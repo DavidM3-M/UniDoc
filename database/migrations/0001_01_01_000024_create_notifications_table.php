@@ -13,7 +13,7 @@ return new class extends Migration
     {
         // Crea la tabla 'notifications' para almacenar notificaciones
         Schema::create('notifications', function (Blueprint $table) {
-            $table->id('id')->primary();// Identificador único de la notificación
+            $table->id('id');// Identificador único de la notificación
             $table->string('type'); // Tipo de notificación (por ejemplo, clase o categoría)
             $table->morphs('notifiable');// Define columnas 'notifiable_id' y 'notifiable_type' para relaciones polimórficas
             $table->text('data'); // Datos de la notificación en formato JSON o texto

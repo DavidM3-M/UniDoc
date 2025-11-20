@@ -64,10 +64,13 @@ class AuthController
                 'menssage' => 'Usuario creado exitosamente',
                 'token' => $token
             ], 201);
-        } catch (\Exception $e) { // Manejo de excepciones
+        } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al crear el usuario',
                 'error'   => $e->getMessage(),
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+                'trace'   => collect($e->getTrace())->take(5), // Opcional: muestra solo los primeros 5 pasos del stack
             ], 500);
         }
     }
