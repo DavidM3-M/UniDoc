@@ -10,9 +10,6 @@ use App\Models\Usuario\User;
 class RoleController
 {
 
-    // de admin aun no hay nada hecho
-    // esto es solo un ejemplo basico de como se haria
-
     
     // Obtener todos los roles
     public function listarRoles()
