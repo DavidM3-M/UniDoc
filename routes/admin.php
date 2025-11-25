@@ -18,7 +18,7 @@ Route::group([
     Route::post('remover-rol/{id}', [RoleController::class, 'removerRol']);
     Route::put('actualizar-rol', [RoleController::class, 'actualizarRol']);
     Route::delete('eliminar-rol', [RoleController::class, 'eliminarRol']);
-    
+
     // Rutas de subir un archivo CSV para ubicaciones
     Route::post('uploadCsv', [UbicacionController::class, 'uploadCsv']);
     // // Rutas de usuarios
@@ -37,6 +37,21 @@ Route::group([
     // Rutas de reportes
     Route::get('usuarios-excel', [ReporteController::class, 'usuariosExcel']);
 
+
+
     
-    
+    //cree estos nuevos endpoints (Brayan Cuellar)
+     // Gestión de usuarios
+    Route::get('/usuarios', [UserController::class, 'listarUsuarios']);
+    Route::put('/usuarios/{id}/cambiar-rol', [UserController::class, 'cambiarRol']);
+    Route::get('/usuarios/exportar-excel', [UserController::class, 'exportarUsuariosExcel']);
+    Route::put('/usuarios/{id}', [UserController::class, 'editarUsuario']);
+    Route::delete('/usuarios/{id}', [UserController::class, 'eliminarUsuario']);
+
+    // Gestión de roles
+    Route::get('/roles', [RoleController::class, 'listarRoles']);
+    Route::post('/roles/asignar', [RoleController::class, 'asignarRol']);
+    Route::post('/roles/remover', [RoleController::class, 'removerRol']);
+    Route::put('/roles/{id}', [RoleController::class, 'actualizarRol']);
+
 });

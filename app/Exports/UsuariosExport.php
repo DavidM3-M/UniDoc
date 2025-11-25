@@ -33,33 +33,28 @@ class UsuariosExport implements FromCollection, WithHeadings, WithTitle, ShouldA
      */
     public function collection()
     {
-        return User::with('roles')
-            ->whereHas(
-                'roles',
-                function ($query) {
-                    $query->where('name', 'Aspirante');
-                }
-            )
-            ->get()
-            ->map(function ($user) {
-                return [
-                    'id' => $user->id,
-                    'primer_nombre' => $user->primer_nombre,
-                    'segundo_nombre' => $user->segundo_nombre,
-                    'primer_apellido' => $user->primer_apellido,
-                    'segundo_apellido' => $user->segundo_apellido,
-                    'tipo_identificacion' => $user->tipo_identificacion,
-                    'numero_identificacion' => $user->numero_identificacion,
-                    'estado_civil' => $user->estado_civil,
-                    'genero' => $user->genero,
-                    'fecha_nacimiento' => $user->fecha_nacimiento,
-                    'correo' => $user->email,
-                ];
-            });
+        //modifique esto (Brayan Cuellar)
+        return User::with('roles')->get()->map(function ($user) {
+            return [
+                'id' => $user->id,
+                'primer_nombre' => $user->primer_nombre,
+                'segundo_nombre' => $user->segundo_nombre,
+                'primer_apellido' => $user->primer_apellido,
+                'segundo_apellido' => $user->segundo_apellido,
+                'tipo_identificacion' => $user->tipo_identificacion,
+                'numero_identificacion' => $user->numero_identificacion,
+                'estado_civil' => $user->estado_civil,
+                'genero' => $user->genero,
+                'fecha_nacimiento' => $user->fecha_nacimiento,
+                'correo' => $user->email,
+                'rol' => $user->roles->first()?->name ?? 'Sin rol',
+            ];
+        });
     }
 
     public function headings(): array
     {
+        //modifique esto (Brayan Cuellar)
         return [
             'ID',
             'Primer Nombre',
@@ -71,7 +66,9 @@ class UsuariosExport implements FromCollection, WithHeadings, WithTitle, ShouldA
             'Estado Civil',
             'Genero',
             'fecha Nacimiento',
-            'Correo'
+            'Correo',
+            // solo añadi el esto (Brayan Cuellar)
+            'Rol Actual',
         ];
     }
 
