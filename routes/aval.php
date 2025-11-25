@@ -1,38 +1,34 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\AvalController;
-
+use App\Http\Controllers\Convocatoria\AvalController;
 
 // Grupo Rectoría
 Route::group([
-    'middleware' => ['api', 'auth:api', 'role:Rectoría'],
+    'middleware' => ['api', 'auth:api', 'role:Rectoria'],
     'prefix' => 'rectoria'
 ], function () {
-    // Registrar aval desde Rectoría
     Route::post('aval-hoja-vida/{userId}', [AvalController::class, 'avalHojaVida']);
-    // Consultar avales de un usuario
     Route::get('usuarios/{userId}/avales', [AvalController::class, 'verAvales']);
+    Route::get('usuarios', [AvalController::class, 'listarUsuarios']); // <-- NUEVA RUTA
 });
 
 // Grupo Vicerrectoría
 Route::group([
-    'middleware' => ['api', 'auth:api', 'role:Vicerrectoría'],
+    'middleware' => ['api', 'auth:api', 'role:Vicerrectoria'],
     'prefix' => 'vicerrectoria'
 ], function () {
-    // Registrar aval desde Vicerrectoría
     Route::post('aval-hoja-vida/{userId}', [AvalController::class, 'avalHojaVida']);
-    // Consultar avales de un usuario
     Route::get('usuarios/{userId}/avales', [AvalController::class, 'verAvales']);
+    Route::get('usuarios', [AvalController::class, 'listarUsuarios']); // <-- NUEVA RUTA
 });
 
 // Grupo Talento Humano
 Route::group([
-    'middleware' => ['api', 'auth:api', 'role:Talento Humano'],
+    'middleware' => ['api', 'auth:api', 'role:TalentoHumano'],
     'prefix' => 'talento-humano'
 ], function () {
-    // Registrar aval desde Talento Humano
     Route::post('aval-hoja-vida/{userId}', [AvalController::class, 'avalHojaVida']);
-    // Consultar avales de un usuario
     Route::get('usuarios/{userId}/avales', [AvalController::class, 'verAvales']);
+    Route::get('usuarios', [AvalController::class, 'listarUsuarios']); // <-- NUEVA RUTA
 });

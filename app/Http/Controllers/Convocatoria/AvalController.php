@@ -1,10 +1,12 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Convocatoria;
 
+use App\Http\Controllers\Controller;   
 use Illuminate\Http\Request;
-use App\Models\User;
+use App\Models\Usuario\User;
 use Illuminate\Support\Facades\DB;
+
 
 class AvalController extends Controller
 {
@@ -15,6 +17,21 @@ class AvalController extends Controller
      * @param int $userId
      * @return \Illuminate\Http\JsonResponse
      */
+    public function listarUsuarios()
+{
+    try {
+        $usuarios = User::all();
+
+        return response()->json([
+            'data' => $usuarios
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'message' => 'Error al obtener usuarios.',
+            'error' => $e->getMessage(),
+        ], 500);
+    }
+}
     public function avalHojaVida(Request $request, $userId)
     {
         try {
@@ -23,7 +40,7 @@ class AvalController extends Controller
 
             DB::transaction(function () use ($request, $user, $role) {
                 switch ($role) {
-                    case 'Rectoría':
+                    case 'Rectoria':
                         if ($user->aval_rectoria) {
                             throw new \Exception('El aval de Rectoría ya fue registrado.');
                         }
@@ -34,7 +51,7 @@ class AvalController extends Controller
                         ]);
                         break;
 
-                    case 'Vicerrectoría':
+                    case 'Vicerrectoria':
                         if ($user->aval_vicerrectoria) {
                             throw new \Exception('El aval de Vicerrectoría ya fue registrado.');
                         }

@@ -20,3 +20,5 @@ require_once __DIR__ . '/evaluador_produccion.php';
 require_once __DIR__ . '/produccion_academica.php';
 // Incluye el archivo apoyo_profesoral.php, contiene rutas relacionadas con el apoyo profesional
 require_once __DIR__ . '/apoyo_profesoral.php';
+// Incluye el archivo aval.php, contiene rutas relacionadas con Vicerrectoría, rectoría y talento humano
+require_once __DIR__ . '/aval.php';
