@@ -1,53 +1,31 @@
 <?php
 
-namespace App\Http\Controllers;
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AvalController;
 
-use Illuminate\Http\Request;
-use App\Models\User;
+// Grupo de rutas para Rectoría
+Route::group([
+    'middleware' => ['api', 'auth:api', 'role:Rectoría'],
+    'prefix' => 'rectoria'
+], function () {
+    // Registrar aval desde Rectoría
+    Route::post('aval-hoja-vida/{userId}', [AvalController::class, 'avalHojaVida']);
+});
 
-class AvalController extends Controller
-{
-    /**
-     * Registrar aval de hoja de vida según el rol del usuario autenticado.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  int  $userId
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function avalHojaVida(Request $request, $userId)
-    {
-        $user = User::findOrFail($userId);
-        $role = $request->user()->getRoleNames()->first();
+// Grupo de rutas para Vicerrectoría
+Route::group([
+    'middleware' => ['api', 'auth:api', 'role:Vicerrectoría'],
+    'prefix' => 'vicerrectoria'
+], function () {
+    // Registrar aval desde Vicerrectoría
+    Route::post('aval-hoja-vida/{userId}', [AvalController::class, 'avalHojaVida']);
+});
 
-        switch ($role) {
-            case 'Rectoría':
-                $user->update([
-                    'aval_rectoria' => true,
-                    'aval_rectoria_by' => $request->user()->id,
-                    'aval_rectoria_at' => now(),
-                ]);
-                break;
-
-            case 'Vicerrectoría':
-                $user->update([
-                    'aval_vicerrectoria' => true,
-                    'aval_vicerrectoria_by' => $request->user()->id,
-                    'aval_vicerrectoria_at' => now(),
-                ]);
-                break;
-
-            case 'Talento Humano':
-                $user->update([
-                    'aval_talento_humano' => true,
-                    'aval_talento_humano_by' => $request->user()->id,
-                    'aval_talento_humano_at' => now(),
-                ]);
-                break;
-
-            default:
-                return response()->json(['error' => 'Rol no autorizado'], 403);
-        }
-
-        return response()->json(['message' => "Aval registrado por {$role}"]);
-    }
-}
+// Grupo de rutas para Talento Humano
+Route::group([
+    'middleware' => ['api', 'auth:api', 'role:Talento Humano'],
+    'prefix' => 'talento-humano'
+], function () {
+    // Registrar aval desde Talento Humano
+    Route::post('aval-hoja-vida/{userId}', [AvalController::class, 'avalHojaVida']);
+});
