@@ -15,8 +15,8 @@ class RoleSeeder extends Seeder
     public function run(): void
     {
         // Definir los roles a crear
-        //borre el rol Evaluador Producción (Brayan Cuellar)
-        $roles = ['Administrador', 'Aspirante', 'Docente', 'Talento Humano', 'Apoyo Profesoral',];
+    
+        $roles = ['Administrador', 'Aspirante', 'Docente', 'Talento Humano', 'Apoyo Profesoral','Evaluador Produccion', 'Vicerrectoria', 'Rectoria'];
 
         // Crear los roles si no existen
         foreach ($roles as $role) {

@@ -40,6 +40,19 @@ return new class extends Migration
                 ->references('id_municipio')
                 ->on('municipios');
 
+            // Campos de avales
+            $table->boolean('aval_rectoria')->default(false);
+            $table->unsignedSmallInteger('aval_rectoria_by')->nullable();
+            $table->timestamp('aval_rectoria_at')->nullable();
+
+            $table->boolean('aval_vicerrectoria')->default(false);
+            $table->unsignedSmallInteger('aval_vicerrectoria_by')->nullable();
+            $table->timestamp('aval_vicerrectoria_at')->nullable();
+
+            $table->boolean('aval_talento_humano')->default(false);
+            $table->unsignedSmallInteger('aval_talento_humano_by')->nullable();
+            $table->timestamp('aval_talento_humano_at')->nullable();
+
         });
         
 

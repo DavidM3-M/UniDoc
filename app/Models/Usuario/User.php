@@ -59,7 +59,19 @@ class User extends Authenticatable implements JWTSubject
         'fecha_nacimiento',
         'estado_civil',
         'email',
-        'password'
+        'password',
+
+        // Campos de aval
+        'aval_rectoria',
+        'aval_rectoria_by',
+        'aval_rectoria_at',
+        'aval_vicerrectoria',
+        'aval_vicerrectoria_by',
+        'aval_vicerrectoria_at',
+        'aval_talento_humano',
+        'aval_talento_humano_by',
+        'aval_talento_humano_at',
+
     ];
 
     /**
