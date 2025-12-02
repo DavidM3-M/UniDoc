@@ -203,7 +203,7 @@ class PostulacionController
      * Actualizar el estado de una postulación.
      *
      * Este método permite modificar el estado de una postulación específica, validando primero que el nuevo estado
-     * esté dentro de los valores definidos en la enumeración `EstadoPostulacion`. 
+     * esté dentro de los valores definidos en la enumeración `EstadoPostulacion`.
      * La operación se realiza dentro de una transacción para asegurar la integridad de los datos.
      * Si la postulación no existe, se lanza una excepción con código 404.
      * En caso de error durante la validación o actualización, se captura la excepción y se retorna una respuesta adecuada.
@@ -269,7 +269,7 @@ class PostulacionController
             return response()->json([ // Retornar un mensaje de éxito
                 'message' => 'Postulación eliminada correctamente.'
             ]);
-            
+
         } catch (\Exception $e) { // Manejar excepciones
             return response()->json([ // Retornar un mensaje de error
                 'message' => 'Ocurrió un error al eliminar la postulación.',
@@ -315,4 +315,25 @@ class PostulacionController
             ], $e->getCode() ?: 500);
         }
     }
+    /**
+ * Generar la hoja de vida en PDF de un usuario (para Rectoría/Vicerrectoría).
+ *
+ * Este método genera el PDF de la hoja de vida de un usuario sin necesidad de verificar
+ * una postulación específica. Es utilizado por roles administrativos como Rectoría.
+ *
+ * @param int $idUsuario ID del usuario cuya hoja de vida se desea generar.
+ * @return \Illuminate\Http\JsonResponse|\Symfony\Component\HttpFoundation\BinaryFileResponse
+ * Respuesta JSON con mensaje de error o archivo PDF generado exitosamente.
+ */
+public function generarHojaDeVidaPDFSimple($idUsuario)
+{
+    try {
+        return $this->generadorHojaDeVidaPDFService->generar($idUsuario);
+    } catch (\Exception $e) {
+        return response()->json([
+            'message' => 'Ocurrió un error al generar la hoja de vida.',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
 }
