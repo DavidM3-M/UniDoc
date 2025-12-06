@@ -28,7 +28,7 @@ Route::group([
     Route::get('obtener-rut', [RutController::class, 'obtenerRut']);
     Route::post('crear-rut', [RutController::class, 'crearRut']);
     Route::put('actualizar-rut', [RutController::class, 'actualizarRut']);
-    
+
     // Rutas relacionadas con la información de contacto
     Route::get('obtener-informacion-contacto', [InformacionContactoController::class, 'obtenerInformacionContacto']);
     Route::post('crear-informacion-contacto', [InformacionContactoController::class, 'crearInformacionContacto']);
@@ -85,7 +85,7 @@ Route::group([
     Route::get('obtener-aptitud/{id}', [AptitudController::class, 'obtenerAptitudesPorId']);
     Route::put('actualizar-aptitud/{id}', [AptitudController::class, 'actualizarAptitudPorId']);
     Route::delete('eliminar-aptitud/{id}', [AptitudController::class, 'eliminarAptitudPorId']);
-      
+
     // Rutas relacionadas con la contratación
     Route::get('ver-contratacion', [ContratacionController::class, 'obtenerContratacionUsuario']);
      
@@ -100,6 +100,6 @@ Route::group([
     // Rutas relacionadas con normativas
     Route::get('obtener-normativas', [NormativaController::class, 'obtenerNormativas']);
     Route::get('obtener-normativa/{id}', [NormativaController::class, 'obtenerNormativaPorId']);
-   
+
 
 });

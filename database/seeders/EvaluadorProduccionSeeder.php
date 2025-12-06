@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Hash;
 
 class EvaluadorProduccionSeeder extends Seeder
 {
-   
+
     public function run(): void
     {
          // Crear usuario administrador por defecto si no existe
