@@ -9,6 +9,11 @@ use App\Models\TalentoHumano\Convocatoria;
 use Illuminate\Support\Facades\DB;
 use App\Services\ArchivoService;
 
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Border;
 
 class ConvocatoriaController
 {
@@ -69,10 +74,10 @@ class ConvocatoriaController
      * Actualizar una convocatoria existente.
      *
      * Este método permite modificar los datos de una convocatoria previamente registrada, identificada por su ID.
-     * La operación se realiza dentro de una transacción para asegurar la integridad de los datos. 
-     * Si se adjunta un nuevo archivo (como una versión actualizada del documento de convocatoria), 
+     * La operación se realiza dentro de una transacción para asegurar la integridad de los datos.
+     * Si se adjunta un nuevo archivo (como una versión actualizada del documento de convocatoria),
      * este se reemplaza utilizando el servicio `ArchivoService`.
-     * En caso de que la convocatoria no exista o se produzca un error durante la operación, 
+     * En caso de que la convocatoria no exista o se produzca un error durante la operación,
      * se captura la excepción y se retorna una respuesta con el mensaje de error correspondiente.
      *
      * @param ActualizarConvocatoriaRequest $request Solicitud validada con los nuevos datos de la convocatoria y archivo opcional.
@@ -105,7 +110,7 @@ class ConvocatoriaController
     /**
      * Eliminar una convocatoria existente.
      *
-     * Este método permite eliminar una convocatoria del sistema, identificada por su ID. 
+     * Este método permite eliminar una convocatoria del sistema, identificada por su ID.
      * Antes de eliminar el registro, se eliminan los archivos asociados utilizando el servicio `ArchivoService`.
      * Toda la operación se realiza dentro de una transacción para asegurar la consistencia de los datos.
      * En caso de que la convocatoria no exista o se produzca un error durante la eliminación,
@@ -139,7 +144,7 @@ class ConvocatoriaController
      *
      * Este método recupera todas las convocatorias disponibles en el sistema, incluyendo los documentos
      * relacionados mediante la relación `documentosConvocatoria`. Las convocatorias se ordenan por su
-     * fecha de creación en orden descendente. Para cada documento, se genera la URL pública del archivo 
+     * fecha de creación en orden descendente. Para cada documento, se genera la URL pública del archivo
      * utilizando el helper `asset()`. Si no se encuentran convocatorias, se lanza una excepción con código 404.
      * En caso de error, se captura la excepción y se retorna una respuesta adecuada.
      *
@@ -200,4 +205,184 @@ class ConvocatoriaController
             ], $e->getCode() ?: 500);
         }
     }
+
+    //logica exportar excel (Brayan Cuellar)
+    /**
+ * Exportar todas las convocatorias a un archivo Excel.
+ *
+ * Este método genera un archivo Excel con todas las convocatorias registradas en el sistema,
+ * incluyendo información detallada como: Estado, Nombre, Tipo, Fecha de publicación,
+ * Fecha de cierre y Descripción. El archivo se genera con estilos profesionales similares
+ * al formato de Novedad 2025.
+ *
+ * @return \Symfony\Component\HttpFoundation\BinaryFileResponse Descarga directa del archivo Excel.
+ */
+public function exportarConvocatoriasExcel()
+{
+    try {
+        // Obtener todas las convocatorias ordenadas por fecha de creación
+        $convocatorias = Convocatoria::orderBy('created_at', 'desc')->get();
+
+        // Crear un nuevo Spreadsheet
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+
+        // Configurar propiedades del documento
+        $spreadsheet->getProperties()
+            ->setCreator('Sistema UniDoc')
+            ->setTitle('Reporte de Convocatorias')
+            ->setSubject('Convocatorias')
+            ->setDescription('Listado de convocatorias del sistema');
+
+        // ENCABEZADO PRINCIPAL
+        $sheet->setCellValue('A1', 'REPORTE DE CONVOCATORIAS');
+        $sheet->mergeCells('A1:F1');
+
+        // Estilo del encabezado principal
+        $sheet->getStyle('A1')->applyFromArray([
+            'font' => [
+                'bold' => true,
+                'size' => 16,
+                'color' => ['rgb' => 'FFFFFF'],
+            ],
+            'alignment' => [
+                'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
+                'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
+            ],
+            'fill' => [
+                'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                'startColor' => ['rgb' => '4472C4'],
+            ],
+        ]);
+        $sheet->getRowDimension(1)->setRowHeight(30);
+
+        // INFORMACIÓN ADICIONAL
+        $fechaGeneracion = date('d/m/Y H:i:s');
+        $sheet->setCellValue('A2', 'Fecha de generación:');
+        $sheet->setCellValue('B2', $fechaGeneracion);
+        $sheet->setCellValue('A3', 'Total de convocatorias:');
+        $sheet->setCellValue('B3', $convocatorias->count());
+
+        $sheet->getStyle('A2:A3')->applyFromArray([
+            'font' => ['bold' => true],
+        ]);
+
+        // ENCABEZADOS DE COLUMNAS
+        $headers = [
+            'A5' => 'ESTADO',
+            'B5' => 'NOMBRE DE CONVOCATORIA',
+            'C5' => 'TIPO',
+            'D5' => 'FECHA DE PUBLICACIÓN',
+            'E5' => 'FECHA DE CIERRE',
+            'F5' => 'DESCRIPCIÓN',
+        ];
+
+        foreach ($headers as $cell => $header) {
+            $sheet->setCellValue($cell, $header);
+        }
+
+        // Estilo de los encabezados
+        $sheet->getStyle('A5:F5')->applyFromArray([
+            'font' => [
+                'bold' => true,
+                'color' => ['rgb' => 'FFFFFF'],
+                'size' => 11,
+            ],
+            'alignment' => [
+                'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
+                'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
+                'wrapText' => true,
+            ],
+            'fill' => [
+                'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                'startColor' => ['rgb' => '2E75B5'],
+            ],
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                    'color' => ['rgb' => '000000'],
+                ],
+            ],
+        ]);
+        $sheet->getRowDimension(5)->setRowHeight(30);
+
+        // DATOS DE LAS CONVOCATORIAS
+        $row = 6;
+        foreach ($convocatorias as $convocatoria) {
+            $sheet->setCellValue('A' . $row, $convocatoria->estado_convocatoria);
+            $sheet->setCellValue('B' . $row, $convocatoria->nombre_convocatoria);
+            $sheet->setCellValue('C' . $row, $convocatoria->tipo);
+            $sheet->setCellValue('D' . $row, date('d/m/Y', strtotime($convocatoria->fecha_publicacion)));
+            $sheet->setCellValue('E' . $row, date('d/m/Y', strtotime($convocatoria->fecha_cierre)));
+            $sheet->setCellValue('F' . $row, $convocatoria->descripcion ?? 'N/A');
+
+            // Estilo alternado de filas
+            $fillColor = ($row % 2 == 0) ? 'E7F3FF' : 'FFFFFF';
+            $sheet->getStyle('A' . $row . ':F' . $row)->applyFromArray([
+                'fill' => [
+                    'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                    'startColor' => ['rgb' => $fillColor],
+                ],
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                        'color' => ['rgb' => 'CCCCCC'],
+                    ],
+                ],
+                'alignment' => [
+                    'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_TOP,
+                    'wrapText' => true,
+                ],
+            ]);
+
+            // Color de estado según su valor
+            $estadoColor = match(strtolower($convocatoria->estado_convocatoria)) {
+                'abierta', 'activa' => '92D050', // Verde
+                'cerrada', 'finalizada' => 'FF6B6B', // Rojo
+                'en proceso', 'proceso' => 'FFC000', // Amarillo
+                default => 'FFFFFF', // Blanco por defecto
+            };
+
+            $sheet->getStyle('A' . $row)->applyFromArray([
+                'fill' => [
+                    'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                    'startColor' => ['rgb' => $estadoColor],
+                ],
+                'font' => ['bold' => true],
+                'alignment' => [
+                    'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
+                ],
+            ]);
+
+            $row++;
+        }
+
+        // AJUSTAR ANCHOS DE COLUMNAS
+        $sheet->getColumnDimension('A')->setWidth(15);
+        $sheet->getColumnDimension('B')->setWidth(35);
+        $sheet->getColumnDimension('C')->setWidth(20);
+        $sheet->getColumnDimension('D')->setWidth(18);
+        $sheet->getColumnDimension('E')->setWidth(18);
+        $sheet->getColumnDimension('F')->setWidth(50);
+
+        // AUTOAJUSTAR ALTURA DE FILAS CON CONTENIDO
+        for ($i = 6; $i < $row; $i++) {
+            $sheet->getRowDimension($i)->setRowHeight(-1);
+        }
+
+        // Crear el archivo Excel
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $fileName = 'Convocatorias_' . date('Y-m-d_His') . '.xlsx';
+        $tempFile = tempnam(sys_get_temp_dir(), $fileName);
+        $writer->save($tempFile);
+
+        return response()->download($tempFile, $fileName)->deleteFileAfterSend(true);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'mensaje' => 'Error al exportar convocatorias a Excel',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
 }

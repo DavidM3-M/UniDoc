@@ -11,7 +11,7 @@ Route::group([
     // Establece un prefijo 'talentoHumano' para las rutas dentro de este grupo
     'prefix' => 'talentoHumano'
 ], function () {
-    
+
     // Rutas relacionadas con convocatorias
     Route::get('obtener-convocatorias',[ConvocatoriaController::class, 'obtenerConvocatorias']);
     Route::get('obtener-convocatoria/{id}',[ConvocatoriaController::class, 'obtenerConvocatoriaPorId']);
@@ -25,14 +25,15 @@ Route::group([
     Route::delete('eliminar-postulacion/{idPostulacion}',[PostulacionController::class, 'eliminarPostulacion']);
     Route::put('actualizar-postulacion/{idPostulacion}',[PostulacionController::class, 'actualizarEstadoPostulacion']);
     Route::get('hoja-de-vida-pdf/{idConvocatoria}/{idUsuario}', [PostulacionController::class, 'generarHojaDeVidaPDF']);
-    
+
     // Rutas relacionadas con contrataciones
     Route::post('crear-contratacion/{user_id}',[ContratacionController::class, 'crearContratacion']);
     Route::put('actualizar-contratacion/{id_contratacion}',[ContratacionController::class, 'actualizarContratacion']);
     Route::delete('eliminar-contratacion/{id}',[ContratacionController::class, 'eliminarContratacion']);
     Route::get('obtener-contratacion/{id_contratacion}',[ContratacionController::class, 'obtenerContratacionPorId']);
     Route::get('obtener-contrataciones',[ContratacionController::class, 'obtenerTodasLasContrataciones']);
-    
 
+    // Nueva Ruta para exportar convocatorias a Excel (Brayan Cuellar)
+    Route::get('exportar-convocatorias-excel',[ConvocatoriaController::class, 'exportarConvocatoriasExcel']);
 
 });
