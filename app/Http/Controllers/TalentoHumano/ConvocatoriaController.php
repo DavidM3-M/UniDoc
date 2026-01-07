@@ -385,4 +385,41 @@ public function exportarConvocatoriasExcel()
         ], 500);
     }
 }
+
+/**
+ * Obtener convocatoria por ID (para Aspirantes y Docentes)
+ *
+ * @param int $id_convocatoria ID de la convocatoria
+ * @return \Illuminate\Http\JsonResponse
+ */
+public function obtenerConvocatoriaPublicaPorId($id_convocatoria)
+{
+    try {
+        // Buscar la convocatoria con sus documentos
+        $convocatoria = Convocatoria::with('documentosConvocatoria')
+            ->where('id_convocatoria', $id_convocatoria)
+            ->firstOrFail();
+
+        // Generar URLs para los documentos
+        foreach ($convocatoria->documentosConvocatoria as $documento) {
+            if (!empty($documento->archivo)) {
+                $documento->archivo_url = asset('storage/' . $documento->archivo);
+            }
+        }
+
+        return response()->json(['convocatoria' => $convocatoria], 200);
+
+    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        return response()->json([
+            'mensaje' => 'Convocatoria no encontrada',
+            'error' => 'La convocatoria solicitada no existe'
+        ], 404);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'mensaje' => 'Error al obtener la convocatoria',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
 }
