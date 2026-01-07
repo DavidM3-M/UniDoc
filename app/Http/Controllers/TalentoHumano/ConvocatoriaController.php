@@ -150,30 +150,62 @@ class ConvocatoriaController
      *
      * @return \Illuminate\Http\JsonResponse Respuesta JSON con la lista de convocatorias o mensaje de error.
      */
-    public function obtenerConvocatorias()
-    {
-        try {
-            $convocatorias = Convocatoria::with('documentosConvocatoria') // Obtenemos todas las convocatorias con sus documentos asociados
-                ->orderBy('created_at', 'desc') // Ordenamos las convocatorias por fecha de creación de forma descendente
-                ->get();
+    /**
+ * Obtener todas las convocatorias registradas.
+ */
+public function obtenerConvocatorias()
+{
+    try {
+        // Obtener convocatorias SIN cargar relaciones para evitar errores
+        $convocatorias = Convocatoria::orderBy('created_at', 'desc')->get();
 
-            if ($convocatorias->isEmpty()) { // Verificamos si no se encontraron convocatorias
-                throw new \Exception('No se encontraron convocatorias', 404);
-            }
-            foreach ($convocatorias as $convocatoria) { // Recorremos cada convocatoria
-                foreach ($convocatoria->documentosConvocatoria as $documento) { // Recorremos cada documento asociado a la convocatoria
-                    $documento->archivo_url = asset('storage/' . $documento->archivo); // Asignamos la URL del archivo usando el helper asset
-                }
-            }
-            return response()->json(['convocatorias' => $convocatorias], 200); // Retornamos una respuesta JSON con las convocatorias
-
-        } catch (\Exception $e) {
-            return response()->json([ // Si ocurre algún error, capturamos la excepción y devolvemos un mensaje de error
-                'mensaje' => 'Error al obtener las convocatorias',
-                'error' => $e->getMessage()
-            ], $e->getCode() ?: 500);
+        if ($convocatorias->isEmpty()) {
+            return response()->json([
+                'mensaje' => 'No se encontraron convocatorias',
+                'convocatorias' => []
+            ], 200);
         }
+
+        // Transformar datos para asegurar que todos los campos existan
+        $convocatoriasTransformadas = $convocatorias->map(function ($conv) {
+            return [
+                'id_convocatoria' => $conv->id_convocatoria,
+                'numero_convocatoria' => $conv->numero_convocatoria ?? 'CONV-' . $conv->id_convocatoria,
+                'nombre_convocatoria' => $conv->nombre_convocatoria,
+                'tipo' => $conv->tipo,
+                'periodo_academico' => $conv->periodo_academico ?? 'No especificado',
+                'cargo_solicitado' => $conv->cargo_solicitado ?? 'No especificado',
+                'facultad' => $conv->facultad ?? 'No especificado',
+                'cursos' => $conv->cursos ?? 'No especificado',
+                'tipo_vinculacion' => $conv->tipo_vinculacion ?? 'No especificado',
+                'personas_requeridas' => $conv->personas_requeridas ?? 1,
+                'fecha_publicacion' => $conv->fecha_publicacion,
+                'fecha_cierre' => $conv->fecha_cierre,
+                'fecha_inicio_contrato' => $conv->fecha_inicio_contrato,
+                'perfil_profesional' => $conv->perfil_profesional ?? '',
+                'experiencia_requerida' => $conv->experiencia_requerida ?? '',
+                'solicitante' => $conv->solicitante ?? 'Talento Humano',
+                'aprobaciones' => $conv->aprobaciones ?? '',
+                'descripcion' => $conv->descripcion,
+                'estado_convocatoria' => $conv->estado_convocatoria,
+                'created_at' => $conv->created_at,
+                'updated_at' => $conv->updated_at,
+            ];
+        });
+
+        return response()->json(['convocatorias' => $convocatoriasTransformadas], 200);
+
+    } catch (\Exception $e) {
+        \Log::error('Error al obtener convocatorias: ' . $e->getMessage());
+        \Log::error('Stack trace: ' . $e->getTraceAsString());
+
+        return response()->json([
+            'mensaje' => 'Error al obtener las convocatorias',
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ], 500);
     }
+}
 
     /**
      * Obtener una convocatoria específica por su ID.
@@ -385,7 +417,6 @@ public function exportarConvocatoriasExcel()
         ], 500);
     }
 }
-
 /**
  * Obtener convocatoria por ID (para Aspirantes y Docentes)
  *
@@ -395,30 +426,56 @@ public function exportarConvocatoriasExcel()
 public function obtenerConvocatoriaPublicaPorId($id_convocatoria)
 {
     try {
-        // Buscar la convocatoria con sus documentos
-        $convocatoria = Convocatoria::with('documentosConvocatoria')
-            ->where('id_convocatoria', $id_convocatoria)
-            ->firstOrFail();
+        \Log::info("Intentando obtener convocatoria con ID: " . $id_convocatoria);
 
-        // Generar URLs para los documentos
-        foreach ($convocatoria->documentosConvocatoria as $documento) {
-            if (!empty($documento->archivo)) {
-                $documento->archivo_url = asset('storage/' . $documento->archivo);
-            }
+        // Buscar la convocatoria SIN cargar relaciones
+        $convocatoria = Convocatoria::where('id_convocatoria', $id_convocatoria)->first();
+
+        if (!$convocatoria) {
+            \Log::warning("Convocatoria no encontrada: " . $id_convocatoria);
+            return response()->json([
+                'mensaje' => 'Convocatoria no encontrada',
+                'error' => 'La convocatoria solicitada no existe'
+            ], 404);
         }
 
-        return response()->json(['convocatoria' => $convocatoria], 200);
+        \Log::info("Convocatoria encontrada: " . $convocatoria->nombre_convocatoria);
 
-    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-        return response()->json([
-            'mensaje' => 'Convocatoria no encontrada',
-            'error' => 'La convocatoria solicitada no existe'
-        ], 404);
+        // Transformar datos para asegurar compatibilidad
+        $convocatoriaTransformada = [
+            'id_convocatoria' => $convocatoria->id_convocatoria,
+            'numero_convocatoria' => $convocatoria->numero_convocatoria ?? 'CONV-' . $convocatoria->id_convocatoria,
+            'nombre_convocatoria' => $convocatoria->nombre_convocatoria,
+            'tipo' => $convocatoria->tipo,
+            'periodo_academico' => $convocatoria->periodo_academico ?? 'No especificado',
+            'cargo_solicitado' => $convocatoria->cargo_solicitado ?? 'No especificado',
+            'facultad' => $convocatoria->facultad ?? 'No especificado',
+            'cursos' => $convocatoria->cursos ?? 'No especificado',
+            'tipo_vinculacion' => $convocatoria->tipo_vinculacion ?? 'No especificado',
+            'personas_requeridas' => $convocatoria->personas_requeridas ?? 1,
+            'fecha_publicacion' => $convocatoria->fecha_publicacion,
+            'fecha_cierre' => $convocatoria->fecha_cierre,
+            'fecha_inicio_contrato' => $convocatoria->fecha_inicio_contrato,
+            'perfil_profesional' => $convocatoria->perfil_profesional ?? '',
+            'experiencia_requerida' => $convocatoria->experiencia_requerida ?? '',
+            'solicitante' => $convocatoria->solicitante ?? 'Talento Humano',
+            'aprobaciones' => $convocatoria->aprobaciones ?? '',
+            'descripcion' => $convocatoria->descripcion,
+            'estado_convocatoria' => $convocatoria->estado_convocatoria,
+            'documentosConvocatoria' => [], // Vacío por ahora
+        ];
+
+        return response()->json(['convocatoria' => $convocatoriaTransformada], 200);
 
     } catch (\Exception $e) {
+        \Log::error("Error al obtener convocatoria: " . $e->getMessage());
+        \Log::error("Stack trace: " . $e->getTraceAsString());
+
         return response()->json([
             'mensaje' => 'Error al obtener la convocatoria',
-            'error' => $e->getMessage()
+            'error' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
         ], 500);
     }
 }
