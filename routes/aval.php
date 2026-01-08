@@ -40,3 +40,4 @@ Route::group([
     Route::get('usuarios/{userId}/avales', [AvalController::class, 'verAvales']);
     Route::get('usuarios', [AvalController::class, 'listarUsuarios']); // <-- NUEVA RUTA
 });
+
