@@ -11,6 +11,8 @@ Route::group([
     Route::post('aval-hoja-vida/{userId}', [AvalController::class, 'avalHojaVida']);
     Route::get('usuarios/{userId}/avales', [AvalController::class, 'verAvales']);
     Route::get('usuarios', [AvalController::class, 'listarUsuarios']); // <-- NUEVA RUTA
+    Route::get('hoja-de-vida-pdf/{idUsuario}', [PostulacionController::class, 'generarHojaDeVidaPDF']);
+
 });
 
 // Grupo Vicerrectoría

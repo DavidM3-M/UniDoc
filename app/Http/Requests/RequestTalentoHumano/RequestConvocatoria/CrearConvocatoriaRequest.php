@@ -2,21 +2,16 @@
 
 namespace App\Http\Requests\RequestTalentoHumano\RequestConvocatoria;
 
-use App\Constants\ConstTalentoHumano\EstadoConvocatoria;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Contracts\Validation\Validator;
-use Illuminate\Http\Exceptions\HttpResponseException;
-use Illuminate\Validation\Rule;
+
 class CrearConvocatoriaRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
-    // Método que determina si el usuario está autorizado para realizar esta solicitud.
     {
         return true;
-    // Retorna `true`, lo que significa que cualquier usuario está autorizado para usar esta solicitud.
     }
 
     /**
@@ -25,45 +20,72 @@ class CrearConvocatoriaRequest extends FormRequest
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
     public function rules(): array
-    // Método que define las reglas de validación para los datos enviados en la solicitud.
     {
         return [
-            'nombre_convocatoria'   => 'required|string|max:255|regex:/^[\pL\pN\s\-]+$/u',
-            // El campo `nombre_convocatoria` es obligatorio (`required`).
-            // Debe ser una cadena (`string`) con un máximo de 255 caracteres y cumplir con un patrón regex que permite letras,
-            // números, espacios y guiones.
-            'tipo'                  => 'required|string|max:255|regex:/^[\pL\pN\s\-]+$/u',
-             // El campo `tipo` es obligatorio (`required`).
-            // Debe ser una cadena con un máximo de 255 caracteres y cumplir con el mismo patrón regex.
-            'fecha_publicacion'     => 'required|date',
-            // El campo `fecha_publicacion` es obligatorio (`required`) y debe ser una fecha válida (`date`).
-            'fecha_cierre'          => 'required|date|after:fecha_publicacion',
-             // El campo `fecha_cierre` es obligatorio (`required`).
-            // Debe ser una fecha válida (`date`) y posterior a `fecha_publicacion`.
-            'descripcion'           => 'required|string|max:1000|regex:/^[\pL\pN\s\-,.]+$/u',
-             // El campo `descripcion` es obligatorio (`required`).
-            // Debe ser una cadena con un máximo de 1000 caracteres y cumplir con el mismo patrón regex.
-            'estado_convocatoria'   => ['required','string', Rule::in(EstadoConvocatoria::all())],
-              // El campo `estado_convocatoria` es obligatorio (`required`).
-            // Su valor debe estar dentro de los valores definidos en `EstadoConvocatoria::all()`.
-            'archivo'               => 'required|file|mimes:pdf|max:2048',
-             // El campo `archivo` es obligatorio (`required`).
-            // Debe ser un archivo (`file`) con extensiones permitidas (`pdf`, `jpg`, `png`) y su tamaño no debe exceder los 2048 KB.
+            // Campos obligatorios
+            'nombre_convocatoria' => 'required|string|max:255|unique:convocatorias,nombre_convocatoria',
+            'tipo' => 'required|string|max:255',
+            'fecha_publicacion' => 'required|date',
+            'fecha_cierre' => 'required|date|after:fecha_publicacion',
+            'descripcion' => 'required|string',
+            'estado_convocatoria' => 'required|string|in:Abierta,Cerrada,Finalizada',
+
+            // Nuevos campos obligatorios
+            'numero_convocatoria' => 'required|string|max:255|unique:convocatorias,numero_convocatoria',
+            'periodo_academico' => 'required|string|max:255',
+            'cargo_solicitado' => 'required|string|max:255',
+            'facultad' => 'required|string|max:255',
+            'cursos' => 'required|string',
+            'tipo_vinculacion' => 'required|string|max:255',
+            'personas_requeridas' => 'required|integer|min:1',
+            'fecha_inicio_contrato' => 'required|date|after:fecha_cierre',
+            'perfil_profesional' => 'required|string',
+            'experiencia_requerida' => 'required|string',
+            'solicitante' => 'required|string|max:255',
+            'aprobaciones' => 'required|string',
+
+            // Archivo opcional
+            'archivo' => 'nullable|file|mimes:pdf,doc,docx|max:10240',
         ];
     }
-    protected function failedValidation(Validator $validator)
-        // Método que se ejecuta cuando la validación falla.
+
+    /**
+     * Get custom messages for validator errors.
+     *
+     * @return array<string, string>
+     */
+    public function messages(): array
     {
-        throw new HttpResponseException(
-           response()->json([
-                'success' => false,
-                // Indica que la solicitud no fue exitosa.
-                'message' => 'Error en el formulario',
-                // Mensaje general de error.
-                'errors' => $validator->errors(),
-            // Incluye los errores específicos de validación generados por el validador.
-            ], 422)
-            // Devuelve un código de estado HTTP 422 (Unprocessable Entity) para indicar errores de validación.
-        );
+        return [
+            'nombre_convocatoria.required' => 'El nombre de la convocatoria es obligatorio.',
+            'nombre_convocatoria.unique' => 'Ya existe una convocatoria con este nombre.',
+            'tipo.required' => 'El tipo de convocatoria es obligatorio.',
+            'fecha_publicacion.required' => 'La fecha de publicación es obligatoria.',
+            'fecha_cierre.required' => 'La fecha de cierre es obligatoria.',
+            'fecha_cierre.after' => 'La fecha de cierre debe ser posterior a la fecha de publicación.',
+            'descripcion.required' => 'La descripción es obligatoria.',
+            'estado_convocatoria.required' => 'El estado de la convocatoria es obligatorio.',
+            'estado_convocatoria.in' => 'El estado debe ser: Abierta, Cerrada o Finalizada.',
+
+            'numero_convocatoria.required' => 'El número de convocatoria es obligatorio.',
+            'numero_convocatoria.unique' => 'Ya existe una convocatoria con este número.',
+            'periodo_academico.required' => 'El período académico es obligatorio.',
+            'cargo_solicitado.required' => 'El cargo solicitado es obligatorio.',
+            'facultad.required' => 'La facultad es obligatoria.',
+            'cursos.required' => 'Los cursos son obligatorios.',
+            'tipo_vinculacion.required' => 'El tipo de vinculación es obligatorio.',
+            'personas_requeridas.required' => 'El número de personas requeridas es obligatorio.',
+            'personas_requeridas.min' => 'Debe requerir al menos 1 persona.',
+            'fecha_inicio_contrato.required' => 'La fecha de inicio de contrato es obligatoria.',
+            'fecha_inicio_contrato.after' => 'La fecha de inicio debe ser posterior a la fecha de cierre.',
+            'perfil_profesional.required' => 'El perfil profesional es obligatorio.',
+            'experiencia_requerida.required' => 'La experiencia requerida es obligatoria.',
+            'solicitante.required' => 'El solicitante es obligatorio.',
+            'aprobaciones.required' => 'Las aprobaciones son obligatorias.',
+
+            'archivo.file' => 'El archivo debe ser un archivo válido.',
+            'archivo.mimes' => 'El archivo debe ser de tipo: PDF, DOC o DOCX.',
+            'archivo.max' => 'El archivo no debe superar los 10MB.',
+        ];
     }
 }

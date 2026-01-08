@@ -4,6 +4,16 @@ use App\Http\Controllers\TalentoHumano\ContratacionController;
 use App\Http\Controllers\TalentoHumano\ConvocatoriaController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\TalentoHumano\PostulacionController;
+
+// RUTAS PÚBLICAS PARA ASPIRANTES Y DOCENTES (FUERA DEL GRUPO DE TALENTO HUMANO)
+Route::middleware(['api', 'auth:api'])->group(function () {
+    // Para Aspirantes
+    Route::get('/aspirante/convocatoria/{id_convocatoria}', [ConvocatoriaController::class, 'obtenerConvocatoriaPublicaPorId']);
+
+    // Para Docentes
+    Route::get('/docente/convocatoria/{id_convocatoria}', [ConvocatoriaController::class, 'obtenerConvocatoriaPublicaPorId']);
+});
+
 // Define un grupo de rutas con configuraciones específicas para el rol "Talento Humano"
 Route::group([
     // Aplica los middlewares 'api', 'auth:api' y 'role:Talento Humano' para proteger las rutas
