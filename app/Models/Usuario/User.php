@@ -29,7 +29,9 @@ use App\Models\Aspirante\FotoPerfil;
 use App\Models\Docente\Puntaje;
 use App\Models\TalentoHumano\Contratacion;
 use App\Models\TalentoHumano\Postulacion;
+use App\Models\Aspirante\CertificacionBancaria;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use App\Models\Aspirante\Pension;
 
 class User extends Authenticatable implements JWTSubject
 {
@@ -151,6 +153,19 @@ class User extends Authenticatable implements JWTSubject
         return $this->hasOne(InformacionContacto::class, 'user_id', 'id');
     }
 
+    // relacion de uno a uno con la tabla certificacion_bancarias
+    public function certificacionesBancariasUsuario(): HasOne
+    {
+        return $this->hasOne(CertificacionBancaria::class, 'user_id', 'id');
+    }
+
+    // relacion de uno a uno con la tabla pension
+    public function pensionUsuario(): HasOne
+    {
+        return $this->hasOne(Pension::class, 'user_id', 'id');
+    }
+
+
 
 
     // relaciones que tienen varios documentos
@@ -177,6 +192,8 @@ class User extends Authenticatable implements JWTSubject
     {
         return $this->hasMany(ProduccionAcademica::class, 'user_id', 'id');
     }
+
+
 
 
 
