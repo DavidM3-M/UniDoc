@@ -10,7 +10,7 @@ Route::group([
 // Establece un prefijo 'constantes' para las rutas dentro de este grupo
     'prefix' => 'constantes'
 ], function () {
-    
+
     // Constantes relacionadas con el usuario
     Route::get('tipos-documento', [ConstantesController::class, 'obtenerTiposDocumento']);
     Route::get('estado-civil', [ConstantesController::class, 'obtenerEstadoCivil']);
@@ -36,5 +36,11 @@ Route::group([
 
     // Constantes relacionadas con los idiomas
     Route::get('niveles-idioma', [ConstantesController::class, 'obtenerNivelIdioma']);
-    
+
+    // Constantes relacionadas con certificaciones bancarias
+    Route::get('tipos-cuenta-bancaria', [ConstantesController::class, 'obtenerTipoCuenta']);
+
+    // Constantes relacionadas con pensiones
+    Route::get('tipos-pension', [ConstantesController::class, 'obtenerRegimenPensional']);
+
 });

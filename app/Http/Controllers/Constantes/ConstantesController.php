@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Constantes;
 use App\Constants\ConstAgregarEstudio\TiposEstudio;
 use App\Constants\ConstAgregarExperiencia\TiposExperiencia;
 use App\Constants\ConstAgregarIdioma\NivelIdioma;
+use App\Constants\ConstCertificacionBancaria\TipoCuenta as ConstCertificacionBancariaTipoCuenta;
 use App\Constants\ConstEps\EstadoAfiliacion;
 use App\Constants\ConstEps\TipoAfiliacion;
 use App\Constants\ConstEps\TipoAfiliado;
@@ -14,6 +15,8 @@ use App\Constants\ConstRut\TipoPersona;
 use App\Constants\ConstUsuario\EstadoCivil;
 use App\Constants\ConstUsuario\Genero;
 use App\Constants\ConstUsuario\TipoIdentificacion;
+use App\Constants\ConstCertificacionBancaria\TipoCuenta;
+use App\Constants\ConstPension\RegimenPensional;
 
 
 class ConstantesController
@@ -35,7 +38,7 @@ class ConstantesController
             'estado_civil' => EstadoCivil::all()
         ]);
     }
-     
+
     // Metodo para obtener el genero
     public function obtenerGenero()
     {
@@ -43,7 +46,7 @@ class ConstantesController
             'genero' => Genero::all()
         ]);
     }
-     
+
     //contantes Rut
 
     // Metodo para obtener el tipo de persona
@@ -122,11 +125,21 @@ class ConstantesController
         ]);
     }
 
+    //constantes cuenta bancaria
+    public function obtenerTipoCuenta()
+    {
+        return response()->json([
+            'tipo_cuenta' =>TipoCuenta::all()
+        ]);
+    }
 
-
-
-
-
-
-
+    //Constantes regimen pensional
+    public function obtenerRegimenPensional()
+    {
+        return response()->json([
+            'regimen_pensional' =>RegimenPensional::all()
+        ]);
+    }
 }
+
+

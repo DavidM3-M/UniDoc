@@ -14,6 +14,8 @@ use App\Http\Controllers\TalentoHumano\PostulacionController;
 use App\Http\Controllers\Aspirante\FotoPerfilController;
 use App\Http\Controllers\Aspirante\AptitudController;
 use App\Http\Controllers\Aspirante\NormativaController;
+use App\Http\Controllers\Aspirante\CertificacionBancariaController;
+use App\Http\Controllers\Aspirante\PensionController;
 // Define un grupo de rutas con configuraciones específicas para el rol "Aspirante"
 Route::group([
     // Aplica los middlewares 'api', 'auth:api' y 'role:Aspirante' para proteger las rutas
@@ -25,7 +27,7 @@ Route::group([
     Route::get('obtener-rut', [RutController::class, 'obtenerRut']);
     Route::post('crear-rut', [RutController::class, 'crearRut']);
     Route::put('actualizar-rut', [RutController::class, 'actualizarRut']);
-    
+
     // Rutas relacionadas con la información de contacto
     Route::get('obtener-informacion-contacto', [InformacionContactoController::class, 'obtenerInformacionContacto']);
     Route::post('crear-informacion-contacto', [InformacionContactoController::class, 'crearInformacionContacto']);
@@ -82,17 +84,27 @@ Route::group([
     Route::get('obtener-aptitud/{id}', [AptitudController::class, 'obtenerAptitudesPorId']);
     Route::put('actualizar-aptitud/{id}', [AptitudController::class, 'actualizarAptitudPorId']);
     Route::delete('eliminar-aptitud/{id}', [AptitudController::class, 'eliminarAptitudPorId']);
-    
+
 
     // Rutas relacionadas con normativas
     Route::get('obtener-normativas', [NormativaController::class, 'obtenerNormativas']);
     Route::get('obtener-normativa/{id}', [NormativaController::class, 'obtenerNormativaPorId']);
 
+    // Rutas relacionadas con certificaciones bancarias
+    Route::post('crear-certificacion-bancaria', [CertificacionBancariaController::class, 'crearCertificacionBancaria']);
+    Route::get('obtener-certificacion-bancaria', [CertificacionBancariaController::class, 'ObtenerCertificacionBancaria']);
+    Route::put('actualizar-certificacion-bancaria', [CertificacionBancariaController::class, 'actualizarCertificacionBancaria']);
+
+    // Rutas relacionadas con pensiones
+    Route::get('obtener-pension', [PensionController::class, 'obtenerPension']);
+    Route::post('crear-pension', [PensionController::class, 'crearPension']);
+    Route::put('actualizar-pension', [PensionController::class, 'actualizarPension']);
 
 
-    
 
-    
+
+
+
 
 
 });
