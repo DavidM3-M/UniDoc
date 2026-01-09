@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Convocatoria\AvalController;
+use App\Http\Controllers\TalentoHumano\PostulacionController;
 
 // Grupo Rectoría
 Route::group([
@@ -10,9 +11,11 @@ Route::group([
 ], function () {
     Route::post('aval-hoja-vida/{userId}', [AvalController::class, 'avalHojaVida']);
     Route::get('usuarios/{userId}/avales', [AvalController::class, 'verAvales']);
-    Route::get('usuarios', [AvalController::class, 'listarUsuarios']); // <-- NUEVA RUTA
-    Route::get('hoja-de-vida-pdf/{idUsuario}', [PostulacionController::class, 'generarHojaDeVidaPDF']);
+    Route::get('usuarios', [AvalController::class, 'listarUsuarios']);
 
+    // Agregado para la hoja de vida
+
+    Route::get('/hoja-de-vida-pdf/{idUsuario}', [PostulacionController::class, 'generarHojaDeVidaPDFSimple']);
 });
 
 // Grupo Vicerrectoría
@@ -22,7 +25,10 @@ Route::group([
 ], function () {
     Route::post('aval-hoja-vida/{userId}', [AvalController::class, 'avalHojaVida']);
     Route::get('usuarios/{userId}/avales', [AvalController::class, 'verAvales']);
-    Route::get('usuarios', [AvalController::class, 'listarUsuarios']); // <-- NUEVA RUTA
+    Route::get('usuarios', [AvalController::class, 'listarUsuarios']);
+
+    // Agregado para la hoja de vida
+    Route::get('hoja-de-vida-pdf/{idConvocatoria}/{idUsuario}', [PostulacionController::class, 'generarHojaDeVidaPDF']);
 });
 
 // Grupo Talento Humano
@@ -34,3 +40,4 @@ Route::group([
     Route::get('usuarios/{userId}/avales', [AvalController::class, 'verAvales']);
     Route::get('usuarios', [AvalController::class, 'listarUsuarios']); // <-- NUEVA RUTA
 });
+
