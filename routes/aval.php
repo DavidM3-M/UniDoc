@@ -28,7 +28,7 @@ Route::group([
     Route::get('usuarios', [AvalController::class, 'listarUsuarios']);
 
     // Agregado para la hoja de vida
-    Route::get('hoja-de-vida-pdf/{idConvocatoria}/{idUsuario}', [PostulacionController::class, 'generarHojaDeVidaPDF']);
+    Route::get('hoja-de-vida-pdf/{idUsuario}', [PostulacionController::class, 'generarHojaDeVidaPDFSimple']);
 });
 
 // Grupo Talento Humano
