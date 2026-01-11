@@ -272,6 +272,8 @@ class AuthController
         }
     }
 
+    
+
     /**
      * Enviar enlace para restablecer la contraseña del usuario.
      *
@@ -311,7 +313,9 @@ class AuthController
                 ['token' => $token, 'created_at' => now()] // Datos a actualizar o insertar
             );
 
-            $resetLink = env('FRONTEND_URL') . '/restablecer-contrasena2?token=' . $token . '&email=' . urlencode($user->email); // Generar el enlace
+            $resetLink = rtrim(config('app.frontend_url'), '/') 
+                . '/restablecer-contrasena2?token=' . $token 
+                . '&email=' . urlencode($user->email); // Crear el enlace de restablecimiento
             Mail::to($user->email)->send(new ResetPasswordMail($user, $resetLink)); // Enviar correo
 
             return response()->json(['message' => 'Correo electrónico enviado'], 200); // Devolver respuesta
