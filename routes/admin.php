@@ -6,6 +6,7 @@ use App\Http\Controllers\Ubicaciones\UbicacionController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Aspirante\NormativaController;
 use App\Http\Controllers\Admin\ReporteController;
+use App\Http\Controllers\Admin\AspiranteAdminController;
 
 Route::group([
     'middleware' => [ 'api','auth:api', 'role:Administrador'],
@@ -39,7 +40,7 @@ Route::group([
 
 
 
-    
+
     //cree estos nuevos endpoints (Brayan Cuellar)
      // Gestión de usuarios
     Route::get('/usuarios', [UserController::class, 'listarUsuarios']);
@@ -54,4 +55,18 @@ Route::group([
     Route::post('/roles/remover', [RoleController::class, 'removerRol']);
     Route::put('/roles/{id}', [RoleController::class, 'actualizarRol']);
 
+
+// Rutas compartidas para Vicerrectoria y Rectoria
+});
+Route::group([
+    'middleware' => ['api', 'auth:api', 'role:Vicerrectoria|Rectoria'],
+    'prefix' => 'admin'
+], function () {
+
+    // Gestión de Aspirantes
+    Route::get('aspirantes', [AspiranteAdminController::class, 'obtenerAspirantes']);
+    Route::get('aspirantes/estadisticas', [AspiranteAdminController::class, 'obtenerEstadisticas']);
+    Route::get('aspirantes/{id}', [AspiranteAdminController::class, 'obtenerAspirantePorId']);
+    Route::get('aspirantes/{id}/hoja-vida-pdf', [AspiranteAdminController::class, 'descargarHojaDeVida']);
+    Route::post('aspirantes/{id}/dar-aval', [AspiranteAdminController::class, 'darAval']);
 });
