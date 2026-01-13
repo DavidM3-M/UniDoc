@@ -3,6 +3,10 @@
 namespace App\Http\Requests\RequestTalentoHumano\RequestConvocatoria;
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Constants\ConstTalentoHumano\EstadoConvocatoria;
+use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Validation\Rule;
 
 class ActualizarConvocatoriaRequest extends FormRequest
 {
@@ -58,6 +62,7 @@ class ActualizarConvocatoriaRequest extends FormRequest
      */
     public function messages(): array
     {
+        
         return [
             'nombre_convocatoria.required' => 'El nombre de la convocatoria es obligatorio.',
             'nombre_convocatoria.unique' => 'Ya existe una convocatoria con este nombre.',
@@ -89,5 +94,8 @@ class ActualizarConvocatoriaRequest extends FormRequest
             'archivo.mimes' => 'El archivo debe ser de tipo: PDF, DOC o DOCX.',
             'archivo.max' => 'El archivo no debe superar los 10MB.',
         ];
+
     }
+
+
 }
