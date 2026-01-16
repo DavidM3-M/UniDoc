@@ -146,6 +146,10 @@ class AspiranteAdminController extends Controller
                 ])
                 ->findOrFail($id);
 
+
+
+
+
             // Construir URLs de foto de perfil
             $fotoUrl = null;
             if ($aspirante->fotoPerfilUsuario && $aspirante->fotoPerfilUsuario->documentosFotoPerfil->count() > 0) {
@@ -182,9 +186,11 @@ class AspiranteAdminController extends Controller
                     'foto_perfil_url' => $fotoUrl,
                 ],
                 'informacion_contacto' => $aspirante->informacionContactoUsuario ? [
-                'telefono' => $aspirante->informacionContactoUsuario->telefono ?? null,
-                'celular' => $aspirante->informacionContactoUsuario->celular ?? null,
-                'direccion' => $aspirante->informacionContactoUsuario->direccion ?? null,
+                'telefono' => $aspirante->informacionContactoUsuario->telefono_movil ?? null,
+                'celular' => $aspirante->informacionContactoUsuario->celular_alternativo ?? null,
+                'direccion' => $aspirante->informacionContactoUsuario->direccion_residencia ?? null,
+                'barrio' => $aspirante->informacionContactoUsuario->barrio ?? null,
+                'correo_alterno' => $aspirante->informacionContactoUsuario->correo_alterno ?? null,
                 ] : null,
                 'eps' => $aspirante->epsUsuario,
                 'rut' => $aspirante->rutUsuario,
