@@ -45,5 +45,9 @@ Route::group([
 
     // Nueva Ruta para exportar convocatorias a Excel (Brayan Cuellar)
     Route::get('exportar-convocatorias-excel',[ConvocatoriaController::class, 'exportarConvocatoriasExcel']);
+    Route::get('hoja-de-vida-pdf/{idUsuario}', [PostulacionController::class, 'generarHojaDeVidaPDFSimple']);
+
+    Route::get('aspirantes/{id}', [App\Http\Controllers\Admin\AspiranteAdminController::class, 'obtenerAspirantePorId']);
+
 
 });

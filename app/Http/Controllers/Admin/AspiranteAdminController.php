@@ -191,14 +191,133 @@ class AspiranteAdminController extends Controller
                 'direccion' => $aspirante->informacionContactoUsuario->direccion_residencia ?? null,
                 'barrio' => $aspirante->informacionContactoUsuario->barrio ?? null,
                 'correo_alterno' => $aspirante->informacionContactoUsuario->correo_alterno ?? null,
+                // Datos de libreta militar (nuevo)
+                'categoria_libreta_militar' => $aspirante->informacionContactoUsuario->categoria_libreta_militar ?? null,
+                'numero_libreta_militar' => $aspirante->informacionContactoUsuario->numero_libreta_militar ?? null,
+                'numero_distrito_militar' => $aspirante->informacionContactoUsuario->numero_distrito_militar ?? null,
+                'documentos_libreta_militar' => $aspirante->informacionContactoUsuario->documentosInformacionContacto ? $aspirante->informacionContactoUsuario->documentosInformacionContacto->map(function($doc) {
+                        return [
+                            'id' => $doc->id_documento,
+                            'nombre' => basename($doc->archivo),
+                            'url' => asset('storage/' . $doc->archivo),
+                            'tipo' => pathinfo($doc->archivo, PATHINFO_EXTENSION),
+                            'estado' => $doc->estado,
+                        ];
+                    }) : [],
                 ] : null,
-                'eps' => $aspirante->epsUsuario,
-                'rut' => $aspirante->rutUsuario,
-                'idiomas' => $aspirante->idiomasUsuario,
-                'experiencias' => $aspirante->experienciasUsuario,
-                'estudios' => $aspirante->estudiosUsuario,
-                'produccion_academica' => $aspirante->produccionAcademicaUsuario,
-                'aptitudes' => $aspirante->aptitudesUsuario,
+                'eps' => $aspirante->epsUsuario ? [
+                    'nombre_eps' => $aspirante->epsUsuario->nombre_eps ?? null,
+                    'tipo_afiliacion' => $aspirante->epsUsuario->tipo_afiliacion ?? null,
+                    'estado_afiliacion' => $aspirante->epsUsuario->estado_afiliacion ?? null,
+                    'fecha_afiliacion_efectiva' => $aspirante->epsUsuario->fecha_afiliacion_efectiva ?? null,
+                    'fecha_finalizacion_afiliacion' => $aspirante->epsUsuario->fecha_finalizacion_afiliacion ?? null,
+                    'tipo_afiliado' => $aspirante->epsUsuario->tipo_afiliado ?? null,
+                    'numero_afiliado' => $aspirante->epsUsuario->numero_afiliado ?? null,
+                    'documentos' => $aspirante->documentosUser->map(function($doc) {
+                    // Extraer el tipo de documento desde la ruta
+                    $rutaPartes = explode('/', $doc->archivo);
+                    $tipoDocumento = count($rutaPartes) > 1 ? $rutaPartes[1] : 'General';
+
+                    return [
+                        'id' => $doc->id_documento,
+                        'nombre' => basename($doc->archivo),
+                        'url' => asset('storage/' . $doc->archivo),
+                        'tipo' => pathinfo($doc->archivo, PATHINFO_EXTENSION),
+                        'categoria' => $tipoDocumento, // Identificacion, Eps, Rut, etc.
+                        'estado' => $doc->estado,
+                    ];
+                }),
+                ] : null,
+                'rut' => $aspirante->rutUsuario ? [
+                    'numero_rut' => $aspirante->rutUsuario->numero_rut ?? null,
+                    'razon_social' => $aspirante->rutUsuario->razon_social ?? null,
+                    'tipo_persona' => $aspirante->rutUsuario->tipo_persona ?? null,
+                    'codigo_ciiu' => $aspirante->rutUsuario->codigo_ciiu ?? null,
+                    'responsabilidades_tributarias' => $aspirante->rutUsuario->responsabilidades_tributarias ?? null,
+                    'documentos' => $aspirante->rutUsuario->documentosRut ? $aspirante->rutUsuario->documentosRut->map(function($doc) {
+                        return [
+                            'id' => $doc->id_documento,
+                            'nombre' => basename($doc->archivo),
+                            'url' => asset('storage/' . $doc->archivo),
+                            'tipo' => pathinfo($doc->archivo, PATHINFO_EXTENSION),
+                            'estado' => $doc->estado,
+                        ];
+                    }) : [],
+                ] : null,
+                'idiomas' => $aspirante->idiomasUsuario ? $aspirante->idiomasUsuario->map(function($idioma) {
+                    return [
+                        'idioma' => $idioma->idioma ?? $idioma->nombre_idioma ?? null,
+                        'nivel' => $idioma->nivel ?? $idioma->nivel_idioma ?? null,
+                        'documentos' => $idioma->documentosIdioma ? $idioma->documentosIdioma->map(function($doc) {
+                            return [
+                                'id' => $doc->id_documento,
+                                'nombre' => basename($doc->archivo),
+                                'url' => asset('storage/' . $doc->archivo),
+                                'tipo' => pathinfo($doc->archivo, PATHINFO_EXTENSION),
+                                'estado' => $doc->estado,
+                            ];
+                        }) : [],
+                    ];
+                }) : [],
+                'experiencias' => $aspirante->experienciasUsuario ? $aspirante->experienciasUsuario->map(function($exp) {
+                    return [
+                        'cargo' => $exp->cargo ?? $exp->nombre_cargo ?? null,
+                        'empresa' => $exp->empresa ?? $exp->nombre_empresa ?? null,
+                        'fecha_inicio' => $exp->fecha_inicio ?? null,
+                        'fecha_fin' => $exp->fecha_fin ?? null,
+                        'descripcion' => $exp->descripcion ?? $exp->descripcion_cargo ?? null,
+                        'documentos' => $exp->documentosExperiencia ? $exp->documentosExperiencia->map(function($doc) {
+                            return [
+                                'id' => $doc->id_documento,
+                                'nombre' => basename($doc->archivo),
+                                'url' => asset('storage/' . $doc->archivo),
+                                'tipo' => pathinfo($doc->archivo, PATHINFO_EXTENSION),
+                                'estado' => $doc->estado,
+                            ];
+                        }) : [],
+                    ];
+                }) : [],
+                'estudios' => $aspirante->estudiosUsuario ? $aspirante->estudiosUsuario->map(function($est) {
+                    return [
+                        'titulo' => $est->titulo ?? $est->nombre_titulo ?? null,
+                        'institucion' => $est->institucion ?? $est->nombre_institucion ?? null,
+                        'fecha_inicio' => $est->fecha_inicio ?? null,
+                        'fecha_fin' => $est->fecha_fin ?? null,
+                        'nivel_educativo' => $est->nivel_educativo ?? $est->nivel ?? null,
+                        'documentos' => $est->documentosEstudio ? $est->documentosEstudio->map(function($doc) {
+                            return [
+                                'id' => $doc->id_documento,
+                                'nombre' => basename($doc->archivo),
+                                'url' => asset('storage/' . $doc->archivo),
+                                'tipo' => pathinfo($doc->archivo, PATHINFO_EXTENSION),
+                                'estado' => $doc->estado,
+                            ];
+                        }) : [],
+                    ];
+                }) : [],
+                'produccion_academica' => $aspirante->produccionAcademicaUsuario ? $aspirante->produccionAcademicaUsuario->map(function($prod) {
+                    return [
+                        'titulo' => $prod->titulo ?? null,
+                        'numero_autores' => $prod->numero_autores ?? null,
+                        'medio_divulgacion' => $prod->medio_divulgacion ?? null,
+                        'fecha_divulgacion' => $prod->fecha_divulgacion ?? null,
+                         'documentos' => $prod->documentosProduccionAcademica ? $prod->documentosProduccionAcademica->map(function($doc) {
+                    return [
+                        'id' => $doc->id_documento,
+                        'nombre' => basename($doc->archivo),
+                        'url' => asset('storage/' . $doc->archivo),
+                        'tipo' => pathinfo($doc->archivo, PATHINFO_EXTENSION),
+                        'estado' => $doc->estado,
+                    ];
+                }) : [],
+                    ];
+                }) : [],
+                'aptitudes' => $aspirante->aptitudesUsuario ? $aspirante->aptitudesUsuario->map(function($apt) {
+                    return [
+                        'nombre' => $apt->nombre_aptitud ?? null,
+                        'descripcion' => $apt->descripcion_aptitud ?? null,
+                    ];
+                }) : [],
                 'postulaciones' => $aspirante->postulacionesUsuario,
                 'documentos' => $documentos,
                 'avales' => [
