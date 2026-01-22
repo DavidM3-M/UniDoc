@@ -8,7 +8,7 @@ use App\Http\Requests\RequestTalentoHumano\RequestConvocatoria\CrearConvocatoria
 use App\Models\TalentoHumano\Convocatoria;
 use Illuminate\Support\Facades\DB;
 use App\Services\ArchivoService;
-
+use Illuminate\Support\Facades\Log;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
@@ -196,8 +196,8 @@ public function obtenerConvocatorias()
         return response()->json(['convocatorias' => $convocatoriasTransformadas], 200);
 
     } catch (\Exception $e) {
-        \Log::error('Error al obtener convocatorias: ' . $e->getMessage());
-        \Log::error('Stack trace: ' . $e->getTraceAsString());
+        Log::error('Error al obtener convocatorias: ' . $e->getMessage());
+        Log::error('Stack trace: ' . $e->getTraceAsString());
 
         return response()->json([
             'mensaje' => 'Error al obtener las convocatorias',
@@ -261,8 +261,8 @@ public function obtenerConvocatorias()
         return response()->json(['convocatoria' => $convocatoriaTransformada], 200);
 
     } catch (\Exception $e) {
-        \Log::error('Error al obtener convocatoria por ID: ' . $e->getMessage());
-        \Log::error('Stack trace: ' . $e->getTraceAsString());
+        Log::error('Error al obtener convocatoria por ID: ' . $e->getMessage());
+        Log::error('Stack trace: ' . $e->getTraceAsString());
 
         return response()->json([
             'mensaje' => 'Error al obtener la convocatoria',
@@ -458,20 +458,20 @@ public function exportarConvocatoriasExcel()
 public function obtenerConvocatoriaPublicaPorId($id_convocatoria)
 {
     try {
-        \Log::info("Intentando obtener convocatoria con ID: " . $id_convocatoria);
+        Log::info("Intentando obtener convocatoria con ID: " . $id_convocatoria);
 
         // Buscar la convocatoria SIN cargar relaciones
         $convocatoria = Convocatoria::where('id_convocatoria', $id_convocatoria)->first();
 
         if (!$convocatoria) {
-            \Log::warning("Convocatoria no encontrada: " . $id_convocatoria);
+            Log::warning("Convocatoria no encontrada: " . $id_convocatoria);
             return response()->json([
                 'mensaje' => 'Convocatoria no encontrada',
                 'error' => 'La convocatoria solicitada no existe'
             ], 404);
         }
 
-        \Log::info("Convocatoria encontrada: " . $convocatoria->nombre_convocatoria);
+        Log::info("Convocatoria encontrada: " . $convocatoria->nombre_convocatoria);
 
         // Transformar datos para asegurar compatibilidad
         $convocatoriaTransformada = [
@@ -500,8 +500,8 @@ public function obtenerConvocatoriaPublicaPorId($id_convocatoria)
         return response()->json(['convocatoria' => $convocatoriaTransformada], 200);
 
     } catch (\Exception $e) {
-        \Log::error("Error al obtener convocatoria: " . $e->getMessage());
-        \Log::error("Stack trace: " . $e->getTraceAsString());
+        Log::error("Error al obtener convocatoria: " . $e->getMessage());
+        Log::error("Stack trace: " . $e->getTraceAsString());
 
         return response()->json([
             'mensaje' => 'Error al obtener la convocatoria',

@@ -59,7 +59,7 @@ Route::group([
 // Rutas compartidas para Vicerrectoria y Rectoria
 });
 Route::group([
-    'middleware' => ['api', 'auth:api', 'role:Vicerrectoria|Rectoria'],
+    'middleware' => ['api', 'auth:api', 'role:Vicerrectoria|Rectoria|Talento Humano'],
     'prefix' => 'admin'
 ], function () {
 

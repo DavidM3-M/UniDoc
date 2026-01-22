@@ -22,11 +22,31 @@ class VerificacionDocumentosController
         'estudiosUsuario'            => 'documentosEstudio',
         'experienciasUsuario'        => 'documentosExperiencia',
         'idiomasUsuario'             => 'documentosIdioma',
+        'produccionAcademicaUsuario' => 'documentosProduccionAcademica',
         'rutUsuario'                 => 'documentosRut',
         'informacionContactoUsuario' => 'documentosInformacionContacto',
         'epsUsuario'                 => 'documentosEps',
         'usuario'                    => 'documentosUser',
     ];
+
+    /**
+     * Mapa de categorías públicas a relaciones internas.
+     *
+     * @return array
+     */
+    private function obtenerMapaCategorias(): array
+    {
+        return [
+            'estudios' => ['relacion' => 'estudiosUsuario', 'documentos' => 'documentosEstudio'],
+            'experiencias' => ['relacion' => 'experienciasUsuario', 'documentos' => 'documentosExperiencia'],
+            'idiomas' => ['relacion' => 'idiomasUsuario', 'documentos' => 'documentosIdioma'],
+            'producciones' => ['relacion' => 'produccionAcademicaUsuario', 'documentos' => 'documentosProduccionAcademica'],
+            'rut' => ['relacion' => 'rutUsuario', 'documentos' => 'documentosRut'],
+            'informacion-contacto' => ['relacion' => 'informacionContactoUsuario', 'documentos' => 'documentosInformacionContacto'],
+            'eps' => ['relacion' => 'epsUsuario', 'documentos' => 'documentosEps'],
+            'usuario' => ['relacion' => 'usuario', 'documentos' => 'documentosUser'],
+        ];
+    }
 
     /**
      * Prepara las relaciones para hacer eager loading filtrando por estado.
@@ -279,6 +299,69 @@ class VerificacionDocumentosController
     }
 
     /**
+     * Obtiene los documentos de un docente filtrados por categoría.
+     *
+     * @param int $user_id ID del usuario (docente) a consultar.
+     * @param string $categoria Categoría de documentos a consultar.
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function verDocumentosPorCategoria($user_id, $categoria)
+    {
+        try {
+            $mapa = $this->obtenerMapaCategorias();
+
+            if (! array_key_exists($categoria, $mapa)) {
+                return response()->json([
+                    'message' => 'Categoría no válida.',
+                    'categorias_disponibles' => array_keys($mapa),
+                ], 422);
+            }
+
+            $relacionPadre = $mapa[$categoria]['relacion'];
+            $relacionDocumentos = $mapa[$categoria]['documentos'];
+
+            if ($relacionPadre === 'usuario') {
+                $usuario = User::with(['documentosUser'])->findOrFail($user_id);
+                $documentos = collect($usuario->documentosUser ?? []);
+            } else {
+                $usuario = User::with([$relacionPadre => function ($q) use ($relacionDocumentos) {
+                    $q->with($relacionDocumentos);
+                }])->findOrFail($user_id);
+
+                $documentos = collect();
+                $relacion = $usuario->$relacionPadre ?? null;
+
+                if (is_iterable($relacion)) {
+                    foreach ($relacion as $item) {
+                        foreach ($item->$relacionDocumentos ?? [] as $documento) {
+                            $documentos->push($documento);
+                        }
+                    }
+                } elseif (is_object($relacion)) {
+                    foreach ($relacion->$relacionDocumentos ?? [] as $documento) {
+                        $documentos->push($documento);
+                    }
+                }
+            }
+
+            foreach ($documentos as $documento) {
+                $documento->archivo_url = Storage::url($documento->archivo);
+            }
+
+            return response()->json([
+                'categoria' => $categoria,
+                'data' => $documentos->values(),
+                'message' => $documentos->isEmpty() ? 'No se encontraron documentos en esta categoría.' : '',
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Error al obtener los documentos por categoría.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Actualiza el estado de un documento específico.
      *
      * Este método recibe una solicitud HTTP para actualizar el estado de un documento identificado por su ID.
@@ -311,6 +394,39 @@ class VerificacionDocumentosController
             // El código de estado HTTP es 500, indicando un error interno del servidor.
             return response()->json([
                 'message' => 'Error al actualizar el estado del documento.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtiene un documento específico y agrega la URL pública del archivo.
+     *
+     * @param int $documento_id ID del documento a consultar.
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function verDocumento($documento_id)
+    {
+        try {
+            $documento = Documento::findOrFail($documento_id);
+            $disk = Storage::disk('public');
+
+            if (! $disk->exists($documento->archivo)) {
+                return response()->json([
+                    'message' => 'Archivo no encontrado.',
+                ], 404);
+            }
+
+            $path = $disk->path($documento->archivo);
+            $mime = $disk->mimeType($documento->archivo) ?? 'application/pdf';
+
+            return response()->file($path, [
+                'Content-Type' => $mime,
+                'Content-Disposition' => 'inline; filename="' . basename($documento->archivo) . '"',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Error al obtener el documento.',
                 'error' => $e->getMessage(),
             ], 500);
         }

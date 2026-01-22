@@ -8,6 +8,7 @@ use App\Services\GeneradorHojaDeVidaPDFService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class AspiranteAdminController extends Controller
 {
@@ -16,6 +17,67 @@ class AspiranteAdminController extends Controller
     public function __construct(GeneradorHojaDeVidaPDFService $generadorPDFService)
     {
         $this->generadorPDFService = $generadorPDFService;
+    }
+
+    /**
+     * Comprueba de forma robusta si un usuario tiene un rol dado.
+     * Soporta Spatie (`hasRole`, `getRoleNames`), relación `roles`, o atributos `rol`/`role`.
+     */
+    private function userHasRole($usuario, string $roleName): bool
+    {
+        try {
+            if (! $usuario) {
+                return false;
+            }
+
+            if (method_exists($usuario, 'hasRole')) {
+                return (bool) $usuario->hasRole($roleName);
+            }
+
+            if (method_exists($usuario, 'getRoleNames')) {
+                $roleNames = $usuario->getRoleNames();
+                if (is_iterable($roleNames)) {
+                    foreach ($roleNames as $r) {
+                        if ((string) $r === $roleName) {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            if (isset($usuario->roles) && is_iterable($usuario->roles)) {
+                // Eloquent relation or array
+                $names = [];
+                if ($usuario->roles instanceof \Illuminate\Support\Collection) {
+                    $names = $usuario->roles->pluck('name')->toArray();
+                } else {
+                    foreach ($usuario->roles as $r) {
+                        if (is_array($r) && isset($r['name'])) {
+                            $names[] = $r['name'];
+                        } elseif (is_object($r) && isset($r->name)) {
+                            $names[] = $r->name;
+                        } else {
+                            $names[] = (string) $r;
+                        }
+                    }
+                }
+
+                return in_array($roleName, $names, true);
+            }
+
+            if (isset($usuario->rol) && (string) $usuario->rol === $roleName) {
+                return true;
+            }
+
+            if (isset($usuario->role) && (string) $usuario->role === $roleName) {
+                return true;
+            }
+
+            return false;
+        } catch (\Throwable $e) {
+            Log::error('Error comprobando rol: ' . $e->getMessage());
+            return false;
+        }
     }
 
     /**
@@ -115,7 +177,7 @@ class AspiranteAdminController extends Controller
             ], 200);
 
         } catch (\Exception $e) {
-            \Log::error('Error al obtener aspirantes: ' . $e->getMessage());
+            Log::error('Error al obtener aspirantes: ' . $e->getMessage());
             return response()->json([
                 'mensaje' => 'Error al obtener la lista de aspirantes',
                 'error' => $e->getMessage()
@@ -218,7 +280,76 @@ class AspiranteAdminController extends Controller
             return response()->json(['aspirante' => $data], 200);
 
         } catch (\Exception $e) {
-            \Log::error('Error al obtener aspirante: ' . $e->getMessage());
+            Log::error('Error al obtener aspirante: ' . $e->getMessage());
+            return response()->json([
+                'mensaje' => 'Error al obtener información del aspirante',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtener información limitada de un aspirante para Talento Humano
+     * Devuelve solo los campos necesarios (evita exponer datos sensibles)
+     */
+    public function obtenerAspiranteParaTalentoHumano($id)
+    {
+        try {
+            $aspirante = User::role('Aspirante')
+                ->with([
+                    'fotoPerfilUsuario.documentosFotoPerfil',
+                    'informacionContactoUsuario',
+                    'documentosUser'
+                ])
+                ->findOrFail($id);
+
+            $fotoUrl = null;
+            if ($aspirante->fotoPerfilUsuario && $aspirante->fotoPerfilUsuario->documentosFotoPerfil->count() > 0) {
+                $fotoUrl = asset('storage/' . $aspirante->fotoPerfilUsuario->documentosFotoPerfil->first()->archivo);
+            }
+
+            $documentos = $aspirante->documentosUser->map(function($doc) {
+                return [
+                    'id' => $doc->id,
+                    'nombre' => $doc->archivo,
+                    'url' => asset('storage/' . $doc->archivo),
+                    'tipo' => pathinfo($doc->archivo, PATHINFO_EXTENSION),
+                ];
+            });
+
+            $data = [
+                'id' => $aspirante->id,
+                'datos_personales' => [
+                    'primer_nombre' => $aspirante->primer_nombre,
+                    'segundo_nombre' => $aspirante->segundo_nombre,
+                    'primer_apellido' => $aspirante->primer_apellido,
+                    'segundo_apellido' => $aspirante->segundo_apellido,
+                    'tipo_identificacion' => $aspirante->tipo_identificacion,
+                    'numero_identificacion' => $aspirante->numero_identificacion,
+                    'email' => $aspirante->email,
+                    'foto_perfil_url' => $fotoUrl,
+                ],
+                'informacion_contacto' => $aspirante->informacionContactoUsuario ? [
+                    'telefono' => $aspirante->informacionContactoUsuario->telefono_movil ?? null,
+                    'celular' => $aspirante->informacionContactoUsuario->celular_alternativo ?? null,
+                ] : null,
+                'documentos' => $documentos,
+                'avales' => [
+                    'rectoria' => [
+                        'estado' => $aspirante->aval_rectoria,
+                        'fecha' => $aspirante->aval_rectoria_at,
+                    ],
+                    'vicerrectoria' => [
+                        'estado' => $aspirante->aval_vicerrectoria,
+                        'fecha' => $aspirante->aval_vicerrectoria_at,
+                    ],
+                ],
+            ];
+
+            return response()->json(['aspirante' => $data], 200);
+
+        } catch (\Exception $e) {
+            Log::error('Error al obtener aspirante (talento humano): ' . $e->getMessage());
             return response()->json([
                 'mensaje' => 'Error al obtener información del aspirante',
                 'error' => $e->getMessage()
@@ -244,14 +375,14 @@ class AspiranteAdminController extends Controller
             $usuario = Auth::user();
             $tipoAval = $request->tipo_aval;
 
-            // Verificar que el usuario tenga el rol correcto
-            if ($tipoAval === 'rectoria' && !$usuario->hasRole('Rectoria')) {
+            // Verificar que el usuario tenga el rol correcto (comprobación robusta)
+            if ($tipoAval === 'rectoria' && ! $this->userHasRole($usuario, 'Rectoria')) {
                 return response()->json([
                     'mensaje' => 'No tienes permisos para dar aval de rectoría'
                 ], 403);
             }
 
-            if ($tipoAval === 'vicerrectoria' && !$usuario->hasRole('Vicerrectoria')) {
+            if ($tipoAval === 'vicerrectoria' && ! $this->userHasRole($usuario, 'Vicerrectoria')) {
                 return response()->json([
                     'mensaje' => 'No tienes permisos para dar aval de vicerrectoría'
                 ], 403);
@@ -284,7 +415,7 @@ class AspiranteAdminController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            \Log::error('Error al dar aval: ' . $e->getMessage());
+            Log::error('Error al dar aval: ' . $e->getMessage());
             return response()->json([
                 'mensaje' => 'Error al registrar el aval',
                 'error' => $e->getMessage()
@@ -302,7 +433,7 @@ class AspiranteAdminController extends Controller
             return $this->generadorPDFService->generar($id);
 
         } catch (\Exception $e) {
-            \Log::error('Error al generar PDF: ' . $e->getMessage());
+            Log::error('Error al generar PDF: ' . $e->getMessage());
             return response()->json([
                 'mensaje' => 'Error al generar la hoja de vida',
                 'error' => $e->getMessage()
@@ -336,7 +467,7 @@ class AspiranteAdminController extends Controller
             ], 200);
 
         } catch (\Exception $e) {
-            \Log::error('Error al obtener estadísticas: ' . $e->getMessage());
+            Log::error('Error al obtener estadísticas: ' . $e->getMessage());
             return response()->json([
                 'mensaje' => 'Error al obtener estadísticas',
                 'error' => $e->getMessage()
