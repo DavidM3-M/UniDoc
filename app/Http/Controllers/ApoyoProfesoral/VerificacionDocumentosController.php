@@ -418,7 +418,8 @@ class VerificacionDocumentosController
             }
 
             $path = $disk->path($documento->archivo);
-            $mime = $disk->mimeType($documento->archivo) ?? 'application/pdf';
+            $mime = Storage::mimeType('public/' . $documento->archivo);
+            $mime = $mime ?? 'application/pdf';
 
             return response()->file($path, [
                 'Content-Type' => $mime,
