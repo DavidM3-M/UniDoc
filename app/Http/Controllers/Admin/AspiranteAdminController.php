@@ -86,6 +86,10 @@ class AspiranteAdminController extends Controller
     public function obtenerAspirantes(Request $request)
     {
         try {
+            $usuario = Auth::user();
+            $esVicerrectoria = $this->userHasRole($usuario, 'Vicerrectoria');
+            $esRectoria = $this->userHasRole($usuario, 'Rectoria');
+
             $query = User::role('Aspirante')
                 ->with([
                     'municipioUsuarios.departamentoMunicipio',
@@ -113,6 +117,18 @@ class AspiranteAdminController extends Controller
                     'created_at'
                 ]);
 
+            if ($esVicerrectoria) {
+                $query->where('aval_talento_humano', true)
+                    ->whereExists(function ($subQuery) {
+                        $subQuery->select(DB::raw(1))
+                            ->from('coordinador_evaluaciones')
+                            ->whereColumn('coordinador_evaluaciones.aspirante_user_id', 'users.id')
+                            ->where('aprobado', true);
+                    });
+            } elseif ($esRectoria) {
+                $query->where('aval_vicerrectoria', true);
+            }
+
             // Filtros opcionales
             if ($request->has('search')) {
                 $search = $request->search;
@@ -127,13 +143,17 @@ class AspiranteAdminController extends Controller
             if ($request->has('aval_filter')) {
                 $filter = $request->aval_filter;
                 if ($filter === 'con_aval_rectoria') {
-                    $query->where('aval_rectoria', 'Aprobado');
+                    $query->where('aval_rectoria', true);
                 } elseif ($filter === 'sin_aval_rectoria') {
-                    $query->whereNull('aval_rectoria');
+                    $query->where(function ($q) {
+                        $q->whereNull('aval_rectoria')->orWhere('aval_rectoria', false);
+                    });
                 } elseif ($filter === 'con_aval_vicerrectoria') {
-                    $query->where('aval_vicerrectoria', 'Aprobado');
+                    $query->where('aval_vicerrectoria', true);
                 } elseif ($filter === 'sin_aval_vicerrectoria') {
-                    $query->whereNull('aval_vicerrectoria');
+                    $query->where(function ($q) {
+                        $q->whereNull('aval_vicerrectoria')->orWhere('aval_vicerrectoria', false);
+                    });
                 }
             }
 
@@ -364,7 +384,7 @@ class AspiranteAdminController extends Controller
     {
         $request->validate([
             'tipo_aval' => 'required|in:rectoria,vicerrectoria',
-            'estado' => 'required|in:Aprobado,Rechazado',
+            'estado' => 'required|boolean',
             'observaciones' => 'nullable|string|max:1000',
         ]);
 
@@ -390,11 +410,11 @@ class AspiranteAdminController extends Controller
 
             // Actualizar el aval correspondiente
             if ($tipoAval === 'rectoria') {
-                $aspirante->aval_rectoria = $request->estado;
+                $aspirante->aval_rectoria = (bool) $request->estado;
                 $aspirante->aval_rectoria_by = $usuario->id;
                 $aspirante->aval_rectoria_at = now();
             } else {
-                $aspirante->aval_vicerrectoria = $request->estado;
+                $aspirante->aval_vicerrectoria = (bool) $request->estado;
                 $aspirante->aval_vicerrectoria_by = $usuario->id;
                 $aspirante->aval_vicerrectoria_at = now();
             }
@@ -448,11 +468,15 @@ class AspiranteAdminController extends Controller
     {
         try {
             $totalAspirantes = User::role('Aspirante')->count();
-            $conAvalRectoria = User::role('Aspirante')->where('aval_rectoria', 'Aprobado')->count();
-            $conAvalVicerrectoria = User::role('Aspirante')->where('aval_vicerrectoria', 'Aprobado')->count();
+            $conAvalRectoria = User::role('Aspirante')->where('aval_rectoria', true)->count();
+            $conAvalVicerrectoria = User::role('Aspirante')->where('aval_vicerrectoria', true)->count();
             $sinAvales = User::role('Aspirante')
-                ->whereNull('aval_rectoria')
-                ->whereNull('aval_vicerrectoria')
+                ->where(function ($q) {
+                    $q->whereNull('aval_rectoria')->orWhere('aval_rectoria', false);
+                })
+                ->where(function ($q) {
+                    $q->whereNull('aval_vicerrectoria')->orWhere('aval_vicerrectoria', false);
+                })
                 ->count();
 
             return response()->json([
@@ -461,8 +485,8 @@ class AspiranteAdminController extends Controller
                     'con_aval_rectoria' => $conAvalRectoria,
                     'con_aval_vicerrectoria' => $conAvalVicerrectoria,
                     'sin_avales' => $sinAvales,
-                    'rechazados_rectoria' => User::role('Aspirante')->where('aval_rectoria', 'Rechazado')->count(),
-                    'rechazados_vicerrectoria' => User::role('Aspirante')->where('aval_vicerrectoria', 'Rechazado')->count(),
+                    'rechazados_rectoria' => 0,
+                    'rechazados_vicerrectoria' => 0,
                 ]
             ], 200);
 

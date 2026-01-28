@@ -7,13 +7,63 @@ use Illuminate\Http\Request;
 use App\Models\Usuario\User;
 use Illuminate\Support\Facades\DB;
 
+
 class VicerrectoriaController extends Controller
 {
+    // Obtener postulaciones/convocatorias de un usuario específico
+    public function postulacionesPorUsuario($userId)
+    {
+        try {
+            $user = User::with(['postulacionesUsuario.convocatoriaPostulacion'])
+                ->findOrFail($userId);
+
+
+            $postulaciones = $user->postulacionesUsuario->map(function ($postulacion) {
+                return [
+                    'postulacion_id' => $postulacion->id_postulacion,
+                    'estado_postulacion' => $postulacion->estado_postulacion,
+                    'convocatoria' => $postulacion->convocatoriaPostulacion,
+                ];
+            })->filter()->values();
+
+            return response()->json(['data' => $postulaciones], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Error al obtener postulaciones del usuario.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
     // Listar usuarios aprobados por Talento Humano
     public function index()
     {
         try {
-            $usuarios = User::where('aval_talento_humano', true)->get();
+            $usuarios = User::where('aval_talento_humano', true)
+                ->where('aval_coordinador', true)
+                ->with(['postulacionesUsuario.convocatoriaPostulacion'])
+                ->get()
+                ->map(function ($usuario) {
+                    $convocatorias = $usuario->postulacionesUsuario
+                        ->map(function ($postulacion) {
+                            $convocatoria = $postulacion->convocatoriaPostulacion;
+                            if (! $convocatoria) {
+                                return null;
+                            }
+                            return [
+                                'id' => $convocatoria->id_convocatoria,
+                                'nombre' => $convocatoria->nombre_convocatoria,
+                            ];
+                        })
+                        ->filter()
+                        ->values();
+
+                    // Convertir el usuario a array y agregar convocatorias
+                    $userArr = $usuario->toArray();
+                    $userArr['convocatorias'] = $convocatorias;
+                    // Opcional: eliminar relaciones innecesarias
+                    unset($userArr['postulaciones_usuario']);
+                    return $userArr;
+                });
 
             return response()->json(['data' => $usuarios], 200);
         } catch (\Exception $e) {
@@ -30,8 +80,8 @@ class VicerrectoriaController extends Controller
         try {
             $user = User::findOrFail($userId);
 
-            if (! $user->aval_talento_humano) {
-                return response()->json(['message' => 'Usuario no aprobado por Talento Humano.'], 403);
+            if (! $user->aval_talento_humano || ! $user->aval_coordinador) {
+                return response()->json(['message' => 'Usuario no aprobado por Talento Humano o Coordinador.'], 403);
             }
 
             return response()->json(['data' => $user], 200);
@@ -49,8 +99,8 @@ class VicerrectoriaController extends Controller
         try {
             $user = User::findOrFail($userId);
 
-            if (! $user->aval_talento_humano) {
-                return response()->json(['message' => 'Usuario no aprobado por Talento Humano.'], 403);
+            if (! $user->aval_talento_humano || ! $user->aval_coordinador) {
+                return response()->json(['message' => 'Usuario no aprobado por Talento Humano o Coordinador.'], 403);
             }
 
             DB::transaction(function () use ($request, $user) {

@@ -63,7 +63,7 @@ class Convocatoria extends Model
     {
         return $this->hasMany(
             \App\Models\TalentoHumano\Postulacion::class,
-            'id_convocatoria',
+            'convocatoria_id',
             'id_convocatoria'
         );
     }

@@ -13,7 +13,7 @@ class RectoriaController extends Controller
     public function index()
     {
         try {
-            $usuarios = User::where('aval_talento_humano', true)->get();
+            $usuarios = User::where('aval_vicerrectoria', true)->get();
 
             return response()->json(['data' => $usuarios], 200);
         } catch (\Exception $e) {
@@ -30,8 +30,8 @@ class RectoriaController extends Controller
         try {
             $user = User::findOrFail($userId);
 
-            if (! $user->aval_talento_humano) {
-                return response()->json(['message' => 'Usuario no aprobado por Talento Humano.'], 403);
+            if (! $user->aval_vicerrectoria) {
+                return response()->json(['message' => 'Usuario no aprobado por Vicerrectoría.'], 403);
             }
 
             return response()->json(['data' => $user], 200);
@@ -49,8 +49,8 @@ class RectoriaController extends Controller
         try {
             $user = User::findOrFail($userId);
 
-            if (! $user->aval_talento_humano) {
-                return response()->json(['message' => 'Usuario no aprobado por Talento Humano.'], 403);
+            if (! $user->aval_vicerrectoria) {
+                return response()->json(['message' => 'Usuario no aprobado por Vicerrectoría.'], 403);
             }
 
             DB::transaction(function () use ($request, $user) {

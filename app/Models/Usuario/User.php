@@ -70,6 +70,9 @@ class User extends Authenticatable implements JWTSubject
         'aval_vicerrectoria',
         'aval_vicerrectoria_by',
         'aval_vicerrectoria_at',
+        'aval_coordinador',
+        'aval_coordinador_by',
+        'aval_coordinador_at',
         'aval_talento_humano',
         'aval_talento_humano_by',
         'aval_talento_humano_at',
@@ -98,6 +101,14 @@ class User extends Authenticatable implements JWTSubject
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'aval_rectoria' => 'boolean',
+            'aval_vicerrectoria' => 'boolean',
+            'aval_coordinador' => 'boolean',
+            'aval_talento_humano' => 'boolean',
+            'aval_rectoria_at' => 'datetime',
+            'aval_vicerrectoria_at' => 'datetime',
+            'aval_coordinador_at' => 'datetime',
+            'aval_talento_humano_at' => 'datetime',
         ];
     }
 
