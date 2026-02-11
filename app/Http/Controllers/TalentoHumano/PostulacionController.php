@@ -43,6 +43,21 @@ class PostulacionController
     public function crearPostulacion(Request $request, $convocatoriaId)
     {
         try {
+            $convocatoria = Convocatoria::findOrFail($convocatoriaId);
+             // Verificar si la convocatoria está cerrada
+            if ($convocatoria->estado_convocatoria === 'Cerrada') {
+                return response()->json([
+                    'mensaje' => 'Esta convocatoria ya está cerrada'
+                ], 403);
+            }
+
+            // Verificar si la fecha de cierre ya pasó
+            if (now()->greaterThan($convocatoria->fecha_cierre)) {
+                return response()->json([
+                    'mensaje' => 'La fecha de cierre de esta convocatoria ya ha pasado'
+                ], 403);
+            }
+            
             DB::transaction(function () use ($request, $convocatoriaId) { // Validar el ID de la convocatoria
                 $user = $request->user(); // Obtener el usuario autenticado
 
