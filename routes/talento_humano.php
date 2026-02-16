@@ -2,6 +2,7 @@
 // Importa los controladores necesarios para manejar las rutas relacionadas con Talento Humano
 use App\Http\Controllers\TalentoHumano\ContratacionController;
 use App\Http\Controllers\TalentoHumano\ConvocatoriaController;
+use App\Http\Controllers\TalentoHumano\ConvocatoriaAvalController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\TalentoHumano\PostulacionController;
 
@@ -24,10 +25,18 @@ Route::group([
 
     // Rutas relacionadas con convocatorias
     Route::get('obtener-convocatorias',[ConvocatoriaController::class, 'obtenerConvocatorias']);
+    Route::get('obtener-tipos-cargo',[ConvocatoriaController::class, 'obtenerTiposCargo']);
     Route::get('obtener-convocatoria/{id}',[ConvocatoriaController::class, 'obtenerConvocatoriaPorId']);
     Route::post('crear-convocatoria',[ConvocatoriaController::class, 'crearConvocatoria']);
     Route::put('actualizar-convocatoria/{id}',[ConvocatoriaController::class, 'actualizarConvocatoria']);
     Route::delete('eliminar-convocatoria/{id}',[ConvocatoriaController::class, 'eliminarConvocatoria']);
+
+    // Rutas para gestionar experiencias requeridas (Talento Humano)
+    Route::get('experiencias-requeridas',[ExperienciaRequeridaController::class, 'index']);
+    Route::post('experiencias-requeridas',[ExperienciaRequeridaController::class, 'store']);
+    Route::get('experiencias-requeridas/{id}',[ExperienciaRequeridaController::class, 'show']);
+    Route::put('experiencias-requeridas/{id}',[ExperienciaRequeridaController::class, 'update']);
+    Route::delete('experiencias-requeridas/{id}',[ExperienciaRequeridaController::class, 'destroy']);
 
     // Rutas relacionadas con postulaciones
     Route::get('obtener-postulaciones',[PostulacionController::class, 'obtenerPostulaciones']);
@@ -42,6 +51,11 @@ Route::group([
     Route::delete('eliminar-contratacion/{id}',[ContratacionController::class, 'eliminarContratacion']);
     Route::get('obtener-contratacion/{id_contratacion}',[ContratacionController::class, 'obtenerContratacionPorId']);
     Route::get('obtener-contrataciones',[ContratacionController::class, 'obtenerTodasLasContrataciones']);
+
+    // Rutas para gestionar avales por convocatoria
+    Route::get('avales',[ConvocatoriaAvalController::class, 'index']);
+    Route::post('avales',[ConvocatoriaAvalController::class, 'store']);
+    Route::put('avales/{id}',[ConvocatoriaAvalController::class, 'update']);
 
     // Nueva Ruta para exportar convocatorias a Excel (Brayan Cuellar)
     Route::get('exportar-convocatorias-excel',[ConvocatoriaController::class, 'exportarConvocatoriasExcel']);

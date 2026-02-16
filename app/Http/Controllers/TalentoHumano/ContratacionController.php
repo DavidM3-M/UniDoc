@@ -7,6 +7,8 @@ use App\Http\Requests\RequestTalentoHumano\RequestContratacion\ActualizarContrat
 use App\Models\Usuario\User;
 use Illuminate\Support\Facades\DB;
 use App\Models\TalentoHumano\Contratacion;
+use App\Models\TalentoHumano\Convocatoria;
+use App\Models\TalentoHumano\ConvocatoriaAval;
 use Illuminate\Support\Facades\Auth;
 use App\Services\AprobarDocumentosService;
 use App\Services\RevertirDocumentosService;
@@ -51,6 +53,24 @@ class ContratacionController
         try {
             DB::transaction(function () use ($request, $user_id) { // Inicia una transacción para asegurar la atomicidad de las operaciones
                 $datosContratacion = $request->validated(); // Validar los datos de la solicitud
+                // Si se envía una convocatoria, verificar que los avales requeridos estén aprobados para este usuario
+                if (!empty($datosContratacion['convocatoria_id'])) {
+                    $conv = Convocatoria::find($datosContratacion['convocatoria_id']);
+                    if ($conv && !empty($conv->avales_establecidos)) {
+                        $faltantes = [];
+                        foreach ($conv->avales_establecidos as $avalRequerido) {
+                            $aprobado = ConvocatoriaAval::where('convocatoria_id', $conv->id_convocatoria)
+                                ->where('user_id', $user_id)
+                                ->where('aval', $avalRequerido)
+                                ->where('estado', 'aprobado')
+                                ->exists();
+                            if (!$aprobado) $faltantes[] = $avalRequerido;
+                        }
+                        if (!empty($faltantes)) {
+                            throw new \Exception('Faltan avales necesarios: ' . implode(', ', $faltantes), 403);
+                        }
+                    }
+                }
                 $datosContratacion['user_id'] = $user_id; // Asignar el user_id a los datos de contratación
 
                 $existeContratacion = Contratacion::where('user_id', $user_id)->exists(); // Verificar si ya existe una contratación para el usuario

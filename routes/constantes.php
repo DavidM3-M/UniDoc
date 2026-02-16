@@ -31,6 +31,9 @@ Route::group([
     // Constantes relacionadas con los estudios
     Route::get('tipos-estudio', [ConstantesController::class, 'obtenerTipoEstudio']);
 
+    // Constantes: perfiles profesionales (desplegable)
+    Route::get('perfiles-profesionales', [ConstantesController::class, 'obtenerPerfilesProfesionales']);
+
     // Constantes relacionadas con la experiencia laboral
     Route::get('tipos-experiencia', [ConstantesController::class, 'obtenerTipoExperiencia']);
 

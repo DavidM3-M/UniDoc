@@ -42,6 +42,7 @@ class CrearContratacionRequest extends FormRequest
             'valor_contrato' => 'required|numeric',
             // El campo `valor_contrato` es obligatorio (`required`) y debe ser un valor numérico (`numeric`).
             'observaciones' => 'nullable|string|regex:/^[\pL\pN\s\-]+$/u',
+            'convocatoria_id' => 'nullable|integer|exists:convocatorias,id_convocatoria',
              // El campo `observaciones` es opcional (`nullable`), pero si está presente, debe ser una cadena (`string`).
             // Además, debe cumplir con un patrón regex que permite letras, números, espacios y guiones.
         ];

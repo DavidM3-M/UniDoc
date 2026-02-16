@@ -125,6 +125,14 @@ class ConstantesController
         ]);
     }
 
+    // Obtener perfiles profesionales para desplegable
+    public function obtenerPerfilesProfesionales()
+    {
+        return response()->json([
+            'perfiles_profesionales' => \App\Constants\ConstTalentoHumano\PerfilesProfesionales\PerfilesProfesionales::all()
+        ], 200);
+    }
+
     //constantes cuenta bancaria
     public function obtenerTipoCuenta()
     {

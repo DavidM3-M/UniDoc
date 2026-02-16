@@ -2,9 +2,15 @@
 
 namespace App\Http\Controllers\TalentoHumano;
 
+use App\Constants\ConstAgregarExperiencia\TiposExperiencia;
+use App\Constants\ConstAgregarIdioma\NivelIdioma;
+use App\Constants\ConstTalentoHumano\PerfilesProfesionales\PerfilesProfesionales;
+use App\Constants\ConstAgregarEstudio\TiposEstudio;
 use App\Constants\ConstTalentoHumano\EstadoPostulacion;
 use App\Models\TalentoHumano\Postulacion;
 use App\Models\TalentoHumano\Convocatoria;
+use App\Models\TalentoHumano\ConvocatoriaAval;
+use App\Models\Usuario\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use App\Services\GeneradorHojaDeVidaPDFService;
@@ -44,9 +50,9 @@ class PostulacionController
     {
         try {
             DB::transaction(function () use ($request, $convocatoriaId) { // Validar el ID de la convocatoria
-                $user = $request->user(); // Obtener el usuario autenticado
+                $user = $request->user()->load(['experienciasUsuario', 'estudiosUsuario', 'idiomasUsuario', 'facultades']); // Obtener el usuario autenticado con todas las relaciones necesarias
 
-                $convocatoria = Convocatoria::findOrFail($convocatoriaId); // Verificar si la convocatoria existe
+                $convocatoria = Convocatoria::with(['tipoCargo', 'experienciaRequerida', 'perfilProfesional', 'facultad'])->findOrFail($convocatoriaId); // Verificar si la convocatoria existe
 
                 if ($convocatoria->estado_convocatoria === 'Cerrada') { // Verificar si la convocatoria está cerrada
                     throw new \Exception('Esta convocatoria está cerrada y no admite más postulaciones.', 403); // Lanzar excepción si la convocatoria está cerrada
@@ -60,11 +66,30 @@ class PostulacionController
                     throw new \Exception('Ya te has postulado a esta convocatoria', 409);
                 }
 
+                // Verificar requisitos de la convocatoria
+                $this->verificarRequisitosConvocatoria($user, $convocatoria);
+
                 Postulacion::create([ // Crear la postulación
                     'user_id' => $user->id,
                     'convocatoria_id' => $convocatoriaId,
                     'estado_postulacion' => 'Enviada'
                 ]);
+
+                // Crear registros de avales pendientes para este postulante si la convocatoria los requiere
+                if (!empty($convocatoria->avales_establecidos) && is_array($convocatoria->avales_establecidos)) {
+                    foreach ($convocatoria->avales_establecidos as $avalRequerido) {
+                        ConvocatoriaAval::updateOrCreate(
+                            [
+                                'convocatoria_id' => $convocatoriaId,
+                                'user_id' => $user->id,
+                                'aval' => $avalRequerido,
+                            ],
+                            [
+                                'estado' => 'pending'
+                            ]
+                        );
+                    }
+                }
             });
 
             return response()->json([ // Crear la respuesta JSON
@@ -336,4 +361,408 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
         ], 500);
     }
 }
+
+    /**
+     * Verificar si el usuario cumple con los requisitos de la convocatoria.
+     *
+     * @param \App\Models\Usuario\User $user
+     * @param \App\Models\TalentoHumano\Convocatoria $convocatoria
+     * @throws \Exception
+     */
+    private function verificarRequisitosConvocatoria($user, $convocatoria)
+    {
+        // Verificar experiencia requerida general
+        if ($convocatoria->experienciaRequerida) {
+            $experienciaRequerida = $convocatoria->experienciaRequerida;
+            $esAdministrativo = $convocatoria->tipoCargo ? $convocatoria->tipoCargo->es_administrativo : false;
+
+            // Calcular experiencia total del usuario
+            $experienciaTotalHoras = $this->calcularExperienciaUsuario($user, $esAdministrativo);
+
+            if ($experienciaTotalHoras < $experienciaRequerida->horas_minimas) {
+                throw new \Exception("No cumples con la experiencia requerida. Se requieren {$experienciaRequerida->horas_minimas} horas y tienes {$experienciaTotalHoras} horas.", 403);
+            }
+        }
+
+        // Verificar requisito de experiencia basado en fecha (si la convocatoria define una fecha)
+        if (!empty($convocatoria->experiencia_requerida_fecha)) {
+            try {
+                $fechaReq = \Carbon\Carbon::parse($convocatoria->experiencia_requerida_fecha);
+            } catch (\Exception $e) {
+                throw new \Exception('Fecha de experiencia requerida inválida en la convocatoria.', 400);
+            }
+
+            $experienciasUsuario = $user->experienciasUsuario;
+            $cumpleFecha = false;
+
+            foreach ($experienciasUsuario as $exp) {
+                // Si la experiencia está vigente (sin fecha_finalizacion) se considera válida
+                if (empty($exp->fecha_finalizacion)) {
+                    $cumpleFecha = true;
+                    break;
+                }
+
+                try {
+                    $fechaFin = \Carbon\Carbon::parse($exp->fecha_finalizacion);
+                } catch (\Exception $e) {
+                    continue; // si la fecha del registro es inválida, omitir esa experiencia
+                }
+
+                // Si la experiencia finalizó en o después de la fecha requerida, cumple
+                if ($fechaFin->greaterThanOrEqualTo($fechaReq)) {
+                    $cumpleFecha = true;
+                    break;
+                }
+            }
+
+            if (!$cumpleFecha) {
+                throw new \Exception("No cumples con la experiencia requerida hasta la fecha {$fechaReq->toDateString()}.", 403);
+            }
+        }
+
+        // Verificar requisitos específicos de tipos de experiencia
+        if ($convocatoria->requisitos_experiencia) {
+            $this->verificarRequisitosExperienciaEspecifica($user, $convocatoria->requisitos_experiencia);
+        }
+
+        // Verificar requisitos de idiomas
+        if ($convocatoria->requisitos_idiomas) {
+            $this->verificarRequisitosIdiomas($user, $convocatoria->requisitos_idiomas);
+        }
+
+        // Verificar perfil profesional
+        if ($convocatoria->perfilProfesional) {
+            $this->verificarPerfilProfesional($user, $convocatoria->perfilProfesional);
+        }
+
+        // Verificar facultad: si la convocatoria especifica una Facultad relacionada, exigir pertenencia.
+        // Si la convocatoria define `facultad_otro` (texto libre), no se exige pertenencia automáticamente.
+        if ($convocatoria->facultad) {
+            $this->verificarFacultadUsuario($user, $convocatoria->facultad);
+        }
+
+        // Aquí se pueden agregar más verificaciones según requisitos_adicionales
+    }
+
+    /**
+     * Calcular la experiencia total del usuario en horas.
+     *
+     * @param \App\Models\Usuario\User $user
+     * @param bool $esAdministrativo
+     * @return int
+     */
+    private function calcularExperienciaUsuario($user, $esAdministrativo)
+    {
+        $experiencias = $user->experienciasUsuario;
+
+        $totalHoras = 0;
+
+        foreach ($experiencias as $experiencia) {
+            // Asumir que tipo_experiencia indica si es docente o administrativo
+            $esExperienciaAdministrativa = strtolower($experiencia->tipo_experiencia) === 'administrativo' ||
+                                           strtolower($experiencia->tipo_experiencia) === 'administrativa';
+
+            if ($esAdministrativo && !$esExperienciaAdministrativa) {
+                continue; // Si la convocatoria es administrativa, solo contar experiencia administrativa
+            }
+
+            if (!$esAdministrativo && $esExperienciaAdministrativa) {
+                continue; // Si la convocatoria es docente, no contar experiencia administrativa
+            }
+
+            $totalHoras += $experiencia->intensidad_horaria ?? 0;
+        }
+
+        return $totalHoras;
+    }
+
+    /**
+     * Verificar requisitos específicos de tipos de experiencia.
+     * Usa las constantes definidas para asegurar consistencia.
+     *
+     * @param \App\Models\Usuario\User $user
+     * @param array $requisitosExperiencia
+     * @throws \Exception
+     */
+    private function verificarRequisitosExperienciaEspecifica($user, $requisitosExperiencia)
+    {
+        $experienciasUsuario = $user->experienciasUsuario;
+
+        foreach ($requisitosExperiencia as $tipoExperiencia => $anosRequeridos) {
+            // Verificar que el tipo de experiencia esté definido en constantes
+            if (!in_array($tipoExperiencia, TiposExperiencia::all())) {
+                throw new \Exception("Tipo de experiencia no válido: {$tipoExperiencia}.", 400);
+            }
+
+            $anosUsuario = $this->calcularAniosExperienciaPorTipo($experienciasUsuario, $tipoExperiencia);
+
+            if ($anosUsuario < $anosRequeridos) {
+                $tipoExperienciaFormateado = ucfirst(str_replace('_', ' ', $tipoExperiencia));
+                throw new \Exception("No cumples con los años de experiencia requeridos en {$tipoExperienciaFormateado}. Se requieren {$anosRequeridos} años y tienes {$anosUsuario} años.", 403);
+            }
+        }
+    }
+
+    /**
+     * Calcular años de experiencia por tipo específico.
+     *
+     * @param \Illuminate\Database\Eloquent\Collection $experiencias
+     * @param string $tipoExperiencia
+     * @return float
+     */
+    private function calcularAniosExperienciaPorTipo($experiencias, $tipoExperiencia)
+    {
+        $totalAnios = 0;
+
+        foreach ($experiencias as $experiencia) {
+            if (strtolower($experiencia->tipo_experiencia) === strtolower(str_replace('_', ' ', $tipoExperiencia))) {
+                if ($experiencia->fecha_inicio && $experiencia->fecha_finalizacion) {
+                    $fechaInicio = \Carbon\Carbon::parse($experiencia->fecha_inicio);
+                    $fechaFin = \Carbon\Carbon::parse($experiencia->fecha_finalizacion);
+                    $diferencia = $fechaInicio->diffInDays($fechaFin);
+                    $totalAnios += $diferencia / 365.25; // Convertir días a años
+                }
+            }
+        }
+
+        return round($totalAnios, 1);
+    }
+
+    /**
+     * Verificar requisitos de idiomas.
+     * Usa las constantes definidas para asegurar consistencia en niveles MCER.
+     *
+     * @param \App\Models\Usuario\User $user
+     * @param array $requisitosIdiomas
+     * @throws \Exception
+     */
+    private function verificarRequisitosIdiomas($user, $requisitosIdiomas)
+    {
+        $idiomasUsuario = $user->idiomasUsuario;
+
+        foreach ($requisitosIdiomas as $idiomaRequerido => $nivelRequerido) {
+            // Verificar que el nivel requerido sea válido
+            if (!in_array(strtoupper($nivelRequerido), NivelIdioma::all())) {
+                throw new \Exception("Nivel de idioma no válido: {$nivelRequerido}. Los niveles válidos son: " . implode(', ', NivelIdioma::all()) . ".", 400);
+            }
+
+            $cumpleRequisito = false;
+
+            foreach ($idiomasUsuario as $idiomaUsuario) {
+                if (strtolower($idiomaUsuario->idioma) === strtolower($idiomaRequerido)) {
+                    if ($this->compararNivelesIdioma($idiomaUsuario->nivel, $nivelRequerido)) {
+                        $cumpleRequisito = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!$cumpleRequisito) {
+                $idiomaFormateado = ucfirst($idiomaRequerido);
+                throw new \Exception("No cumples con el requisito de idioma {$idiomaFormateado} nivel {$nivelRequerido}.", 403);
+            }
+        }
+    }
+
+    /**
+     * Comparar niveles de idioma según el MCER.
+     * Usa las constantes definidas para asegurar jerarquía correcta.
+     *
+     * @param string $nivelUsuario
+     * @param string $nivelRequerido
+     * @return bool
+     */
+    private function compararNivelesIdioma($nivelUsuario, $nivelRequerido)
+    {
+        $jerarquiaNiveles = NivelIdioma::all();
+
+        $posicionUsuario = array_search(strtoupper($nivelUsuario), $jerarquiaNiveles);
+        $posicionRequerido = array_search(strtoupper($nivelRequerido), $jerarquiaNiveles);
+
+        // Si alguno de los niveles no está en la jerarquía, devolver false
+        if ($posicionUsuario === false || $posicionRequerido === false) {
+            return false;
+        }
+
+        return $posicionUsuario >= $posicionRequerido;
+    }
+
+    /**
+     * Verificar que el usuario tenga el perfil profesional requerido.
+     * Validación robusta que considera:
+     * - Palabras clave específicas del perfil en títulos de estudio
+     * - Nivel académico mínimo requerido para el perfil
+     * - Compatibilidad de tipos de estudio
+     *
+     * @param \App\Models\Usuario\User $user
+     * @param \App\Models\PerfilProfesional $perfilRequerido
+     * @throws \Exception
+     */
+    private function verificarPerfilProfesional($user, $perfilRequerido)
+    {
+        $estudiosUsuario = $user->estudiosUsuario;
+
+        // Verificar que el perfil requerido existe y tiene nombre
+        if (!$perfilRequerido || !isset($perfilRequerido->nombre_perfil)) {
+            throw new \Exception("Perfil profesional requerido no válido.", 400);
+        }
+
+        $nombrePerfil = $perfilRequerido->nombre_perfil;
+
+        // Verificar que el perfil esté definido en las constantes
+        if (!in_array($nombrePerfil, PerfilesProfesionales::all())) {
+            // Si no está en constantes, usar validación básica
+            $this->validacionBasicaPerfil($estudiosUsuario, $nombrePerfil);
+            return;
+        }
+
+        // Validación robusta usando constantes
+        $this->validacionRobustaPerfil($estudiosUsuario, $nombrePerfil);
+    }
+
+    /**
+     * Validación básica de perfil (para perfiles no definidos en constantes)
+     */
+    private function validacionBasicaPerfil($estudiosUsuario, $nombrePerfil)
+    {
+        $estudiosRelacionados = $estudiosUsuario->filter(function ($estudio) use ($nombrePerfil) {
+            $tituloEstudio = strtolower($estudio->titulo_obtenido ?? '');
+            $perfilLower = strtolower($nombrePerfil);
+
+            return str_contains($tituloEstudio, $perfilLower) ||
+                   str_contains($perfilLower, $tituloEstudio);
+        });
+
+        if ($estudiosRelacionados->isEmpty()) {
+            throw new \Exception("No cumples con el perfil profesional requerido: {$nombrePerfil}.", 403);
+        }
+    }
+
+    /**
+     * Validación robusta de perfil usando constantes y lógica avanzada
+     */
+    private function validacionRobustaPerfil($estudiosUsuario, $nombrePerfil)
+    {
+        $palabrasClave = PerfilesProfesionales::getPalabrasClavePerfil($nombrePerfil);
+        $nivelesMinimos = PerfilesProfesionales::getNivelMinimoEstudio($nombrePerfil);
+
+        $estudioCompatible = false;
+        $nivelAdecuado = false;
+
+        foreach ($estudiosUsuario as $estudio) {
+            $tituloEstudio = strtolower($estudio->titulo_obtenido ?? '');
+            $tipoEstudio = $estudio->tipo_estudio ?? '';
+
+            // 1. Verificar palabras clave en el título
+            $contienePalabrasClave = false;
+            foreach ($palabrasClave as $palabra) {
+                if (str_contains($tituloEstudio, strtolower($palabra))) {
+                    $contienePalabrasClave = true;
+                    break;
+                }
+            }
+
+            // 2. Verificar nivel académico
+            $nivelValido = in_array($tipoEstudio, $nivelesMinimos);
+
+            // 3. Verificar si es un título relacionado (lógica adicional)
+            $tituloRelacionado = $this->esTituloRelacionado($tituloEstudio, $nombrePerfil);
+
+            if (($contienePalabrasClave || $tituloRelacionado) && $nivelValido) {
+                $estudioCompatible = true;
+                $nivelAdecuado = true;
+                break;
+            }
+        }
+
+        if (!$estudioCompatible) {
+            throw new \Exception("No tienes estudios compatibles con el perfil profesional requerido: {$nombrePerfil}. Se requieren estudios en áreas relacionadas con al menos nivel " . $this->getNivelMinimoTexto($nivelesMinimos) . ".", 403);
+        }
+
+        if (!$nivelAdecuado) {
+            throw new \Exception("Tu nivel de estudios no cumple con el mínimo requerido para el perfil {$nombrePerfil}. Se requiere al menos: " . $this->getNivelMinimoTexto($nivelesMinimos) . ".", 403);
+        }
+    }
+
+    /**
+     * Verifica si un título está relacionado con un perfil profesional
+     * Lógica adicional más flexible que las palabras clave exactas
+     */
+    private function esTituloRelacionado($tituloEstudio, $nombrePerfil): bool
+    {
+        // Normalizar textos
+        $titulo = $this->normalizarTexto($tituloEstudio);
+        $perfil = $this->normalizarTexto($nombrePerfil);
+
+        // Verificar coincidencias parciales más flexibles
+        $palabrasPerfil = explode(' ', $perfil);
+        $coincidencias = 0;
+
+        foreach ($palabrasPerfil as $palabra) {
+            if (str_contains($titulo, $palabra) && strlen($palabra) > 3) {
+                $coincidencias++;
+            }
+        }
+
+        // Si al menos el 50% de las palabras clave del perfil están en el título
+        return $coincidencias >= ceil(count($palabrasPerfil) * 0.5);
+    }
+
+    /**
+     * Normaliza texto para comparación (quita acentos, caracteres especiales)
+     */
+    private function normalizarTexto($texto): string
+    {
+        $texto = strtolower($texto);
+        $texto = str_replace(['á', 'é', 'í', 'ó', 'ú', 'ñ'], ['a', 'e', 'i', 'o', 'u', 'n'], $texto);
+        $texto = preg_replace('/[^a-z0-9\s]/', '', $texto);
+        return trim($texto);
+    }
+
+    /**
+     * Convierte array de niveles de estudio a texto legible
+     */
+    private function getNivelMinimoTexto($niveles): string
+    {
+        $nombres = [
+            TiposEstudio::TECNICO => 'Técnico',
+            TiposEstudio::TECNOLOGICO => 'Tecnológico',
+            TiposEstudio::PREGRADO => 'Pregrado',
+            TiposEstudio::ESPECIALIZACION => 'Especialización',
+            TiposEstudio::MAESTRIA => 'Maestría',
+            TiposEstudio::DOCTORADO => 'Doctorado',
+            TiposEstudio::POSTDOCTORADO => 'Postdoctorado',
+        ];
+
+        $nivelesTexto = array_map(function($nivel) use ($nombres) {
+            return $nombres[$nivel] ?? $nivel;
+        }, $niveles);
+
+        return implode(', ', $nivelesTexto);
+    }
+
+    /**
+     * Verificar que el usuario pertenezca a la facultad requerida.
+     *
+     * @param \App\Models\Usuario\User $user
+     * @param \App\Models\Facultad $facultadRequerida
+     * @throws \Exception
+     */
+    private function verificarFacultadUsuario($user, $facultadRequerida)
+    {
+        // Verificar que la facultad requerida existe y tiene nombre
+        if (!$facultadRequerida || !isset($facultadRequerida->id_facultad) || !isset($facultadRequerida->nombre_facultad)) {
+            throw new \Exception("Facultad requerida no válida.", 400);
+        }
+
+        $facultadesUsuario = $user->facultades()->where('is_active', true)->get();
+
+        $perteneceFacultad = $facultadesUsuario->contains(function ($facultad) use ($facultadRequerida) {
+            return $facultad->id_facultad === $facultadRequerida->id_facultad;
+        });
+
+        if (!$perteneceFacultad) {
+            throw new \Exception("No perteneces a la facultad requerida: {$facultadRequerida->nombre_facultad}.", 403);
+        }
+    }
 }

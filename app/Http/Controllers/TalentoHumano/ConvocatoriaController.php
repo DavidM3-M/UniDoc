@@ -51,6 +51,12 @@ class ConvocatoriaController
             DB::transaction(function () use ($request) { // Inicio de la transacción
 
                 $datosConvocatoria = $request->validated(); // Validamos los datos de la solicitud
+                
+                // Removemos el campo 'archivo' si existe, ya que no es un campo de BD
+                if (isset($datosConvocatoria['archivo'])) {
+                    unset($datosConvocatoria['archivo']);
+                }
+                
                 $convocatoria = Convocatoria::create($datosConvocatoria); // Creamos la convocatoria en la base de datos
 
                 if ($request->hasFile('archivo')) { // Verificamos si se ha subido un archivo
@@ -89,7 +95,15 @@ class ConvocatoriaController
         try {
             DB::transaction(function () use ($request, $id) { // Inicio de la transacción
                 $convocatoria = Convocatoria::findOrFail($id); // Buscamos la convocatoria por su ID
-                $convocatoria->update($request->validated()); // Actualizamos la convocatoria con los datos validados
+                
+                $datosActualizacion = $request->validated(); 
+                
+                // Removemos el campo 'archivo' si existe, ya que no es un campo de BD
+                if (isset($datosActualizacion['archivo'])) {
+                    unset($datosActualizacion['archivo']);
+                }
+                
+                $convocatoria->update($datosActualizacion); // Actualizamos la convocatoria con los datos validados
 
                 if ($request->hasFile('archivo')) { // Verificamos si se ha subido un archivo
                     $this->archivoService->actualizarArchivoDocumento($request->file('archivo'), $convocatoria, 'Convocatorias'); // Actualizamos el archivo asociado a la convocatoria
@@ -156,8 +170,10 @@ class ConvocatoriaController
 public function obtenerConvocatorias()
 {
     try {
-        // Obtener convocatorias SIN cargar relaciones para evitar errores
-        $convocatorias = Convocatoria::orderBy('created_at', 'desc')->get();
+        // Obtener convocatorias CON relaciones cargadas
+        $convocatorias = Convocatoria::with(['tipoCargo', 'facultad', 'perfilProfesional', 'experienciaRequerida', 'documentosConvocatoria'])
+            ->orderBy('created_at', 'desc')
+            ->get();
 
         if ($convocatorias->isEmpty()) {
             return response()->json([
@@ -168,28 +184,54 @@ public function obtenerConvocatorias()
 
         // Transformar datos para asegurar que todos los campos existan
         $convocatoriasTransformadas = $convocatorias->map(function ($conv) {
+            // Obtener documentos de la convocatoria
+            $documentos = $conv->documentosConvocatoria->map(function ($doc) {
+                return [
+                    'id_documento' => $doc->id_documento,
+                    'archivo' => $doc->archivo,
+                    'estado' => $doc->estado ?? '',
+                    'url' => asset('storage/' . $doc->archivo),
+                ];
+            })->toArray();
+
             return [
                 'id_convocatoria' => $conv->id_convocatoria,
                 'numero_convocatoria' => $conv->numero_convocatoria ?? 'CONV-' . $conv->id_convocatoria,
                 'nombre_convocatoria' => $conv->nombre_convocatoria,
                 'tipo' => $conv->tipo,
                 'periodo_academico' => $conv->periodo_academico ?? 'No especificado',
-                'cargo_solicitado' => $conv->cargo_solicitado ?? 'No especificado',
-                'facultad' => $conv->facultad ?? 'No especificado',
+                'tipo_cargo_id' => $conv->tipo_cargo_id,
+                'tipo_cargo_otro' => $conv->tipo_cargo_otro ?? '',
+                'cargo_solicitado' => $conv->tipo_cargo_id ? $conv->tipo_cargo_id : ($conv->tipo_cargo_otro ?? ''),
+                'perfil_profesional_id' => $conv->perfil_profesional_id,
+                'perfil_profesional_outro' => $conv->perfil_profesional_outro ?? '',
+                'perfil_profesional' => $conv->perfil_profesional_outro ?? ($conv->perfilProfesional ? ($conv->perfilProfesional->nombre_perfil ?? 'No especificado') : 'No especificado'),
+                'facultad_id' => $conv->facultad_id,
+                'facultad_outro' => $conv->facultad_outro ?? '',
+                'facultad' => $conv->facultad_otro ?? ($conv->facultad ? $conv->facultad->nombre_facultad : 'No especificado'),
                 'cursos' => $conv->cursos ?? 'No especificado',
                 'tipo_vinculacion' => $conv->tipo_vinculacion ?? 'No especificado',
                 'personas_requeridas' => $conv->personas_requeridas ?? 1,
                 'fecha_publicacion' => $conv->fecha_publicacion,
                 'fecha_cierre' => $conv->fecha_cierre,
                 'fecha_inicio_contrato' => $conv->fecha_inicio_contrato,
-                'perfil_profesional' => $conv->perfil_profesional ?? '',
-                'experiencia_requerida' => $conv->experiencia_requerida ?? '',
+                'experiencia_requerida' => $conv->experiencia_requerida_fecha ? ($conv->experiencia_requerida_fecha instanceof \Illuminate\Support\Carbon ? $conv->experiencia_requerida_fecha->toDateString() : $conv->experiencia_requerida_fecha) : ($conv->experienciaRequerida ? $conv->experienciaRequerida->descripcion_experiencia : ''),
+                'anos_experiencia_requerida' => $conv->anos_experiencia_requerida,
+                'tipo_experiencia_requerida' => $conv->tipo_experiencia_requerida,
+                'cantidad_experiencia' => $conv->cantidad_experiencia,
+                'unidad_experiencia' => $conv->unidad_experiencia,
+                'referencia_experiencia' => $conv->referencia_experiencia,
+                'experiencia_completa' => $this->formatearExperienciaCompleta($conv),
+                'requisitos_experiencia' => $conv->requisitos_experiencia ?? [],
+                'requisitos_idiomas' => $conv->requisitos_idiomas ?? [],
+                'requisitos_adicionales' => $conv->requisitos_adicionales ?? [],
                 'solicitante' => $conv->solicitante ?? 'Talento Humano',
-                'aprobaciones' => $conv->aprobaciones ?? '',
+                'avales_establecidos' => $conv->avales_establecidos ?? [],
                 'descripcion' => $conv->descripcion,
                 'estado_convocatoria' => $conv->estado_convocatoria,
                 'created_at' => $conv->created_at,
                 'updated_at' => $conv->updated_at,
+                'documentos_convocatoria' => $documentos,
             ];
         });
 
@@ -221,8 +263,8 @@ public function obtenerConvocatorias()
     public function obtenerConvocatoriaPorId($id)
 {
     try {
-        // Buscar la convocatoria SIN cargar relaciones
-        $convocatoria = Convocatoria::where('id_convocatoria', $id)->first();
+        // Buscar la convocatoria CON relaciones
+        $convocatoria = Convocatoria::with(['tipoCargo', 'facultad', 'perfilProfesional', 'experienciaRequerida', 'documentosConvocatoria'])->find($id);
 
         if (!$convocatoria) {
             return response()->json([
@@ -231,6 +273,16 @@ public function obtenerConvocatorias()
             ], 404);
         }
 
+        // Obtener documentos de la convocatoria
+        $documentos = $convocatoria->documentosConvocatoria->map(function ($doc) {
+            return [
+                'id_documento' => $doc->id_documento,
+                'archivo' => $doc->archivo,
+                'estado' => $doc->estado ?? '',
+                'url' => asset('storage/' . $doc->archivo),
+            ];
+        })->toArray();
+
         // Transformar datos para asegurar que todos los campos existan
         $convocatoriaTransformada = [
             'id_convocatoria' => $convocatoria->id_convocatoria,
@@ -238,24 +290,44 @@ public function obtenerConvocatorias()
             'nombre_convocatoria' => $convocatoria->nombre_convocatoria,
             'tipo' => $convocatoria->tipo,
             'periodo_academico' => $convocatoria->periodo_academico ?? '',
-            'cargo_solicitado' => $convocatoria->cargo_solicitado ?? '',
-            'facultad' => $convocatoria->facultad ?? '',
+            
+            // Cargo Solicitado: retorna ID si existe en BD, si no retorna el texto personalizado
+            'tipo_cargo_id' => $convocatoria->tipo_cargo_id,
+            'tipo_cargo_otro' => $convocatoria->tipo_cargo_otro ?? '',
+            'cargo_solicitado' => $convocatoria->tipo_cargo_id ? $convocatoria->tipo_cargo_id : ($convocatoria->tipo_cargo_otro ?? ''),
+            
+            'facultad_id' => $convocatoria->facultad_id,
+            'facultad_otro' => $convocatoria->facultad_otro ?? '',
+            'facultad' => $convocatoria->facultad_otro ?? ($convocatoria->facultad ? $convocatoria->facultad->nombre_facultad : ''),
             'cursos' => $convocatoria->cursos ?? '',
             'tipo_vinculacion' => $convocatoria->tipo_vinculacion ?? '',
             'personas_requeridas' => $convocatoria->personas_requeridas ?? 1,
             'fecha_publicacion' => $convocatoria->fecha_publicacion,
             'fecha_cierre' => $convocatoria->fecha_cierre,
             'fecha_inicio_contrato' => $convocatoria->fecha_inicio_contrato,
-            'perfil_profesional' => $convocatoria->perfil_profesional ?? '',
-            'experiencia_requerida' => $convocatoria->experiencia_requerida ?? '',
+            'perfil_profesional_id' => $convocatoria->perfil_profesional_id,
+            'perfil_profesional_outro' => $convocatoria->perfil_profesional_outro ?? '',
+            'perfil_profesional' => $convocatoria->perfil_profesional_outro ?? ($convocatoria->perfilProfesional ? ($convocatoria->perfilProfesional->nombre_perfil ?? '') : ''),
+            'experiencia_requerida_id' => $convocatoria->experiencia_requerida_id,
+            'experiencia_requerida_fecha' => $convocatoria->experiencia_requerida_fecha ? ($convocatoria->experiencia_requerida_fecha instanceof \Illuminate\Support\Carbon ? $convocatoria->experiencia_requerida_fecha->toDateString() : $convocatoria->experiencia_requerida_fecha) : null,
+            'experiencia_requerida' => $convocatoria->experiencia_requerida_fecha ? ($convocatoria->experiencia_requerida_fecha instanceof \Illuminate\Support\Carbon ? $convocatoria->experiencia_requerida_fecha->toDateString() : $convocatoria->experiencia_requerida_fecha) : ($convocatoria->experienciaRequerida ? $convocatoria->experienciaRequerida->descripcion_experiencia : ''),
+            'anos_experiencia_requerida' => $convocatoria->anos_experiencia_requerida,
+            'tipo_experiencia_requerida' => $convocatoria->tipo_experiencia_requerida,
+            'cantidad_experiencia' => $convocatoria->cantidad_experiencia,
+            'unidad_experiencia' => $convocatoria->unidad_experiencia,
+            'referencia_experiencia' => $convocatoria->referencia_experiencia,
+            'experiencia_completa' => $this->formatearExperienciaCompleta($convocatoria),
+            'requisitos_experiencia' => $convocatoria->requisitos_experiencia ?? [],
+            'requisitos_idiomas' => $convocatoria->requisitos_idiomas ?? [],
+            'requisitos_adicionales' => $convocatoria->requisitos_adicionales ?? [],
             'solicitante' => $convocatoria->solicitante ?? '',
-            'aprobaciones' => $convocatoria->aprobaciones ?? '',
+            'avales_establecidos' => $convocatoria->avales_establecidos ?? [],
             'descripcion' => $convocatoria->descripcion ?? '',
             'estado_convocatoria' => $convocatoria->estado_convocatoria,
             'created_at' => $convocatoria->created_at,
             'updated_at' => $convocatoria->updated_at,
-            // Documentos vacíos por ahora
-            'documentos_convocatoria' => [],
+            // Documentos cargados desde la relación
+            'documentos_convocatoria' => $documentos,
         ];
 
         return response()->json(['convocatoria' => $convocatoriaTransformada], 200);
@@ -460,8 +532,8 @@ public function obtenerConvocatoriaPublicaPorId($id_convocatoria)
     try {
         Log::info("Intentando obtener convocatoria con ID: " . $id_convocatoria);
 
-        // Buscar la convocatoria SIN cargar relaciones
-        $convocatoria = Convocatoria::where('id_convocatoria', $id_convocatoria)->first();
+        // Buscar la convocatoria CON relaciones
+        $convocatoria = Convocatoria::with(['tipoCargo', 'facultad', 'perfilProfesional', 'experienciaRequerida', 'documentosConvocatoria'])->where('id_convocatoria', $id_convocatoria)->first();
 
         if (!$convocatoria) {
             Log::warning("Convocatoria no encontrada: " . $id_convocatoria);
@@ -473,6 +545,16 @@ public function obtenerConvocatoriaPublicaPorId($id_convocatoria)
 
         Log::info("Convocatoria encontrada: " . $convocatoria->nombre_convocatoria);
 
+        // Obtener documentos de la convocatoria
+        $documentos = $convocatoria->documentosConvocatoria->map(function ($doc) {
+            return [
+                'id_documento' => $doc->id_documento,
+                'archivo' => $doc->archivo,
+                'estado' => $doc->estado ?? '',
+                'url' => asset('storage/' . $doc->archivo),
+            ];
+        })->toArray();
+
         // Transformar datos para asegurar compatibilidad
         $convocatoriaTransformada = [
             'id_convocatoria' => $convocatoria->id_convocatoria,
@@ -480,21 +562,37 @@ public function obtenerConvocatoriaPublicaPorId($id_convocatoria)
             'nombre_convocatoria' => $convocatoria->nombre_convocatoria,
             'tipo' => $convocatoria->tipo,
             'periodo_academico' => $convocatoria->periodo_academico ?? 'No especificado',
-            'cargo_solicitado' => $convocatoria->cargo_solicitado ?? 'No especificado',
-            'facultad' => $convocatoria->facultad ?? 'No especificado',
+            'tipo_cargo_id' => $convocatoria->tipo_cargo_id,
+            'tipo_cargo_otro' => $convocatoria->tipo_cargo_otro ?? '',
+            'cargo_solicitado' => $convocatoria->tipo_cargo_id ? $convocatoria->tipo_cargo_id : ($convocatoria->tipo_cargo_otro ?? ''),
+            'facultad_id' => $convocatoria->facultad_id,
+            'facultad_otro' => $convocatoria->facultad_otro ?? '',
+            'facultad' => $convocatoria->facultad_otro ?? ($convocatoria->facultad ? $convocatoria->facultad->nombre_facultad : 'No especificado'),
             'cursos' => $convocatoria->cursos ?? 'No especificado',
             'tipo_vinculacion' => $convocatoria->tipo_vinculacion ?? 'No especificado',
             'personas_requeridas' => $convocatoria->personas_requeridas ?? 1,
             'fecha_publicacion' => $convocatoria->fecha_publicacion,
             'fecha_cierre' => $convocatoria->fecha_cierre,
             'fecha_inicio_contrato' => $convocatoria->fecha_inicio_contrato,
-            'perfil_profesional' => $convocatoria->perfil_profesional ?? '',
-            'experiencia_requerida' => $convocatoria->experiencia_requerida ?? '',
+            'perfil_profesional_id' => $convocatoria->perfil_profesional_id,
+            'perfil_profesional_outro' => $convocatoria->perfil_profesional_outro ?? '',
+            'perfil_profesional' => $convocatoria->perfil_profesional_outro ?? ($convocatoria->perfilProfesional ? ($convocatoria->perfilProfesional->nombre_perfil ?? '') : ''),
+            'experiencia_requerida_id' => $convocatoria->experiencia_requerida_id,
+            'experiencia_requerida_fecha' => $convocatoria->experiencia_requerida_fecha ? ($convocatoria->experiencia_requerida_fecha instanceof \Illuminate\Support\Carbon ? $convocatoria->experiencia_requerida_fecha->toDateString() : $convocatoria->experiencia_requerida_fecha) : null,
+            'experiencia_requerida' => $convocatoria->experiencia_requerida_fecha ? ($convocatoria->experiencia_requerida_fecha instanceof \Illuminate\Support\Carbon ? $convocatoria->experiencia_requerida_fecha->toDateString() : $convocatoria->experiencia_requerida_fecha) : ($convocatoria->experienciaRequerida ? $convocatoria->experienciaRequerida->descripcion_experiencia : ''),
+            'anos_experiencia_requerida' => $convocatoria->anos_experiencia_requerida,
+            'tipo_experiencia_requerida' => $convocatoria->tipo_experiencia_requerida,
+            'cantidad_experiencia' => $convocatoria->cantidad_experiencia,
+            'unidad_experiencia' => $convocatoria->unidad_experiencia,
+            'referencia_experiencia' => $convocatoria->referencia_experiencia,
+            'requisitos_experiencia' => $convocatoria->requisitos_experiencia ?? [],
+            'requisitos_idiomas' => $convocatoria->requisitos_idiomas ?? [],
+            'requisitos_adicionales' => $convocatoria->requisitos_adicionales ?? [],
             'solicitante' => $convocatoria->solicitante ?? 'Talento Humano',
-            'aprobaciones' => $convocatoria->aprobaciones ?? '',
+            'avales_establecidos' => $convocatoria->avales_establecidos ?? [],
             'descripcion' => $convocatoria->descripcion,
             'estado_convocatoria' => $convocatoria->estado_convocatoria,
-            'documentosConvocatoria' => [], // Vacío por ahora
+            'documentos_convocatoria' => $documentos,
         ];
 
         return response()->json(['convocatoria' => $convocatoriaTransformada], 200);
@@ -511,4 +609,77 @@ public function obtenerConvocatoriaPublicaPorId($id_convocatoria)
         ], 500);
     }
 }
+
+    /**
+     * Obtener opciones para tipos de cargo
+     */
+    public function obtenerTiposCargo()
+    {
+        try {
+            $tiposCargo = \App\Models\TipoCargo::select('id_tipo_cargo', 'nombre_tipo_cargo', 'es_administrativo')->get();
+            return response()->json(['tipos_cargo' => $tiposCargo], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'mensaje' => 'Error al obtener tipos de cargo',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtener opciones para facultades
+     */
+    public function obtenerFacultades()
+    {
+        try {
+            $facultades = \App\Models\Facultad::select('id_facultad', 'nombre_facultad')->get();
+            return response()->json(['facultades' => $facultades], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'mensaje' => 'Error al obtener facultades',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtener los tipos de convocatoria disponibles.
+     *
+     * Este método retorna una lista de tipos únicos de convocatorias existentes en la base de datos.
+     *
+     * @return \Illuminate\Http\JsonResponse Respuesta JSON con la lista de tipos de convocatoria.
+     */
+    public function obtenerTiposConvocatoria()
+    {
+        try {
+            $tipos = Convocatoria::select('tipo')->distinct()->pluck('tipo');
+            return response()->json(['tipos' => $tipos], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'mensaje' => 'Error al obtener tipos de convocatoria',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Formatear la experiencia completa (predefinida + personalizada)
+     */
+    private function formatearExperienciaCompleta($convocatoria)
+    {
+        $experiencia = '';
+
+        if ($convocatoria->experienciaRequerida) {
+            $experiencia .= $convocatoria->experienciaRequerida->descripcion_experiencia;
+        }
+
+        if ($convocatoria->tipo_experiencia_requerida) {
+            if ($experiencia) {
+                $experiencia .= ' + ';
+            }
+            $experiencia .= $convocatoria->anos_experiencia_requerida . ' años de ' . $convocatoria->tipo_experiencia_requerida;
+        }
+
+        return $experiencia ?: 'No especificada';
+    }
 }
