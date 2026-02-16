@@ -116,7 +116,7 @@ class InformacionContactoController
             return response()->json([ // En caso de error, se devuelve el mensaje y el código correspondiente
                 'message' => 'Error al obtener la información de contacto',
                 'error'   => $e->getMessage()
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 

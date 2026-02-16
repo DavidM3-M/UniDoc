@@ -17,6 +17,7 @@ use App\Models\Aspirante\InformacionContacto;
 use App\Models\Ubicacion\Municipio;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use App\Models\Aspirante\Eps;
 use App\Models\Aspirante\Rut;
 use App\Models\Aspirante\Idioma;
@@ -248,5 +249,11 @@ class User extends Authenticatable implements JWTSubject
     public function evaluacionDocenteUsuario(): HasOne
     {
         return $this->hasOne(EvaluacionDocente::class, 'user_id', 'id');
+    }
+
+    // Relación muchos a muchos con la tabla facultades (pivot: facultad_user)
+    public function facultades(): BelongsToMany
+    {
+        return $this->belongsToMany(\App\Models\Facultad::class, 'facultad_user', 'user_id', 'facultad_id');
     }
 }

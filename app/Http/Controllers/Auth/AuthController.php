@@ -113,7 +113,7 @@ class AuthController
             return response()->json([
                 'message' => 'Error al iniciar sesión',
                 'error'   => $e->getMessage()
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 
@@ -224,7 +224,7 @@ class AuthController
             return response()->json([
                 'message' => 'Error al obtener el usuario autenticado',
                 'error'   => $e->getMessage()
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 
@@ -268,7 +268,7 @@ class AuthController
             return response()->json([
                 'message' => 'Error al actualizar la contraseña.',
                 'error' => $e->getMessage()
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 
@@ -324,7 +324,7 @@ class AuthController
             return response()->json([
                 'message' => 'Error al enviar el correo de restablecimiento.',
                 'error' => $e->getMessage()
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 
@@ -374,7 +374,7 @@ class AuthController
             return response()->json([
                 'message' => 'Error al actualizar la contraseña.',
                 'error' => $e->getMessage(),
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 }

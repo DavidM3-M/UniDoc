@@ -113,7 +113,7 @@ class EpsController
             return response()->json([
                 'message' => 'Error al obtener la información de EPS',
                 'error'   => $e->getMessage()
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 

@@ -103,7 +103,7 @@ class NormativaController
             return response()->json([ // Manejo de errores
                 'message' => 'Error al obtener las normativas.',
                 'error' => $e->getMessage(),
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 

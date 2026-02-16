@@ -105,7 +105,7 @@ class ExperienciaController
             return response()->json([ // En caso de error, se retorna una respuesta con el mensaje.
                 'message' => 'Error al obtener las experiencias.',
                 'error' => $e->getMessage()
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 
@@ -143,7 +143,7 @@ class ExperienciaController
             return response()->json([ // En caso de error, se retorna un mensaje detallado.
                 'message' => 'Error al obtener la experiencia.',
                 'error' => $e->getMessage()
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 

@@ -69,7 +69,7 @@ class FotoPerfilController
             return response()->json([ // Si ocurre un error, devuelve un mensaje y el error correspondiente
                 'mensaje' => 'Error al crear la foto de perfil.',
                 'error'   => $e->getMessage(),
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 
@@ -105,7 +105,7 @@ class FotoPerfilController
             return response()->json([ // En caso de error, retorna mensaje con código
                 'mensaje' => 'Error al eliminar la foto de perfil.',
                 'error'   => $e->getMessage(),
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 
@@ -154,7 +154,7 @@ class FotoPerfilController
             return response()->json([ // Devuelve mensaje de error en caso de falla
                 'message' => 'Error al obtener la foto de perfil',
                 'error'   => $e->getMessage()
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 }

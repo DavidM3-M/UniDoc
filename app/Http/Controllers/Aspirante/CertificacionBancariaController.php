@@ -81,7 +81,7 @@ class CertificacionBancariaController
             return response()->json([
                 'message' => 'Error al obtener la Certificación Bancaria.',
                 'error' => $e->getMessage(),
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 
@@ -112,7 +112,7 @@ class CertificacionBancariaController
             return response()->json([
                 'message' => 'Error al actualizar la Certificación Bancaria.',
                 'error' => $e->getMessage(),
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 

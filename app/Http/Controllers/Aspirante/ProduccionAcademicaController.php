@@ -107,7 +107,7 @@ class ProduccionAcademicaController
          return response()->json([ // Manejo de errores
             'message' => 'Error al obtener las producciones académicas.',
             'error' => $e->getMessage()
-         ], $e->getCode() ?: 500);
+         ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
       }
    }
 
@@ -144,7 +144,7 @@ class ProduccionAcademicaController
          return response()->json([ // Error al buscar
             'message' => 'Error al obtener la producción académica.',
             'error' => $e->getMessage()
-         ], $e->getCode() ?: 500);
+         ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
       }
    }
 

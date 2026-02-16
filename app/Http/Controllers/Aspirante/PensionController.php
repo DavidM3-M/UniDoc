@@ -80,7 +80,7 @@ class PensionController
             return response()->json([
                 'message' => 'Error al obtener la Pension.',
                 'error' => $e->getMessage(),
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 
@@ -108,7 +108,7 @@ class PensionController
             return response()->json([
                 'message' => 'Error al actualizar la Pension.',
                 'error' => $e->getMessage(),
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 

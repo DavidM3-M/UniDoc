@@ -128,7 +128,7 @@ class ContratacionController
             return response()->json([
                 'message' => 'Error al actualizar la contratación.',
                 'error' => $e->getMessage()
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 
@@ -168,7 +168,7 @@ class ContratacionController
             return response()->json([
                 'message' => 'Error al eliminar la contratación.',
                 'error' => $e->getMessage()
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 
@@ -226,7 +226,7 @@ class ContratacionController
             return response()->json([
                 'message' => 'Error al obtener la información de la contratación.',
                 'error' => $e->getMessage()
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 
@@ -289,7 +289,7 @@ class ContratacionController
             return response()->json([
                 'message' => 'Error al obtener las contrataciones del usuario autenticado.',
                 'error' => $e->getMessage()
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 }

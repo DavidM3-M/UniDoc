@@ -109,7 +109,7 @@ class IdiomaController
             return response()->json([ // Manejo de errores
                 'message' => 'Error al obtener los idiomas.',
                 'error'   => $e->getMessage(),
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 
@@ -146,7 +146,7 @@ class IdiomaController
             return response()->json([ // Manejo de errores
                 'message' => 'Error al obtener el idioma.',
                 'error'   => $e->getMessage(),
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 

@@ -114,7 +114,7 @@ class PostulacionController
             return response()->json([
                 'message' => 'Ocurrió un error al crear la postulación.',
                 'error' => $e->getMessage()
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 
@@ -277,7 +277,7 @@ class PostulacionController
             return response()->json([
                 'message' => 'Ocurrió un error al actualizar el estado de la postulación.',
                 'error' => $e->getMessage()
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 
@@ -314,7 +314,7 @@ class PostulacionController
             return response()->json([ // Retornar un mensaje de error
                 'message' => 'Ocurrió un error al eliminar la postulación.',
                 'error' => $e->getMessage()
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 
@@ -352,7 +352,7 @@ class PostulacionController
             return response()->json([
                 'message' => 'Ocurrió un error al eliminar la postulación del usuario.',
                 'error' => $e->getMessage()
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
     /**

@@ -37,7 +37,7 @@ class AptitudController
             return response()->json([ // Manejo de errores
                 'mensaje' => 'Error al crear la aptitud.',
                 'error'   => $e->getMessage(),
-            ], $e->getCode() ?: 500); // Retorna el código del error o 500 si no hay código
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500); // Retorna el código del error o 500 si no hay código
         }
     }
 
@@ -62,7 +62,7 @@ class AptitudController
             return response()->json([ // Manejo de errores
                 'mensaje' => 'Error al obtener las aptitudes.',
                 'error'   => $e->getMessage(),
-            ], $e->getCode() ?: 500); // Retorna el código del error o 500 si no hay código
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500); // Retorna el código del error o 500 si no hay código
         }
     }
 
@@ -94,7 +94,7 @@ class AptitudController
             return response()->json([ // Manejo de errores
                 'mensaje' => 'Error al obtener la aptitud.',
                 'error'   => $e->getMessage(),
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 
@@ -132,7 +132,7 @@ class AptitudController
             return response()->json([ // Manejo de errores
                 'mensaje' => 'Error al actualizar la aptitud.',
                 'error'   => $e->getMessage(),
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 
@@ -166,7 +166,7 @@ class AptitudController
             return response()->json([ // Manejo de errores
                 'mensaje' => 'Error al eliminar la aptitud.',
                 'error'   => $e->getMessage(),
-            ], $e->getCode() ?: 500);
+            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
 }
