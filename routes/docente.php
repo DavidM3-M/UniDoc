@@ -113,5 +113,4 @@ Route::group([
     Route::post('crear-pension', [PensionController::class, 'crearPension']);
     Route::put('actualizar-pension', [PensionController::class, 'actualizarPension']);
 
-
 });
