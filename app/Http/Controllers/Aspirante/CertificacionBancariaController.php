@@ -66,7 +66,7 @@ class CertificacionBancariaController
             if (!$certificacionBancaria) {
                 return response()->json([
                     'message' => 'No se encontró ninguna Certificación Bancaria para el usuario.',
-                    'eps' => null
+                    'certificacion_bancaria' => null
                 ], 200);
             }
 
@@ -85,7 +85,7 @@ class CertificacionBancariaController
         }
     }
 
-    
+
 
     public function actualizarCertificacionBancaria(  ActualizarCertificacionBancariaRequest $request)
     {

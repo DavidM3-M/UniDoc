@@ -16,6 +16,9 @@ use App\Http\Controllers\Aspirante\AptitudController;
 use App\Http\Controllers\Aspirante\NormativaController;
 use App\Http\Controllers\Aspirante\CertificacionBancariaController;
 use App\Http\Controllers\Aspirante\PensionController;
+use App\Http\Controllers\Aspirante\AntecedentesJudicialesController;
+use App\Http\Controllers\Aspirante\ArlController;
+
 // Define un grupo de rutas con configuraciones específicas para el rol "Aspirante"
 Route::group([
     // Aplica los middlewares 'api', 'auth:api' y 'role:Aspirante' para proteger las rutas
@@ -99,6 +102,16 @@ Route::group([
     Route::get('obtener-pension', [PensionController::class, 'obtenerPension']);
     Route::post('crear-pension', [PensionController::class, 'crearPension']);
     Route::put('actualizar-pension', [PensionController::class, 'actualizarPension']);
+
+    // Rutas relacioandos con antecedentes judiciales
+    Route::get('obtener-antecedentes-judiciales', [AntecedentesJudicialesController::class, 'obtenerAntecedentesJudiciales']);
+    Route::post('crear-antecedentes-judiciales', [AntecedentesJudicialesController::class, 'crearAntecedentesJudiciales']);
+    Route::put('actualizar-antecedentes-judiciales', [AntecedentesJudicialesController::class, 'actualizarAntecedentesJudiciales']);
+
+    // Rutas relacionadas con Arl
+    Route::get('obtener-arl', [ArlController::class, 'obtenerArl']);
+    Route::post('crear-arl', [ArlController::class, 'crearArl']);
+    Route::put('actualizar-arl', [ArlController::class, 'actualizarArl']);
 
 
 

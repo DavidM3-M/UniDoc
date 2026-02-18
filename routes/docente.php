@@ -1,5 +1,7 @@
 <?php
 // Constantes relacionadas con los idiomas
+
+use App\Http\Controllers\Aspirante\AntecedentesJudicialesController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Docente\PuntajeController;
 use App\Http\Controllers\Docente\EvaluacionDocenteController;
@@ -15,7 +17,10 @@ use App\Http\Controllers\TalentoHumano\PostulacionController;
 use App\Http\Controllers\TalentoHumano\ContratacionController;
 use App\Http\Controllers\Aspirante\FotoPerfilController;
 use App\Http\Controllers\Aspirante\AptitudController;
+use App\Http\Controllers\Aspirante\ArlController;
+use App\Http\Controllers\Aspirante\CertificacionBancariaController;
 use App\Http\Controllers\Aspirante\NormativaController;
+use App\Http\Controllers\Aspirante\PensionController;
 
 // Define un grupo de rutas con configuraciones específicas para el rol "Docente"
 Route::group([
@@ -88,7 +93,7 @@ Route::group([
 
     // Rutas relacionadas con la contratación
     Route::get('ver-contratacion', [ContratacionController::class, 'obtenerContratacionUsuario']);
-     
+
     // Rutas relacionadas con la evaluación docente
     Route::post('crear-evaluacion', [EvaluacionDocenteController::class, 'crearEvaluacionDocente']);
     Route::get('ver-evaluaciones', [EvaluacionDocenteController::class, 'verEvaluacionDocente']);
@@ -100,6 +105,27 @@ Route::group([
     // Rutas relacionadas con normativas
     Route::get('obtener-normativas', [NormativaController::class, 'obtenerNormativas']);
     Route::get('obtener-normativa/{id}', [NormativaController::class, 'obtenerNormativaPorId']);
+
+    // Rutas relacionadas con certificaciones bancarias
+    Route::post('crear-certificacion-bancaria', [CertificacionBancariaController::class, 'crearCertificacionBancaria']);
+    Route::get('obtener-certificacion-bancaria', [CertificacionBancariaController::class, 'ObtenerCertificacionBancaria']);
+    Route::put('actualizar-certificacion-bancaria', [CertificacionBancariaController::class, 'actualizarCertificacionBancaria']);
+
+    // Rutas relacionadas con pensiones
+    Route::get('obtener-pension', [PensionController::class, 'obtenerPension']);
+    Route::post('crear-pension', [PensionController::class, 'crearPension']);
+    Route::put('actualizar-pension', [PensionController::class, 'actualizarPension']);
+
+    // Rutas relacioandos con antecedentes judiciales
+    Route::get('obtener-antecedentes-judiciales', [AntecedentesJudicialesController::class, 'obtenerAntecedentesJudiciales']);
+    Route::post('crear-antecedentes-judiciales', [AntecedentesJudicialesController::class, 'crearAntecedentesJudiciales']);
+    Route::put('actualizar-antecedentes-judiciales', [AntecedentesJudicialesController::class, 'actualizarAntecedentesJudiciales']);
+
+    // Rutas relacionadas con Arl
+    Route::get('obtener-arl', [ArlController::class, 'obtenerArl']);
+    Route::post('crear-arl', [ArlController::class, 'crearArl']);
+    Route::put('actualizar-arl', [ArlController::class, 'actualizarArl']);
+
 
 
 });
