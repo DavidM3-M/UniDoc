@@ -3,6 +3,7 @@
 use App\Http\Controllers\TalentoHumano\ContratacionController;
 use App\Http\Controllers\TalentoHumano\ConvocatoriaController;
 use App\Http\Controllers\TalentoHumano\ConvocatoriaAvalController;
+use App\Http\Controllers\TalentoHumano\ExperienciaRequeridaController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\TalentoHumano\PostulacionController;
 
