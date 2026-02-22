@@ -6,8 +6,10 @@ namespace App\Models\Usuario;
 // en este modelo se definen las relaciones con otras tablas
 // en este caso la tabla users tiene una relacion de uno a uno con la tabla informacion_contacto
 
+use App\Models\Aspirante\AntecedentesJudiciales;
 use App\Models\Docente\EvaluacionDocente;
 use App\Models\Aspirante\Aptitud;
+use App\Models\Aspirante\Arl;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -177,6 +179,17 @@ class User extends Authenticatable implements JWTSubject
         return $this->hasOne(Pension::class, 'user_id', 'id');
     }
 
+    // relacion de uno con la tabla antecedentes_judiciales
+    public function antecedentesJudicialesUsuario(): HasOne
+    {
+        return $this->hasOne(AntecedentesJudiciales::class, 'user_id', 'id');
+    }
+
+    //Relacion de uno a uno con la tabla Arl
+    public function arlUsuario(): HasOne
+    {
+        return $this->hasOne(Arl::class, 'user_id', 'id');
+    }
 
 
 
