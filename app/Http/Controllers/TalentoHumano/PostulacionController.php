@@ -114,7 +114,7 @@ class PostulacionController
             return response()->json([
                 'message' => 'Ocurrió un error al crear la postulación.',
                 'error' => $e->getMessage()
-            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
+            ], $e->getCode() ?: 500);
         }
     }
 
@@ -277,7 +277,7 @@ class PostulacionController
             return response()->json([
                 'message' => 'Ocurrió un error al actualizar el estado de la postulación.',
                 'error' => $e->getMessage()
-            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
+            ], $e->getCode() ?: 500);
         }
     }
 
@@ -314,7 +314,7 @@ class PostulacionController
             return response()->json([ // Retornar un mensaje de error
                 'message' => 'Ocurrió un error al eliminar la postulación.',
                 'error' => $e->getMessage()
-            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
+            ], $e->getCode() ?: 500);
         }
     }
 
@@ -352,7 +352,7 @@ class PostulacionController
             return response()->json([
                 'message' => 'Ocurrió un error al eliminar la postulación del usuario.',
                 'error' => $e->getMessage()
-            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
+            ], $e->getCode() ?: 500);
         }
     }
     /**
@@ -553,6 +553,21 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
      */
     private function verificarRequisitosIdiomas($user, $requisitosIdiomas)
     {
+        // Si no hay requisitos de idiomas, pasar la validación
+        if (empty($requisitosIdiomas) || !is_array($requisitosIdiomas)) {
+            return;
+        }
+        
+        // Detectar si llegó como array indexado (estructura corrupta)
+        $esIndexado = array_keys($requisitosIdiomas) === range(0, count($requisitosIdiomas) - 1);
+        if ($esIndexado) {
+            throw new \Exception(
+                'Error interno: estructura de requisitos_idiomas corrupta (array indexado). ' .
+                'Contacte al administrador del sistema.',
+                500
+            );
+        }
+        
         $idiomasUsuario = $user->idiomasUsuario;
 
         foreach ($requisitosIdiomas as $idiomaRequerido => $nivelRequerido) {
@@ -562,9 +577,25 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
             }
 
             $cumpleRequisito = false;
+            
+            // Normalizar idioma requerido (remover tildes, espacios)
+            $idiomaRequeridoNormalizado = $this->normalizarIdioma((string)$idiomaRequerido);
 
             foreach ($idiomasUsuario as $idiomaUsuario) {
-                if (strtolower($idiomaUsuario->idioma) === strtolower($idiomaRequerido)) {
+                // Normalizar idioma del usuario
+                $idiomaUsuarioNormalizado = $this->normalizarIdioma((string)$idiomaUsuario->idioma);
+                
+                \Log::info('DEBUG verificarRequisitosIdiomas - Comparando idiomas:', [
+                    'idioma_requerido_original' => $idiomaRequerido,
+                    'idioma_requerido_normalizado' => $idiomaRequeridoNormalizado,
+                    'idioma_usuario_original' => $idiomaUsuario->idioma,
+                    'idioma_usuario_normalizado' => $idiomaUsuarioNormalizado,
+                    'nivel_usuario' => $idiomaUsuario->nivel,
+                    'nivel_requerido' => $nivelRequerido,
+                    'coinciden_idiomas' => $idiomaUsuarioNormalizado === $idiomaRequeridoNormalizado,
+                ]);
+                
+                if ($idiomaUsuarioNormalizado === $idiomaRequeridoNormalizado) {
                     if ($this->compararNivelesIdioma($idiomaUsuario->nivel, $nivelRequerido)) {
                         $cumpleRequisito = true;
                         break;
@@ -577,6 +608,19 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
                 throw new \Exception("No cumples con el requisito de idioma {$idiomaFormateado} nivel {$nivelRequerido}.", 403);
             }
         }
+    }
+    
+    /**
+     * Normalizar nombre de idioma: remover tildes, espacios extra, convertir a minúsculas
+     */
+    private function normalizarIdioma(string $idioma): string
+    {
+        // Remover tildes y caracteres especiales
+        $idioma = strtolower(trim($idioma));
+        $idioma = str_replace(['á', 'é', 'í', 'ó', 'ú', 'ñ'], ['a', 'e', 'i', 'o', 'u', 'n'], $idioma);
+        // Remover espacios múltiples
+        $idioma = preg_replace('/\s+/', ' ', $idioma);
+        return $idioma;
     }
 
     /**
