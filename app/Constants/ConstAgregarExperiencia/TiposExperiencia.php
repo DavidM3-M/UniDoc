@@ -16,6 +16,9 @@ class TiposExperiencia
     public const PROFESORAL = 'Profesoral';
     // Constante para experiencia en **dirección académica** (como coordinador, director de programa, decano, etc.)
     public const DIRECCION_ACADEMICA = 'Dirección académica';
+    // Constante para cualquier otro tipo de experiencia que no encaje en las categorías anteriores
+    public const OTRA = 'Otra';
+    
 
     // Método estático que retorna un array con todos los tipos de experiencia definidos anteriormente.
     // Este método facilita cargar estas opciones en listas desplegables o validaciones.
@@ -26,7 +29,8 @@ class TiposExperiencia
             self::DOCENCIA_UNIVERSITARIA,
             self::DOCENCIA_NO_UNIVERSITARIA,
             self::PROFESORAL,
-            self::DIRECCION_ACADEMICA
+            self::DIRECCION_ACADEMICA,
+            self::OTRA,
         ];
     }
 }

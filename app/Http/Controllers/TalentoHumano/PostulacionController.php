@@ -14,6 +14,7 @@ use App\Models\Usuario\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use App\Services\GeneradorHojaDeVidaPDFService;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 class PostulacionController
@@ -585,7 +586,7 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
                 // Normalizar idioma del usuario
                 $idiomaUsuarioNormalizado = $this->normalizarIdioma((string)$idiomaUsuario->idioma);
                 
-                \Log::info('DEBUG verificarRequisitosIdiomas - Comparando idiomas:', [
+                Log::info('DEBUG verificarRequisitosIdiomas - Comparando idiomas:', [
                     'idioma_requerido_original' => $idiomaRequerido,
                     'idioma_requerido_normalizado' => $idiomaRequeridoNormalizado,
                     'idioma_usuario_original' => $idiomaUsuario->idioma,

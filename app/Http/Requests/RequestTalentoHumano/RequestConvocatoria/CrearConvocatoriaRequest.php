@@ -73,7 +73,7 @@ class CrearConvocatoriaRequest extends FormRequest
         foreach ($arrayFields as $f) {
             if ($this->has($f)) {
                 $val = $this->input($f);
-                \Log::info("DEBUG prepareForValidation - $f recibido:", [
+                Log::info("DEBUG prepareForValidation - $f recibido:", [
                     'tipo' => gettype($val),
                     'valor' => is_string($val) ? $val : (is_array($val) ? json_encode($val) : $val),
                     'es_string' => is_string($val),
@@ -82,12 +82,12 @@ class CrearConvocatoriaRequest extends FormRequest
                 
                 // Si es string JSON, intentar deserializar
                 if (is_string($val) && ($decoded = json_decode($val, true)) !== null) {
-                    \Log::info("DEBUG prepareForValidation - $f deserializado como JSON:", ['resultado' => $decoded]);
+                    Log::info("DEBUG prepareForValidation - $f deserializado como JSON:", ['resultado' => $decoded]);
                     $this->merge([$f => $decoded]);
                 }
                 // Si ya es array, dejarlo como está
                 elseif (is_array($val)) {
-                    \Log::info("DEBUG prepareForValidation - $f ya es array, no requiere deserialización");
+                    Log::info("DEBUG prepareForValidation - $f ya es array, no requiere deserialización");
                 }
             }
         }
