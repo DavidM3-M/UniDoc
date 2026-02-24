@@ -26,7 +26,7 @@ Route::group([
 
     // Rutas relacionadas con convocatorias
     Route::get('obtener-convocatorias',[ConvocatoriaController::class, 'obtenerConvocatorias']);
-    Route::get('obtener-tipos-cargo',[ConvocatoriaController::class, 'obtenerTiposCargo']);
+    Route::get('obtener-tipos-cargos',[ConvocatoriaController::class, 'obtenerTiposCargo']);
     Route::get('obtener-convocatoria/{id}',[ConvocatoriaController::class, 'obtenerConvocatoriaPorId']);
     Route::post('crear-convocatoria',[ConvocatoriaController::class, 'crearConvocatoria']);
     Route::put('actualizar-convocatoria/{id}',[ConvocatoriaController::class, 'actualizarConvocatoria']);
