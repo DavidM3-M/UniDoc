@@ -411,7 +411,11 @@ class ProcesoAprobacionController extends Controller
                     'produccionAcademicaUsuario',
                     'aptitudesUsuario',
                     'postulacionesUsuario.convocatoriaPostulacion',
-                    'documentosUser'
+                    'documentosUser',
+                    'certificacionesBancariasUsuario.documentosCertificacionBancaria',
+                    'pensionUsuario.documentosPension',
+                    'antecedentesJudicialesUsuario.documentosAntecedentesJudiciales',
+                    'arlUsuario.documentosArl'
                 ])
                 ->findOrFail($id);
 
@@ -464,6 +468,32 @@ class ProcesoAprobacionController extends Controller
                 'aptitudes' => $aspirante->aptitudesUsuario,
                 'postulaciones' => $aspirante->postulacionesUsuario,
                 'documentos' => $documentos,
+                'certificacion_bancaria' => $aspirante->certificacionesBancariasUsuario ? [
+                    'nombre_banco' => $aspirante->certificacionesBancariasUsuario->nombre_banco ?? null,
+                    'tipo_cuenta' => $aspirante->certificacionesBancariasUsuario->tipo_cuenta ?? null,
+                    'numero_cuenta' => $aspirante->certificacionesBancariasUsuario->numero_cuenta ?? null,
+                    'fecha_emision' => $aspirante->certificacionesBancariasUsuario->fecha_emision ?? null,
+                    'documentosCertificacionBancaria' => ($aspirante->certificacionesBancariasUsuario->documentosCertificacionBancaria ?? collect())->map(fn($d) => ['archivo_url' => asset('storage/' . $d->archivo)])->toArray(),
+                ] : null,
+                'pension' => $aspirante->pensionUsuario ? [
+                    'regimen_pensional' => $aspirante->pensionUsuario->regimen_pensional ?? null,
+                    'entidad_pensional' => $aspirante->pensionUsuario->entidad_pensional ?? null,
+                    'nit_entidad' => $aspirante->pensionUsuario->nit_entidad ?? null,
+                    'documentosPension' => ($aspirante->pensionUsuario->documentosPension ?? collect())->map(fn($d) => ['archivo_url' => asset('storage/' . $d->archivo)])->toArray(),
+                ] : null,
+                'antecedente_judicial' => $aspirante->antecedentesJudicialesUsuario ? [
+                    'estado_antecedentes' => $aspirante->antecedentesJudicialesUsuario->estado_antecedentes ?? null,
+                    'fecha_validacion' => $aspirante->antecedentesJudicialesUsuario->fecha_validacion ?? null,
+                    'documentosAntecedentesJudiciales' => ($aspirante->antecedentesJudicialesUsuario->documentosAntecedentesJudiciales ?? collect())->map(fn($d) => ['archivo_url' => asset('storage/' . $d->archivo)])->toArray(),
+                ] : null,
+                'arl' => $aspirante->arlUsuario ? [
+                    'nombre_arl' => $aspirante->arlUsuario->nombre_arl ?? null,
+                    'clase_riesgo' => $aspirante->arlUsuario->clase_riesgo ?? null,
+                    'estado_afiliacion' => $aspirante->arlUsuario->estado_afiliacion ?? null,
+                    'fecha_afiliacion' => $aspirante->arlUsuario->fecha_afiliacion ?? null,
+                    'fecha_retiro' => $aspirante->arlUsuario->fecha_retiro ?? null,
+                    'documentosArl' => ($aspirante->arlUsuario->documentosArl ?? collect())->map(fn($d) => ['archivo_url' => asset('storage/' . $d->archivo)])->toArray(),
+                ] : null,
                 'avales' => [
                     'talento_humano' => [
                         'estado' => $aspirante->aval_talento_humano,

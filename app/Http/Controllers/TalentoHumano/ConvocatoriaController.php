@@ -51,28 +51,28 @@ class ConvocatoriaController
             DB::transaction(function () use ($request) { // Inicio de la transacción
 
                 $datosConvocatoria = $request->validated(); // Validamos los datos de la solicitud
-                
+
                 \Log::info('DEBUG crearConvocatoria - Datos VALIDADOS recibidos:', [
                     'tiene_requisitos_idiomas' => isset($datosConvocatoria['requisitos_idiomas']),
                     'requisitos_idiomas' => $datosConvocatoria['requisitos_idiomas'] ?? 'NO PRESENTE',
                     'tipo_requisitos_idiomas' => gettype($datosConvocatoria['requisitos_idiomas'] ?? null),
                 ]);
-                
+
                 // Asegurar que requisitos_idiomas se guarda correctamente
                 if (isset($datosConvocatoria['requisitos_idiomas'])) {
                     $idiomas = $datosConvocatoria['requisitos_idiomas'];
-                    
+
                     \Log::info('DEBUG crearConvocatoria - Procesando requisitos_idiomas:', [
                         'es_array' => is_array($idiomas),
                         'es_vacio' => empty($idiomas),
                         'contenido' => $idiomas,
                     ]);
-                    
+
                     // Si es array pero está vacío, establecer a null
                     if (is_array($idiomas) && empty($idiomas)) {
                         $datosConvocatoria['requisitos_idiomas'] = null;
                         \Log::info('DEBUG crearConvocatoria - Array vacío, estableciendo a null');
-                    } 
+                    }
                     // Si es array asociativo, limpiar entradas inválidas
                     elseif (is_array($idiomas)) {
                         $idiomasLimpios = [];
@@ -87,12 +87,12 @@ class ConvocatoriaController
                         ]);
                     }
                 }
-                
+
                 // Removemos el campo 'archivo' si existe, ya que no es un campo de BD
                 if (isset($datosConvocatoria['archivo'])) {
                     unset($datosConvocatoria['archivo']);
                 }
-                
+
                 $convocatoria = Convocatoria::create($datosConvocatoria); // Creamos la convocatoria en la base de datos
 
                 \Log::info('DEBUG crearConvocatoria - Convocatoria guardada en BD:', [
@@ -137,20 +137,20 @@ class ConvocatoriaController
         try {
             DB::transaction(function () use ($request, $id) { // Inicio de la transacción
                 $convocatoria = Convocatoria::findOrFail($id); // Buscamos la convocatoria por su ID
-                
-                $datosActualizacion = $request->validated(); 
-                
+
+                $datosActualizacion = $request->validated();
+
                 \Log::info('DEBUG actualizarConvocatoria - Datos VALIDADOS:', [
                     'tiene_requisitos_idiomas' => isset($datosActualizacion['requisitos_idiomas']),
                     'requisitos_idiomas' => $datosActualizacion['requisitos_idiomas'] ?? 'NO PRESENTE',
                 ]);
-                
+
                 // Procesar requisitos_idiomas similar a create
                 if (isset($datosActualizacion['requisitos_idiomas'])) {
                     $idiomas = $datosActualizacion['requisitos_idiomas'];
                     if (is_array($idiomas) && empty($idiomas)) {
                         $datosActualizacion['requisitos_idiomas'] = null;
-                    } 
+                    }
                     elseif (is_array($idiomas)) {
                         $idiomasLimpios = [];
                         foreach ($idiomas as $idioma => $nivel) {
@@ -161,12 +161,12 @@ class ConvocatoriaController
                         $datosActualizacion['requisitos_idiomas'] = !empty($idiomasLimpios) ? $idiomasLimpios : null;
                     }
                 }
-                
+
                 // Removemos el campo 'archivo' si existe, ya que no es un campo de BD
                 if (isset($datosActualizacion['archivo'])) {
                     unset($datosActualizacion['archivo']);
                 }
-                
+
                 $convocatoria->update($datosActualizacion); // Actualizamos la convocatoria con los datos validados
 
                 \Log::info('DEBUG actualizarConvocatoria - Convocatoria actualizada en BD:', [
@@ -359,12 +359,12 @@ public function obtenerConvocatorias()
             'nombre_convocatoria' => $convocatoria->nombre_convocatoria,
             'tipo' => $convocatoria->tipo,
             'periodo_academico' => $convocatoria->periodo_academico ?? '',
-            
+
             // Cargo Solicitado: retorna ID si existe en BD, si no retorna el texto personalizado
             'tipo_cargo_id' => $convocatoria->tipo_cargo_id,
             'tipo_cargo_otro' => $convocatoria->tipo_cargo_otro ?? '',
             'cargo_solicitado' => $convocatoria->tipo_cargo_id ? $convocatoria->tipo_cargo_id : ($convocatoria->tipo_cargo_otro ?? ''),
-            
+
             'facultad_id' => $convocatoria->facultad_id,
             'facultad_otro' => $convocatoria->facultad_otro ?? '',
             'facultad' => $convocatoria->facultad_otro ?? ($convocatoria->facultad ? $convocatoria->facultad->nombre_facultad : ''),

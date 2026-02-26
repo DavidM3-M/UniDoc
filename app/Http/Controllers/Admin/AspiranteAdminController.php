@@ -208,105 +208,194 @@ class AspiranteAdminController extends Controller
     /**
      * Obtener información completa de un aspirante específico
      */
-    public function obtenerAspirantePorId($id)
-    {
-        try {
-            $aspirante = User::role('Aspirante')
-                ->with([
-                    'municipioUsuarios.departamentoMunicipio',
-                    'fotoPerfilUsuario.documentosFotoPerfil',
-                    'informacionContactoUsuario',
-                    'epsUsuario',
-                    'rutUsuario',
-                    'idiomasUsuario',
-                    'experienciasUsuario',
-                    'estudiosUsuario',
-                    'produccionAcademicaUsuario',
-                    'aptitudesUsuario',
-                    'postulacionesUsuario.convocatoriaPostulacion',
-                    'documentosUser'
-                ])
-                ->findOrFail($id);
+   public function obtenerAspirantePorId($id)
+{
+    try {
+        $aspirante = User::role('Aspirante')
+        ->with([
+            'municipioUsuarios.departamentoMunicipio',
+            'fotoPerfilUsuario.documentosFotoPerfil',
+            'informacionContactoUsuario',
+            'epsUsuario',
+            'rutUsuario',
+            'certificacionesBancariasUsuario.documentosCertificacionBancaria',
+            'pensionUsuario.documentosPension',
+            'antecedentesJudicialesUsuario.documentosAntecedentesJudiciales',
+            'arlUsuario.documentosArl',
+            'idiomasUsuario',
+            'experienciasUsuario',
+            'estudiosUsuario',
+            'produccionAcademicaUsuario',
+            'aptitudesUsuario',
+            'postulacionesUsuario.convocatoriaPostulacion',
+            'documentosUser'
+        ])
+        ->findOrFail($id);
 
+        // Foto de perfil
+        $fotoUrl = null;
+        if ($aspirante->fotoPerfilUsuario && $aspirante->fotoPerfilUsuario->documentosFotoPerfil->count() > 0) {
+            $fotoUrl = asset('storage/' . $aspirante->fotoPerfilUsuario->documentosFotoPerfil->first()->archivo);
+        }
 
+        // Documentos generales
+        $documentos = $aspirante->documentosUser->map(function($doc) {
+            return [
+                'id' => $doc->id,
+                'nombre' => $doc->archivo,
+                'url' => asset('storage/' . $doc->archivo),
+                'tipo' => pathinfo($doc->archivo, PATHINFO_EXTENSION),
+            ];
+        });
 
-
-
-            // Construir URLs de foto de perfil
-            $fotoUrl = null;
-            if ($aspirante->fotoPerfilUsuario && $aspirante->fotoPerfilUsuario->documentosFotoPerfil->count() > 0) {
-                $fotoUrl = asset('storage/' . $aspirante->fotoPerfilUsuario->documentosFotoPerfil->first()->archivo);
+        // Generar archivo_url
+        if ($aspirante->certificacionesBancariasUsuario) {
+            foreach ($aspirante->certificacionesBancariasUsuario->documentosCertificacionBancaria as $doc) {
+                if (!empty($doc->archivo)) {
+                    $doc->archivo_url = asset('storage/' . $doc->archivo);
+                }
             }
+        }
 
-            // Construir URLs de documentos
-            $documentos = $aspirante->documentosUser->map(function($doc) {
-                return [
-                    'id' => $doc->id,
-                    'nombre' => $doc->archivo,
-                    'url' => asset('storage/' . $doc->archivo),
-                    'tipo' => pathinfo($doc->archivo, PATHINFO_EXTENSION),
-                ];
-            });
+        if ($aspirante->pensionUsuario) {
+            foreach ($aspirante->pensionUsuario->documentosPension as $doc) {
+                if (!empty($doc->archivo)) {
+                    $doc->archivo_url = asset('storage/' . $doc->archivo);
+                }
+            }
+        }
 
-            $data = [
-                'id' => $aspirante->id,
-                'datos_personales' => [
-                    'primer_nombre' => $aspirante->primer_nombre,
-                    'segundo_nombre' => $aspirante->segundo_nombre,
-                    'primer_apellido' => $aspirante->primer_apellido,
-                    'segundo_apellido' => $aspirante->segundo_apellido,
-                    'tipo_identificacion' => $aspirante->tipo_identificacion,
-                    'numero_identificacion' => $aspirante->numero_identificacion,
-                    'genero' => $aspirante->genero,
-                    'fecha_nacimiento' => $aspirante->fecha_nacimiento,
-                    'estado_civil' => $aspirante->estado_civil,
-                    'email' => $aspirante->email,
-                    'municipio' => $aspirante->municipioUsuarios ? $aspirante->municipioUsuarios->nombre_municipio : null,
-                    'departamento' => $aspirante->municipioUsuarios && $aspirante->municipioUsuarios->departamentoMunicipio
-                        ? $aspirante->municipioUsuarios->departamentoMunicipio->nombre_departamento
-                        : null,
-                    'foto_perfil_url' => $fotoUrl,
-                ],
-                'informacion_contacto' => $aspirante->informacionContactoUsuario ? [
+        if ($aspirante->antecedentesJudicialesUsuario) {
+            foreach ($aspirante->antecedentesJudicialesUsuario->documentosAntecedentesJudiciales as $doc) {
+                if (!empty($doc->archivo)) {
+                    $doc->archivo_url = asset('storage/' . $doc->archivo);
+                }
+            }
+        }
+
+        if ($aspirante->arlUsuario) {
+            foreach ($aspirante->arlUsuario->documentosArl as $doc) {
+                if (!empty($doc->archivo)) {
+                    $doc->archivo_url = asset('storage/' . $doc->archivo);
+                }
+            }
+        }
+
+        // Construir $data despues de asignar las URLs
+        $data = [
+            'id' => $aspirante->id,
+            'datos_personales' => [
+                'primer_nombre' => $aspirante->primer_nombre,
+                'segundo_nombre' => $aspirante->segundo_nombre,
+                'primer_apellido' => $aspirante->primer_apellido,
+                'segundo_apellido' => $aspirante->segundo_apellido,
+                'tipo_identificacion' => $aspirante->tipo_identificacion,
+                'numero_identificacion' => $aspirante->numero_identificacion,
+                'genero' => $aspirante->genero,
+                'fecha_nacimiento' => $aspirante->fecha_nacimiento,
+                'estado_civil' => $aspirante->estado_civil,
+                'email' => $aspirante->email,
+                'municipio' => $aspirante->municipioUsuarios ? $aspirante->municipioUsuarios->nombre_municipio : null,
+                'departamento' => $aspirante->municipioUsuarios && $aspirante->municipioUsuarios->departamentoMunicipio
+                    ? $aspirante->municipioUsuarios->departamentoMunicipio->nombre_departamento
+                    : null,
+                'foto_perfil_url' => $fotoUrl,
+            ],
+            'informacion_contacto' => $aspirante->informacionContactoUsuario ? [
                 'telefono' => $aspirante->informacionContactoUsuario->telefono_movil ?? null,
                 'celular' => $aspirante->informacionContactoUsuario->celular_alternativo ?? null,
                 'direccion' => $aspirante->informacionContactoUsuario->direccion_residencia ?? null,
                 'barrio' => $aspirante->informacionContactoUsuario->barrio ?? null,
                 'correo_alterno' => $aspirante->informacionContactoUsuario->correo_alterno ?? null,
-                ] : null,
-                'eps' => $aspirante->epsUsuario,
-                'rut' => $aspirante->rutUsuario,
-                'idiomas' => $aspirante->idiomasUsuario,
-                'experiencias' => $aspirante->experienciasUsuario,
-                'estudios' => $aspirante->estudiosUsuario,
-                'produccion_academica' => $aspirante->produccionAcademicaUsuario,
-                'aptitudes' => $aspirante->aptitudesUsuario,
-                'postulaciones' => $aspirante->postulacionesUsuario,
-                'documentos' => $documentos,
-                'avales' => [
-                    'rectoria' => [
-                        'estado' => $aspirante->aval_rectoria,
-                        'aprobado_por' => $aspirante->aval_rectoria_by,
-                        'fecha' => $aspirante->aval_rectoria_at,
-                    ],
-                    'vicerrectoria' => [
-                        'estado' => $aspirante->aval_vicerrectoria,
-                        'aprobado_por' => $aspirante->aval_vicerrectoria_by,
-                        'fecha' => $aspirante->aval_vicerrectoria_at,
-                    ],
+            ] : null,
+            'eps' => $aspirante->epsUsuario,
+            'rut' => $aspirante->rutUsuario,
+            'certificacion_bancaria' => $aspirante->certificacionesBancariasUsuario ? array_merge(
+    $aspirante->certificacionesBancariasUsuario->toArray(),
+            [
+                'documentosCertificacionBancaria' => $aspirante->certificacionesBancariasUsuario->documentosCertificacionBancaria->map(function($doc) {
+                    return [
+                        'id_documento' => $doc->id_documento,
+                        'archivo' => $doc->archivo,
+                        'archivo_url' => !empty($doc->archivo) ? asset('storage/' . $doc->archivo) : null,
+                        'estado' => $doc->estado,
+                    ];
+                })->toArray()
+            ]
+        ) : null,
+
+        'pension' => $aspirante->pensionUsuario ? array_merge(
+            $aspirante->pensionUsuario->toArray(),
+            [
+                'documentosPension' => $aspirante->pensionUsuario->documentosPension->map(function($doc) {
+                    return [
+                        'id_documento' => $doc->id_documento,
+                        'archivo' => $doc->archivo,
+                        'archivo_url' => !empty($doc->archivo) ? asset('storage/' . $doc->archivo) : null,
+                        'estado' => $doc->estado,
+                    ];
+                })->toArray()
+            ]
+        ) : null,
+
+        'antecedente_judicial' => $aspirante->antecedentesJudicialesUsuario ? array_merge(
+            $aspirante->antecedentesJudicialesUsuario->toArray(),
+            [
+                'documentosAntecedentesJudiciales' => $aspirante->antecedentesJudicialesUsuario->documentosAntecedentesJudiciales->map(function($doc) {
+                    return [
+                        'id_documento' => $doc->id_documento,
+                        'archivo' => $doc->archivo,
+                        'archivo_url' => !empty($doc->archivo) ? asset('storage/' . $doc->archivo) : null,
+                        'estado' => $doc->estado,
+                    ];
+                })->toArray()
+            ]
+        ) : null,
+
+        'arl' => $aspirante->arlUsuario ? array_merge(
+            $aspirante->arlUsuario->toArray(),
+            [
+                'documentosArl' => $aspirante->arlUsuario->documentosArl->map(function($doc) {
+                    return [
+                        'id_documento' => $doc->id_documento,
+                        'archivo' => $doc->archivo,
+                        'archivo_url' => !empty($doc->archivo) ? asset('storage/' . $doc->archivo) : null,
+                        'estado' => $doc->estado,
+                    ];
+                })->toArray()
+            ]
+) : null,
+            'idiomas' => $aspirante->idiomasUsuario,
+            'experiencias' => $aspirante->experienciasUsuario,
+            'estudios' => $aspirante->estudiosUsuario,
+            'produccion_academica' => $aspirante->produccionAcademicaUsuario,
+            'aptitudes' => $aspirante->aptitudesUsuario,
+            'postulaciones' => $aspirante->postulacionesUsuario,
+            'documentos' => $documentos,
+            'avales' => [
+                'rectoria' => [
+                    'estado' => $aspirante->aval_rectoria,
+                    'aprobado_por' => $aspirante->aval_rectoria_by,
+                    'fecha' => $aspirante->aval_rectoria_at,
                 ],
-            ];
+                'vicerrectoria' => [
+                    'estado' => $aspirante->aval_vicerrectoria,
+                    'aprobado_por' => $aspirante->aval_vicerrectoria_by,
+                    'fecha' => $aspirante->aval_vicerrectoria_at,
+                ],
+            ],
+        ];
 
-            return response()->json(['aspirante' => $data], 200);
+        return response()->json(['aspirante' => $data], 200);
 
-        } catch (\Exception $e) {
-            Log::error('Error al obtener aspirante: ' . $e->getMessage());
-            return response()->json([
-                'mensaje' => 'Error al obtener información del aspirante',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+    } catch (\Exception $e) {
+        Log::error('Error al obtener aspirante: ' . $e->getMessage());
+        return response()->json([
+            'mensaje' => 'Error al obtener información del aspirante',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
 
     /**
      * Obtener información limitada de un aspirante para Talento Humano
