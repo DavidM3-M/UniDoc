@@ -16,6 +16,7 @@ use Illuminate\Http\Request;
 use App\Services\GeneradorHojaDeVidaPDFService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
+use App\Http\Controllers\TalentoHumano\NotificacionController;
 
 class PostulacionController
 {
@@ -107,6 +108,23 @@ class PostulacionController
                     }
                 }
             });
+
+            // Notificar a los administradores de Talento Humano sobre la nueva postulación
+            try {
+                $admins = User::role('Talento Humano')->get();
+                if ($admins->isNotEmpty()) {
+                    NotificacionController::nuevaPostulacion($admins, $request->user());
+                }
+            } catch (\Exception $notifEx) {
+                Log::error('Error al notificar nueva postulación: ' . $notifEx->getMessage());
+            }
+
+            // Confirmar al postulante que su postulación fue recibida
+            try {
+                NotificacionController::confirmacionPostulacion($request->user(), $convocatoria);
+            } catch (\Throwable $notifEx) {
+                Log::error('Error al confirmar postulación al postulante: ' . $notifEx->getMessage());
+            }
 
             return response()->json([ // Crear la respuesta JSON
                 'message' => 'Postulación enviada correctamente'
@@ -270,6 +288,19 @@ class PostulacionController
                 $postulacion->save(); // Guardar los cambios en la base de datos
 
             });
+
+            // Notificar al usuario postulante sobre el cambio de estado
+            try {
+                $postulacion = Postulacion::with('usuarioPostulacion')->find($idPostulacion);
+                if ($postulacion && $postulacion->usuarioPostulacion) {
+                    NotificacionController::cambioEstadoPostulacion(
+                        $postulacion->usuarioPostulacion,
+                        $request->estado_postulacion
+                    );
+                }
+            } catch (\Exception $notifEx) {
+                Log::error('Error al notificar cambio de estado de postulación: ' . $notifEx->getMessage());
+            }
 
             return response()->json([
                 'message' => 'Estado de postulación actualizado correctamente.'
@@ -451,6 +482,16 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
             $this->verificarPerfilProfesional($user, $convocatoria->perfilProfesional);
         }
 
+        // Verificar experiencia por cantidad + unidad (ej: 2 Años, 6 Meses)
+        if (!empty($convocatoria->cantidad_experiencia) && !empty($convocatoria->unidad_experiencia)) {
+            $this->verificarExperienciaCantidadUnidad($user, $convocatoria);
+        }
+
+        // Verificar experiencia por años + tipo (ej: 3 años de experiencia docente)
+        if (!empty($convocatoria->anos_experiencia_requerida) && !empty($convocatoria->tipo_experiencia_requerida)) {
+            $this->verificarAniosExperienciaPorTipo($user, $convocatoria);
+        }
+
         // Verificar facultad: si la convocatoria especifica una Facultad relacionada, exigir pertenencia.
         // Si la convocatoria define `facultad_otro` (texto libre), no se exige pertenencia automáticamente.
         if ($convocatoria->facultad) {
@@ -458,6 +499,121 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
         }
 
         // Aquí se pueden agregar más verificaciones según requisitos_adicionales
+    }
+
+    /**
+     * Verificar que el usuario cumpla la experiencia requerida en cantidad + unidad.
+     * Soporta unidades: Años, Meses, Semanas.
+     * Si la convocatoria define tipo_experiencia_requerida, solo se contabilizan
+     * las experiencias de ese tipo.
+     */
+    private function verificarExperienciaCantidadUnidad($user, $convocatoria)
+    {
+        $cantidadRequerida = $convocatoria->cantidad_experiencia;
+        $unidad            = strtolower(trim($convocatoria->unidad_experiencia));
+        $tipoFiltro        = $convocatoria->tipo_experiencia_requerida ?? null;
+
+        $totalDias = $this->calcularTotalDiasExperiencia($user->experienciasUsuario, $tipoFiltro);
+
+        // Convertir el requisito a días para comparar en la misma unidad
+        $diasRequeridos = match (true) {
+            str_starts_with($unidad, 'año')  => $cantidadRequerida * 365.25,
+            str_starts_with($unidad, 'mes')  => $cantidadRequerida * 30.44,
+            str_starts_with($unidad, 'sem')  => $cantidadRequerida * 7,
+            default                          => $cantidadRequerida * 365.25, // default años
+        };
+
+        if ($totalDias < $diasRequeridos) {
+            $tieneStr = $this->diasATexto($totalDias, $unidad);
+            $requiereStr = "{$cantidadRequerida} {$convocatoria->unidad_experiencia}";
+            $tipoStr = $tipoFiltro ? " de experiencia en {$tipoFiltro}" : '';
+            throw new \Exception(
+                "No cumples con la experiencia requerida{$tipoStr}. Se requieren {$requiereStr} y tienes {$tieneStr}.",
+                403
+            );
+        }
+    }
+
+    /**
+     * Verificar que el usuario cumpla los años de experiencia requeridos por tipo.
+     */
+    private function verificarAniosExperienciaPorTipo($user, $convocatoria)
+    {
+        $anosRequeridos = $convocatoria->anos_experiencia_requerida;
+        $tipoRequerido  = $convocatoria->tipo_experiencia_requerida;
+
+        $totalDias  = $this->calcularTotalDiasExperiencia($user->experienciasUsuario, $tipoRequerido);
+        $anosUsuario = round($totalDias / 365.25, 1);
+
+        if ($anosUsuario < $anosRequeridos) {
+            throw new \Exception(
+                "No cumples con los años de experiencia requeridos en {$tipoRequerido}. " .
+                "Se requieren {$anosRequeridos} años y tienes {$anosUsuario} años.",
+                403
+            );
+        }
+    }
+
+    /**
+     * Calcula el total de días de experiencia del usuario.
+     * Si $tipoFiltro no es null, solo cuenta experiencias de ese tipo.
+     * Incluye experiencias activas (trabajo_actual / sin fecha_finalizacion).
+     *
+     * @param \Illuminate\Database\Eloquent\Collection $experiencias
+     * @param string|null $tipoFiltro
+     * @return float Total en días
+     */
+    private function calcularTotalDiasExperiencia($experiencias, ?string $tipoFiltro): float
+    {
+        $totalDias = 0.0;
+
+        foreach ($experiencias as $exp) {
+            // Filtrar por tipo si se especificó
+            if ($tipoFiltro !== null) {
+                if (strtolower(trim($exp->tipo_experiencia)) !== strtolower(trim($tipoFiltro))) {
+                    continue;
+                }
+            }
+
+            if (empty($exp->fecha_inicio)) {
+                continue;
+            }
+
+            try {
+                $inicio = \Carbon\Carbon::parse($exp->fecha_inicio);
+                // Trabajo actual o sin fecha de fin → usar hoy como fin
+                $fin = (!empty($exp->fecha_finalizacion))
+                    ? \Carbon\Carbon::parse($exp->fecha_finalizacion)
+                    : \Carbon\Carbon::today();
+
+                if ($fin->lessThan($inicio)) {
+                    continue; // Datos inconsistentes, omitir
+                }
+
+                $totalDias += $inicio->diffInDays($fin);
+            } catch (\Exception $e) {
+                continue;
+            }
+        }
+
+        return $totalDias;
+    }
+
+    /**
+     * Convierte días a un texto representativo en la unidad dada.
+     */
+    private function diasATexto(float $dias, string $unidad): string
+    {
+        if (str_starts_with($unidad, 'año')) {
+            return round($dias / 365.25, 1) . ' años';
+        }
+        if (str_starts_with($unidad, 'mes')) {
+            return round($dias / 30.44, 1) . ' meses';
+        }
+        if (str_starts_with($unidad, 'sem')) {
+            return round($dias / 7, 1) . ' semanas';
+        }
+        return round($dias / 365.25, 1) . ' años';
     }
 
     /**
@@ -532,9 +688,12 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
 
         foreach ($experiencias as $experiencia) {
             if (strtolower($experiencia->tipo_experiencia) === strtolower(str_replace('_', ' ', $tipoExperiencia))) {
-                if ($experiencia->fecha_inicio && $experiencia->fecha_finalizacion) {
+                if ($experiencia->fecha_inicio) {
                     $fechaInicio = \Carbon\Carbon::parse($experiencia->fecha_inicio);
-                    $fechaFin = \Carbon\Carbon::parse($experiencia->fecha_finalizacion);
+                    // Si no tiene fecha de finalización (trabajo actual), usar hoy
+                    $fechaFin = !empty($experiencia->fecha_finalizacion)
+                        ? \Carbon\Carbon::parse($experiencia->fecha_finalizacion)
+                        : \Carbon\Carbon::today();
                     $diferencia = $fechaInicio->diffInDays($fechaFin);
                     $totalAnios += $diferencia / 365.25; // Convertir días a años
                 }

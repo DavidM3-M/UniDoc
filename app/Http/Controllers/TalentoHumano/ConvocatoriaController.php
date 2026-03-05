@@ -6,6 +6,7 @@ namespace App\Http\Controllers\TalentoHumano;
 use App\Http\Requests\RequestTalentoHumano\RequestConvocatoria\ActualizarConvocatoriaRequest;
 use App\Http\Requests\RequestTalentoHumano\RequestConvocatoria\CrearConvocatoriaRequest;
 use App\Models\TalentoHumano\Convocatoria;
+use App\Models\Usuario\User;
 use Illuminate\Support\Facades\DB;
 use App\Services\ArchivoService;
 use Illuminate\Support\Facades\Log;
@@ -48,7 +49,8 @@ class ConvocatoriaController
     public function crearConvocatoria(CrearConvocatoriaRequest $request)
     {
         try {
-            DB::transaction(function () use ($request) { // Inicio de la transacción
+            $convocatoria = null;
+            DB::transaction(function () use ($request, &$convocatoria) { // Inicio de la transacción
 
                 $datosConvocatoria = $request->validated(); // Validamos los datos de la solicitud
                 
@@ -106,6 +108,26 @@ class ConvocatoriaController
                     $this->archivoService->guardarArchivoDocumento($request->file('archivo'), $convocatoria, 'Convocatorias'); // Guardamos el archivo asociado a la convocatoria
                 }
             });
+
+            // Notificar a todos los aspirantes sobre la nueva convocatoria
+            try {
+                $aspirantes = User::role('Aspirante')->get();
+                if ($aspirantes->isNotEmpty()) {
+                    NotificacionController::nuevaConvocatoria($aspirantes, $convocatoria);
+                }
+            } catch (\Throwable $notifEx) {
+                Log::error('Error al notificar nueva convocatoria a aspirantes: ' . $notifEx->getMessage());
+            }
+
+            // Notificar también a los docentes ya contratados
+            try {
+                $docentes = User::role('Docente')->get();
+                if ($docentes->isNotEmpty()) {
+                    NotificacionController::nuevaConvocatoriaDocente($docentes, $convocatoria);
+                }
+            } catch (\Throwable $notifEx) {
+                Log::error('Error al notificar nueva convocatoria a docentes: ' . $notifEx->getMessage());
+            }
 
             return response()->json([ // Retornamos una respuesta JSON
                 'mensaje' => 'Convocatoria creada exitosamente',

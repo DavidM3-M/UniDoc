@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Convocatoria;
 
-use App\Http\Controllers\Controller;   
+use App\Http\Controllers\Controller;
+use App\Http\Controllers\TalentoHumano\NotificacionController;
 use Illuminate\Http\Request;
 use App\Models\Usuario\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 
 class AvalController extends Controller
@@ -117,6 +119,43 @@ class AvalController extends Controller
                         throw new \Exception('Rol no autorizado', 403);
                 }
             });
+
+            // Notificaciones por correo según el rol que acaba de otorgar el aval
+            try {
+                $user->refresh();
+                switch ($role) {
+                    case 'Talento Humano':
+                        // Notificar a los Coordinadores
+                        $coordinadores = User::role('Coordinador')->get();
+                        if ($coordinadores->isNotEmpty()) {
+                            NotificacionController::listoParaCoordinador($coordinadores, $user);
+                        }
+                        break;
+
+                    case 'Coordinador':
+                        // Notificar a Vicerrectoría
+                        $vicerrectores = User::role('Vicerrectoria')->get();
+                        if ($vicerrectores->isNotEmpty()) {
+                            NotificacionController::listoParaVicerrectoria($vicerrectores, $user);
+                        }
+                        break;
+
+                    case 'Vicerrectoria':
+                        // Notificar a Rectoría
+                        $rectores = User::role('Rectoria')->get();
+                        if ($rectores->isNotEmpty()) {
+                            NotificacionController::listoParaRectoria($rectores, $user);
+                        }
+                        break;
+
+                    case 'Rectoria':
+                        // Notificar al aspirante que el proceso está completo
+                        NotificacionController::avalFinalCompletado($user);
+                        break;
+                }
+            } catch (\Exception $notifEx) {
+                Log::error("Error al enviar notificación de aval [{$role}] para usuario {$user->id}: " . $notifEx->getMessage());
+            }
 
             return response()->json([
                 'message' => "Aval registrado exitosamente por {$role}",

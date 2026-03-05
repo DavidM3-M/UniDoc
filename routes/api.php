@@ -24,3 +24,5 @@ require_once __DIR__ . '/apoyo_profesoral.php';
 require_once __DIR__ . '/aval.php';
 // Incluye el archivo coordinador.php, contiene rutas relacionadas con el rol Coordinador
 require_once __DIR__ . '/coordinador.php';
+// Incluye el archivo notificaciones.php, contiene rutas compartidas de notificaciones
+require_once __DIR__ . '/notificaciones.php';

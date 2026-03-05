@@ -1,0 +1,1951 @@
+{
+  "info": {
+    "_postman_id": "cualificacion-docentes-api",
+    "name": "Cualificación Docentes API",
+    "description": "Colección completa de endpoints para el sistema de cualificación, postulación, aval, contratación y seguimiento de docentes universitarios.\n\n**Configuración:**\n- Crear variable de entorno `base_url` = `http://localhost:8000/api`\n- Crear variable de entorno `token` con el JWT obtenido al iniciar sesión\n\nTodas las rutas protegidas usan: `Authorization: Bearer {{token}}`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000/api", "type": "string" },
+    { "key": "token", "value": "", "type": "string" }
+  ],
+  "item": [
+
+    {
+      "name": "🔐 Auth",
+      "description": "Endpoints de autenticación. Los marcados como públicos no requieren token.",
+      "item": [
+        {
+          "name": "Registrar usuario",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/registrar-usuario", "host": ["{{base_url}}"], "path": ["auth", "registrar-usuario"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Juan\",\n  \"apellido\": \"Pérez\",\n  \"correo\": \"juan@example.com\",\n  \"contrasena\": \"password123\",\n  \"tipo_documento\": \"CC\",\n  \"numero_documento\": \"1234567890\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Registra un nuevo usuario con rol Aspirante y retorna un JWT.\n\n**Respuesta 201:**\n```json\n{\n  \"message\": \"Usuario registrado exitosamente\",\n  \"token\": \"eyJ...\",\n  \"usuario\": { \"id\": 1, \"nombre\": \"Juan\", \"rol\": \"Aspirante\" }\n}\n```"
+          }
+        },
+        {
+          "name": "Iniciar sesión",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.token) { pm.collectionVariables.set('token', json.token); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/iniciar-sesion", "host": ["{{base_url}}"], "path": ["auth", "iniciar-sesion"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"juan@example.com\",\n  \"contrasena\": \"password123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Inicia sesión y retorna el JWT. El token se guarda automáticamente en la variable `token`.\n\n**Respuesta 200:**\n```json\n{\n  \"token\": \"eyJ...\",\n  \"token_type\": \"bearer\",\n  \"expires_in\": 86400\n}\n```"
+          }
+        },
+        {
+          "name": "Cerrar sesión",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/auth/cerrar-sesion", "host": ["{{base_url}}"], "path": ["auth", "cerrar-sesion"] },
+            "description": "Invalida el JWT del usuario autenticado.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Sesión cerrada exitosamente\" }\n```"
+          }
+        },
+        {
+          "name": "Obtener usuario autenticado",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/auth/obtener-usuario-autenticado", "host": ["{{base_url}}"], "path": ["auth", "obtener-usuario-autenticado"] },
+            "description": "Retorna los datos del usuario autenticado y sus roles.\n\n**Respuesta 200:**\n```json\n{\n  \"id\": 1,\n  \"nombre\": \"Juan\",\n  \"apellido\": \"Pérez\",\n  \"correo\": \"juan@example.com\",\n  \"roles\": [\"Aspirante\"]\n}\n```"
+          }
+        },
+        {
+          "name": "Actualizar usuario",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/auth/actualizar-usuario", "host": ["{{base_url}}"], "path": ["auth", "actualizar-usuario"] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "nombre", "value": "Juan Carlos", "type": "text" },
+                { "key": "apellido", "value": "Pérez López", "type": "text" },
+                { "key": "correo", "value": "juancarlos@example.com", "type": "text" },
+                { "key": "tipo_documento", "value": "CC", "type": "text" },
+                { "key": "numero_documento", "value": "1234567890", "type": "text" },
+                { "key": "archivo_documento", "type": "file", "src": "", "description": "Opcional: archivo del documento de identidad" }
+              ]
+            },
+            "description": "Actualiza el perfil del usuario autenticado. Soporta carga de archivo de documento."
+          }
+        },
+        {
+          "name": "Actualizar contraseña",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/auth/actualizar-contrasena/1", "host": ["{{base_url}}"], "path": ["auth", "actualizar-contrasena", "1"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contrasena_actual\": \"password123\",\n  \"contrasena_nueva\": \"newpassword123\",\n  \"contrasena_nueva_confirmation\": \"newpassword123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Actualiza la contraseña de un usuario específico por ID."
+          }
+        },
+        {
+          "name": "Solicitar restablecimiento de contraseña",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/restablecer-contrasena", "host": ["{{base_url}}"], "path": ["auth", "restablecer-contrasena"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"correo\": \"juan@example.com\" }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Envía un token de restablecimiento de contraseña al correo del usuario."
+          }
+        },
+        {
+          "name": "Restablecer contraseña con token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/restablecer-contrasena-token", "host": ["{{base_url}}"], "path": ["auth", "restablecer-contrasena-token"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"abc123token\",\n  \"correo\": \"juan@example.com\",\n  \"contrasena\": \"nuevapassword123\",\n  \"contrasena_confirmation\": \"nuevapassword123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Restablece la contraseña usando el token recibido por email."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "👤 Aspirante",
+      "description": "Endpoints para el rol Aspirante. Requieren `Authorization: Bearer {{token}}` y rol Aspirante.",
+      "item": [
+        {
+          "name": "Foto de Perfil",
+          "item": [
+            {
+              "name": "Crear foto de perfil",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/crear-foto-perfil", "host": ["{{base_url}}"], "path": ["aspirante", "crear-foto-perfil"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [{ "key": "foto_perfil", "type": "file", "src": "", "description": "jpeg/png/jpg, máx 2 MB" }]
+                },
+                "description": "Sube la foto de perfil del aspirante.\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Foto de perfil creada exitosamente\", \"url\": \"http://...\" }\n```\n\n**Errores:**\n- `422`: El archivo no es una imagen válida o supera 2 MB"
+              }
+            },
+            {
+              "name": "Obtener foto de perfil",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/obtener-foto-perfil", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-foto-perfil"] },
+                "description": "Retorna la URL de la foto de perfil del aspirante.\n\n**Respuesta 200:**\n```json\n{ \"url\": \"http://localhost:8000/storage/fotos/1_perfil.jpg\" }\n```"
+              }
+            },
+            {
+              "name": "Eliminar foto de perfil",
+              "request": {
+                "method": "DELETE",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/eliminar-foto-perfil", "host": ["{{base_url}}"], "path": ["aspirante", "eliminar-foto-perfil"] },
+                "description": "Elimina la foto de perfil del aspirante.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Foto de perfil eliminada exitosamente\" }\n```"
+              }
+            }
+          ]
+        },
+        {
+          "name": "RUT",
+          "item": [
+            {
+              "name": "Obtener RUT",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/obtener-rut", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-rut"] },
+                "description": "Retorna el RUT del aspirante autenticado.\n\n**Respuesta 200:**\n```json\n{\n  \"id\": 1,\n  \"tipo_persona\": \"Natural\",\n  \"codigo_ciiu\": \"8560\",\n  \"numero_documento\": \"1234567890\",\n  \"archivo_url\": \"http://...\",\n  \"estado\": \"Pendiente\"\n}\n```\n\n**Error 404:** RUT no encontrado"
+              }
+            },
+            {
+              "name": "Crear RUT",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/crear-rut", "host": ["{{base_url}}"], "path": ["aspirante", "crear-rut"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "tipo_persona", "value": "Natural", "type": "text" },
+                    { "key": "codigo_ciiu", "value": "8560", "type": "text" },
+                    { "key": "numero_documento", "value": "1234567890", "type": "text" },
+                    { "key": "archivo_rut", "type": "file", "src": "", "description": "PDF del RUT obligatorio" }
+                  ]
+                },
+                "description": "Crea el registro de RUT del aspirante (uno por usuario).\n\n**Respuesta 201:**\n```json\n{ \"message\": \"RUT creado exitosamente\", \"rut\": { \"id\": 1, ... } }\n```\n\n**Error 422:** Datos inválidos o RUT ya existente"
+              }
+            },
+            {
+              "name": "Actualizar RUT",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/actualizar-rut", "host": ["{{base_url}}"], "path": ["aspirante", "actualizar-rut"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "tipo_persona", "value": "Natural", "type": "text" },
+                    { "key": "codigo_ciiu", "value": "8560", "type": "text" },
+                    { "key": "numero_documento", "value": "1234567890", "type": "text" },
+                    { "key": "archivo_rut", "type": "file", "src": "", "description": "Opcional: nuevo archivo PDF" }
+                  ]
+                },
+                "description": "Actualiza el RUT del aspirante."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Información de Contacto",
+          "item": [
+            {
+              "name": "Obtener información de contacto",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/obtener-informacion-contacto", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-informacion-contacto"] },
+                "description": "Retorna la información de contacto del aspirante.\n\n**Respuesta 200:**\n```json\n{\n  \"id\": 1,\n  \"direccion\": \"Calle 123 #45-67\",\n  \"telefono\": \"3001234567\",\n  \"municipio\": { \"id\": 1, \"nombre\": \"Bogotá\" },\n  \"estado\": \"Pendiente\"\n}\n```"
+              }
+            },
+            {
+              "name": "Crear información de contacto",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/crear-informacion-contacto", "host": ["{{base_url}}"], "path": ["aspirante", "crear-informacion-contacto"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "direccion", "value": "Calle 123 #45-67", "type": "text" },
+                    { "key": "telefono", "value": "3001234567", "type": "text" },
+                    { "key": "municipio_id", "value": "1", "type": "text" },
+                    { "key": "categoria_libreta_militar", "value": "", "type": "text", "description": "Opcional (hombres)" },
+                    { "key": "numero_libreta_militar", "value": "", "type": "text", "description": "Opcional" },
+                    { "key": "distrito_militar", "value": "", "type": "text", "description": "Opcional" },
+                    { "key": "archivo_libreta_militar", "type": "file", "src": "", "description": "Opcional: PDF libreta militar" }
+                  ]
+                },
+                "description": "Crea la información de contacto del aspirante (una por usuario).\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Información de contacto creada\", \"contacto\": { ... } }\n```"
+              }
+            },
+            {
+              "name": "Actualizar información de contacto",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/actualizar-informacion-contacto", "host": ["{{base_url}}"], "path": ["aspirante", "actualizar-informacion-contacto"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "direccion", "value": "Carrera 10 #20-30", "type": "text" },
+                    { "key": "telefono", "value": "3109876543", "type": "text" },
+                    { "key": "municipio_id", "value": "1", "type": "text" }
+                  ]
+                },
+                "description": "Actualiza la información de contacto del aspirante."
+              }
+            }
+          ]
+        },
+        {
+          "name": "EPS",
+          "item": [
+            {
+              "name": "Obtener EPS",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/obtener-eps", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-eps"] },
+                "description": "Retorna el registro de EPS del aspirante."
+              }
+            },
+            {
+              "name": "Crear EPS",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/crear-eps", "host": ["{{base_url}}"], "path": ["aspirante", "crear-eps"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "nombre_eps", "value": "Sura EPS", "type": "text" },
+                    { "key": "estado_afiliacion", "value": "Activo", "type": "text" },
+                    { "key": "tipo_afiliacion", "value": "Cotizante", "type": "text" },
+                    { "key": "tipo_afiliado", "value": "Empleado", "type": "text" },
+                    { "key": "archivo_eps", "type": "file", "src": "", "description": "PDF certificado de afiliación EPS" }
+                  ]
+                },
+                "description": "Crea el registro de EPS.\n\n**Respuesta 201:**\n```json\n{ \"message\": \"EPS creada exitosamente\", \"eps\": { ... } }\n```"
+              }
+            },
+            {
+              "name": "Actualizar EPS",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/actualizar-eps", "host": ["{{base_url}}"], "path": ["aspirante", "actualizar-eps"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "nombre_eps", "value": "Compensar EPS", "type": "text" },
+                    { "key": "estado_afiliacion", "value": "Activo", "type": "text" },
+                    { "key": "tipo_afiliacion", "value": "Cotizante", "type": "text" },
+                    { "key": "tipo_afiliado", "value": "Empleado", "type": "text" }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pensión",
+          "item": [
+            {
+              "name": "Obtener pensión",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/obtener-pension", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-pension"] }
+              }
+            },
+            {
+              "name": "Crear pensión",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/crear-pension", "host": ["{{base_url}}"], "path": ["aspirante", "crear-pension"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "nombre_fondo", "value": "Porvenir", "type": "text" },
+                    { "key": "regimen_pensional", "value": "Ahorro Individual", "type": "text" },
+                    { "key": "archivo_pension", "type": "file", "src": "", "description": "PDF certificado de vinculación pensional" }
+                  ]
+                },
+                "description": "Crea el registro de pensión del aspirante."
+              }
+            },
+            {
+              "name": "Actualizar pensión",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/actualizar-pension", "host": ["{{base_url}}"], "path": ["aspirante", "actualizar-pension"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "nombre_fondo", "value": "Colfondos", "type": "text" },
+                    { "key": "regimen_pensional", "value": "Prima Media", "type": "text" }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "ARL",
+          "item": [
+            {
+              "name": "Obtener ARL",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/obtener-arl", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-arl"] }
+              }
+            },
+            {
+              "name": "Crear ARL",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/crear-arl", "host": ["{{base_url}}"], "path": ["aspirante", "crear-arl"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "nombre_arl", "value": "ARL Sura", "type": "text" },
+                    { "key": "archivo_arl", "type": "file", "src": "" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Actualizar ARL",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/actualizar-arl", "host": ["{{base_url}}"], "path": ["aspirante", "actualizar-arl"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "nombre_arl", "value": "ARL Positiva", "type": "text" }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Certificación Bancaria",
+          "item": [
+            {
+              "name": "Obtener certificación bancaria",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/obtener-certificacion-bancaria", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-certificacion-bancaria"] }
+              }
+            },
+            {
+              "name": "Crear certificación bancaria",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/crear-certificacion-bancaria", "host": ["{{base_url}}"], "path": ["aspirante", "crear-certificacion-bancaria"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "banco", "value": "Bancolombia", "type": "text" },
+                    { "key": "numero_cuenta", "value": "123456789012", "type": "text" },
+                    { "key": "tipo_cuenta", "value": "Ahorros", "type": "text" },
+                    { "key": "archivo_certificacion", "type": "file", "src": "", "description": "PDF del certificado bancario" }
+                  ]
+                },
+                "description": "Crea la certificación bancaria del aspirante."
+              }
+            },
+            {
+              "name": "Actualizar certificación bancaria",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/actualizar-certificacion-bancaria", "host": ["{{base_url}}"], "path": ["aspirante", "actualizar-certificacion-bancaria"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "banco", "value": "Davivienda", "type": "text" },
+                    { "key": "numero_cuenta", "value": "987654321098", "type": "text" },
+                    { "key": "tipo_cuenta", "value": "Corriente", "type": "text" }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Antecedentes Judiciales",
+          "item": [
+            {
+              "name": "Obtener antecedentes judiciales",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/obtener-antecedentes-judiciales", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-antecedentes-judiciales"] }
+              }
+            },
+            {
+              "name": "Crear antecedentes judiciales",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/crear-antecedentes-judiciales", "host": ["{{base_url}}"], "path": ["aspirante", "crear-antecedentes-judiciales"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "archivo_antecedentes", "type": "file", "src": "", "description": "PDF de antecedentes judiciales" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Actualizar antecedentes judiciales",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/actualizar-antecedentes-judiciales", "host": ["{{base_url}}"], "path": ["aspirante", "actualizar-antecedentes-judiciales"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "archivo_antecedentes", "type": "file", "src": "" }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Idiomas",
+          "item": [
+            {
+              "name": "Listar idiomas",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/obtener-idiomas", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-idiomas"] },
+                "description": "Lista todos los idiomas registrados por el aspirante.\n\n**Respuesta 200:**\n```json\n[\n  {\n    \"id\": 1,\n    \"idioma\": \"Inglés\",\n    \"nivel\": \"B2\",\n    \"institucion\": \"British Council\",\n    \"fecha_expedicion\": \"2024-06-15\",\n    \"estado\": \"Pendiente\"\n  }\n]\n```"
+              }
+            },
+            {
+              "name": "Obtener idioma por ID",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/obtener-idioma/1", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-idioma", "1"] }
+              }
+            },
+            {
+              "name": "Crear idioma",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/crear-idioma", "host": ["{{base_url}}"], "path": ["aspirante", "crear-idioma"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "idioma", "value": "Inglés", "type": "text" },
+                    { "key": "nivel", "value": "B2", "type": "text", "description": "A1, A2, B1, B2, C1, C2" },
+                    { "key": "institucion", "value": "British Council", "type": "text" },
+                    { "key": "fecha_expedicion", "value": "2024-06-15", "type": "text" },
+                    { "key": "archivo_certificado", "type": "file", "src": "", "description": "PDF del certificado de idioma" }
+                  ]
+                },
+                "description": "Agrega un idioma al perfil del aspirante.\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Idioma creado exitosamente\", \"idioma\": { \"id\": 1, \"idioma\": \"Inglés\", \"nivel\": \"B2\" } }\n```"
+              }
+            },
+            {
+              "name": "Actualizar idioma",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/actualizar-idioma/1", "host": ["{{base_url}}"], "path": ["aspirante", "actualizar-idioma", "1"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "idioma", "value": "Inglés", "type": "text" },
+                    { "key": "nivel", "value": "C1", "type": "text" },
+                    { "key": "institucion", "value": "Cambridge", "type": "text" },
+                    { "key": "fecha_expedicion", "value": "2025-01-20", "type": "text" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Eliminar idioma",
+              "request": {
+                "method": "DELETE",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/eliminar-idioma/1", "host": ["{{base_url}}"], "path": ["aspirante", "eliminar-idioma", "1"] }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Experiencias Laborales",
+          "item": [
+            {
+              "name": "Listar experiencias",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/obtener-experiencias", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-experiencias"] }
+              }
+            },
+            {
+              "name": "Obtener experiencia por ID",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/obtener-experiencia/1", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-experiencia", "1"] }
+              }
+            },
+            {
+              "name": "Crear experiencia",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/crear-experiencia", "host": ["{{base_url}}"], "path": ["aspirante", "crear-experiencia"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "empresa", "value": "Universidad Nacional", "type": "text" },
+                    { "key": "cargo", "value": "Docente de Cátedra", "type": "text" },
+                    { "key": "tipo_experiencia", "value": "Docencia Universitaria", "type": "text" },
+                    { "key": "fecha_inicio", "value": "2020-01-15", "type": "text" },
+                    { "key": "fecha_fin", "value": "2023-12-31", "type": "text", "description": "Dejar vacío si es trabajo actual" },
+                    { "key": "municipio_id", "value": "1", "type": "text" },
+                    { "key": "descripcion", "value": "Docencia en cátedra de programación", "type": "text" },
+                    { "key": "archivo_certificado", "type": "file", "src": "", "description": "PDF certificado laboral" }
+                  ]
+                },
+                "description": "Agrega una experiencia laboral.\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Experiencia creada\", \"experiencia\": { \"id\": 1, \"empresa\": \"...\", \"estado\": \"Pendiente\" } }\n```"
+              }
+            },
+            {
+              "name": "Actualizar experiencia",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/actualizar-experiencia/1", "host": ["{{base_url}}"], "path": ["aspirante", "actualizar-experiencia", "1"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "empresa", "value": "Universidad Distrital", "type": "text" },
+                    { "key": "cargo", "value": "Profesor Asociado", "type": "text" },
+                    { "key": "tipo_experiencia", "value": "Docencia Universitaria", "type": "text" },
+                    { "key": "fecha_inicio", "value": "2023-02-01", "type": "text" },
+                    { "key": "municipio_id", "value": "1", "type": "text" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Eliminar experiencia",
+              "request": {
+                "method": "DELETE",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/eliminar-experiencia/1", "host": ["{{base_url}}"], "path": ["aspirante", "eliminar-experiencia", "1"] }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Estudios Académicos",
+          "item": [
+            {
+              "name": "Listar estudios",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/obtener-estudios", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-estudios"] }
+              }
+            },
+            {
+              "name": "Obtener estudio por ID",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/obtener-estudio/1", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-estudio", "1"] }
+              }
+            },
+            {
+              "name": "Crear estudio",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/crear-estudio", "host": ["{{base_url}}"], "path": ["aspirante", "crear-estudio"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "institucion", "value": "Universidad Nacional de Colombia", "type": "text" },
+                    { "key": "titulo", "value": "Ingeniero de Sistemas", "type": "text" },
+                    { "key": "tipo_estudio", "value": "Pregrado", "type": "text" },
+                    { "key": "perfil_profesional", "value": "Ingeniería", "type": "text" },
+                    { "key": "fecha_grado", "value": "2018-11-30", "type": "text" },
+                    { "key": "municipio_id", "value": "1", "type": "text" },
+                    { "key": "archivo_diploma", "type": "file", "src": "", "description": "PDF diploma o acta de grado" }
+                  ]
+                },
+                "description": "Agrega un título académico.\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Estudio creado\", \"estudio\": { \"id\": 1, \"titulo\": \"Ingeniero de Sistemas\", \"estado\": \"Pendiente\" } }\n```"
+              }
+            },
+            {
+              "name": "Actualizar estudio",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/actualizar-estudio/1", "host": ["{{base_url}}"], "path": ["aspirante", "actualizar-estudio", "1"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "institucion", "value": "Universidad de Los Andes", "type": "text" },
+                    { "key": "titulo", "value": "Magíster en Ingeniería de Sistemas", "type": "text" },
+                    { "key": "tipo_estudio", "value": "Maestría", "type": "text" },
+                    { "key": "perfil_profesional", "value": "Ingeniería", "type": "text" },
+                    { "key": "fecha_grado", "value": "2022-05-20", "type": "text" },
+                    { "key": "municipio_id", "value": "1", "type": "text" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Eliminar estudio",
+              "request": {
+                "method": "DELETE",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/eliminar-estudio/1", "host": ["{{base_url}}"], "path": ["aspirante", "eliminar-estudio", "1"] }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Producción Académica",
+          "item": [
+            {
+              "name": "Listar producciones",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/obtener-producciones", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-producciones"] }
+              }
+            },
+            {
+              "name": "Obtener producción por ID",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/obtener-produccion/1", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-produccion", "1"] }
+              }
+            },
+            {
+              "name": "Crear producción",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/crear-produccion", "host": ["{{base_url}}"], "path": ["aspirante", "crear-produccion"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "titulo", "value": "Algoritmos de aprendizaje automático", "type": "text" },
+                    { "key": "id_producto_academico", "value": "1", "type": "text", "description": "Ver /tiposProduccionAcademica/productos-academicos" },
+                    { "key": "id_ambito_divulgacion", "value": "2", "type": "text", "description": "Ver /tiposProduccionAcademica/ambitos-divulgacion" },
+                    { "key": "anio", "value": "2024", "type": "text" },
+                    { "key": "descripcion", "value": "Artículo publicado en revista indexada", "type": "text" },
+                    { "key": "archivo_produccion", "type": "file", "src": "", "description": "PDF que certifica la producción" }
+                  ]
+                },
+                "description": "Agrega una producción académica.\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Producción creada\", \"produccion\": { \"id\": 1, \"titulo\": \"...\", \"estado\": \"Pendiente\" } }\n```"
+              }
+            },
+            {
+              "name": "Actualizar producción",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/actualizar-produccion/1", "host": ["{{base_url}}"], "path": ["aspirante", "actualizar-produccion", "1"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "titulo", "value": "Actualización: Algoritmos ML 2025", "type": "text" },
+                    { "key": "id_producto_academico", "value": "1", "type": "text" },
+                    { "key": "id_ambito_divulgacion", "value": "2", "type": "text" },
+                    { "key": "anio", "value": "2025", "type": "text" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Eliminar producción",
+              "request": {
+                "method": "DELETE",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/eliminar-produccion/1", "host": ["{{base_url}}"], "path": ["aspirante", "eliminar-produccion", "1"] }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Aptitudes",
+          "item": [
+            {
+              "name": "Listar aptitudes",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/obtener-aptitudes", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-aptitudes"] }
+              }
+            },
+            {
+              "name": "Crear aptitud",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+                "url": { "raw": "{{base_url}}/aspirante/crear-aptitud", "host": ["{{base_url}}"], "path": ["aspirante", "crear-aptitud"] },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{ \"nombre\": \"Liderazgo\", \"descripcion\": \"Gestión de equipos de trabajo\" }",
+                  "options": { "raw": { "language": "json" } }
+                }
+              }
+            },
+            {
+              "name": "Eliminar aptitud",
+              "request": {
+                "method": "DELETE",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/eliminar-aptitud/1", "host": ["{{base_url}}"], "path": ["aspirante", "eliminar-aptitud", "1"] }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Convocatorias y Postulaciones",
+          "item": [
+            {
+              "name": "Ver convocatorias disponibles",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/ver-convocatorias", "host": ["{{base_url}}"], "path": ["aspirante", "ver-convocatorias"] },
+                "description": "Lista las convocatorias abiertas disponibles para el aspirante."
+              }
+            },
+            {
+              "name": "Ver convocatoria por ID",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/ver-convocatoria/1", "host": ["{{base_url}}"], "path": ["aspirante", "ver-convocatoria", "1"] }
+              }
+            },
+            {
+              "name": "Postular a convocatoria",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/crear-postulacion/1", "host": ["{{base_url}}"], "path": ["aspirante", "crear-postulacion", "1"] },
+                "description": "Postula el aspirante a la convocatoria con ID 1. Valida requisitos mínimos (estudios, idiomas, experiencias).\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Postulación creada exitosamente\", \"postulacion\": { \"id\": 1, \"estado\": \"Pendiente\" } }\n```\n\n**Error 422:** No cumple requisitos de la convocatoria\n\n**Error 409:** Ya está postulado a esta convocatoria"
+              }
+            },
+            {
+              "name": "Ver mis postulaciones",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/ver-postulaciones", "host": ["{{base_url}}"], "path": ["aspirante", "ver-postulaciones"] }
+              }
+            },
+            {
+              "name": "Eliminar mi postulación",
+              "request": {
+                "method": "DELETE",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/eliminar-postulacion/1", "host": ["{{base_url}}"], "path": ["aspirante", "eliminar-postulacion", "1"] }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Normativas",
+          "item": [
+            {
+              "name": "Listar normativas",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/obtener-normativas", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-normativas"] }
+              }
+            },
+            {
+              "name": "Obtener normativa por ID",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/aspirante/obtener-normativa/1", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-normativa", "1"] }
+              }
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "🎓 Docente",
+      "description": "Endpoints exclusivos para el rol Docente. Incluye toda la gestión de HV del Aspirante más los endpoints propios.",
+      "item": [
+        {
+          "name": "Ver contratación",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/docente/ver-contratacion", "host": ["{{base_url}}"], "path": ["docente", "ver-contratacion"] },
+            "description": "Retorna la información de contratación del docente autenticado.\n\n**Respuesta 200:**\n```json\n{\n  \"id\": 5,\n  \"convocatoria\": { \"id\": 3, \"titulo\": \"...\" },\n  \"fecha_inicio\": \"2026-02-01\",\n  \"fecha_fin\": \"2026-12-31\",\n  \"tipo_contrato\": \"Prestación de Servicios\",\n  \"estado\": \"Activo\"\n}\n```"
+          }
+        },
+        {
+          "name": "Crear evaluación docente",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/docente/crear-evaluacion", "host": ["{{base_url}}"], "path": ["docente", "crear-evaluacion"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"calificacion_docencia\": 85,\n  \"calificacion_investigacion\": 70,\n  \"calificacion_extension\": 60,\n  \"observaciones\": \"Actividades realizadas durante el semestre\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Crea la evaluación docente inicial (estado Pendiente, una por docente).\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Evaluación creada\", \"evaluacion\": { \"id\": 1, \"estado\": \"Pendiente\" } }\n```"
+          }
+        },
+        {
+          "name": "Ver mis evaluaciones",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/docente/ver-evaluaciones", "host": ["{{base_url}}"], "path": ["docente", "ver-evaluaciones"] }
+          }
+        },
+        {
+          "name": "Actualizar evaluación docente",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/docente/actualizar-evaluacion", "host": ["{{base_url}}"], "path": ["docente", "actualizar-evaluacion"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"calificacion_docencia\": 90,\n  \"calificacion_investigacion\": 75,\n  \"calificacion_extension\": 65,\n  \"observaciones\": \"Actualización de calificaciones\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Evaluar puntaje total",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/docente/evaluar-puntaje", "host": ["{{base_url}}"], "path": ["docente", "evaluar-puntaje"] },
+            "description": "Calcula y guarda el puntaje total del docente (estudios + idiomas + experiencia + producción + evaluación).\n\n**Respuesta 200:**\n```json\n{ \"puntaje_total\": 87.5, \"desglose\": { \"estudios\": 30, \"idiomas\": 15, \"experiencia\": 20, \"produccion\": 12.5, \"evaluacion\": 10 } }\n```"
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🏢 Talento Humano",
+      "description": "Gestión de convocatorias, postulaciones, avales y contrataciones. Requiere rol Talento Humano.",
+      "item": [
+        {
+          "name": "Convocatorias",
+          "item": [
+            {
+              "name": "Listar convocatorias",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/talentoHumano/obtener-convocatorias", "host": ["{{base_url}}"], "path": ["talentoHumano", "obtener-convocatorias"] }
+              }
+            },
+            {
+              "name": "Obtener convocatoria por ID",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/talentoHumano/obtener-convocatoria/1", "host": ["{{base_url}}"], "path": ["talentoHumano", "obtener-convocatoria", "1"] }
+              }
+            },
+            {
+              "name": "Obtener tipos de cargos",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/talentoHumano/obtener-tipos-cargos", "host": ["{{base_url}}"], "path": ["talentoHumano", "obtener-tipos-cargos"] }
+              }
+            },
+            {
+              "name": "Crear convocatoria",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/talentoHumano/crear-convocatoria", "host": ["{{base_url}}"], "path": ["talentoHumano", "crear-convocatoria"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "titulo", "value": "Docente Ingeniería 2026-I", "type": "text" },
+                    { "key": "descripcion", "value": "Se requiere docente para el área de sistemas", "type": "text" },
+                    { "key": "tipo_cargo_id", "value": "1", "type": "text" },
+                    { "key": "fecha_inicio", "value": "2026-03-01", "type": "text" },
+                    { "key": "fecha_fin", "value": "2026-04-30", "type": "text" },
+                    { "key": "requisitos_idioma", "value": "[{\"idioma\":\"Inglés\",\"nivel\":\"B2\"}]", "type": "text", "description": "JSON string, opcional" },
+                    { "key": "requisitos_experiencia", "value": "[{\"tipo\":\"Docencia Universitaria\",\"anios\":2}]", "type": "text", "description": "JSON string, opcional" },
+                    { "key": "archivo_convocatoria", "type": "file", "src": "", "description": "PDF oficial de la convocatoria" }
+                  ]
+                },
+                "description": "Crea una nueva convocatoria docente.\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Convocatoria creada\", \"convocatoria\": { \"id\": 1, \"titulo\": \"...\", \"estado\": \"Abierta\" } }\n```"
+              }
+            },
+            {
+              "name": "Actualizar convocatoria",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/talentoHumano/actualizar-convocatoria/1", "host": ["{{base_url}}"], "path": ["talentoHumano", "actualizar-convocatoria", "1"] },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "titulo", "value": "Docente Ingeniería 2026-I (Actualizada)", "type": "text" },
+                    { "key": "fecha_fin", "value": "2026-05-31", "type": "text" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Eliminar convocatoria",
+              "request": {
+                "method": "DELETE",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/talentoHumano/eliminar-convocatoria/1", "host": ["{{base_url}}"], "path": ["talentoHumano", "eliminar-convocatoria", "1"] }
+              }
+            },
+            {
+              "name": "Exportar convocatorias Excel",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/talentoHumano/exportar-convocatorias-excel", "host": ["{{base_url}}"], "path": ["talentoHumano", "exportar-convocatorias-excel"] },
+                "description": "Descarga un archivo Excel con todas las convocatorias."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Postulaciones",
+          "item": [
+            {
+              "name": "Listar todas las postulaciones",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/talentoHumano/obtener-postulaciones", "host": ["{{base_url}}"], "path": ["talentoHumano", "obtener-postulaciones"] }
+              }
+            },
+            {
+              "name": "Actualizar estado de postulación",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+                "url": { "raw": "{{base_url}}/talentoHumano/actualizar-postulacion/1", "host": ["{{base_url}}"], "path": ["talentoHumano", "actualizar-postulacion", "1"] },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{ \"estado\": \"Aprobado\", \"observaciones\": \"Cumple todos los requisitos\" }",
+                  "options": { "raw": { "language": "json" } }
+                }
+              }
+            },
+            {
+              "name": "Eliminar postulación",
+              "request": {
+                "method": "DELETE",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/talentoHumano/eliminar-postulacion/1", "host": ["{{base_url}}"], "path": ["talentoHumano", "eliminar-postulacion", "1"] }
+              }
+            },
+            {
+              "name": "Generar HV PDF",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/talentoHumano/hoja-de-vida-pdf/1/2", "host": ["{{base_url}}"], "path": ["talentoHumano", "hoja-de-vida-pdf", "1", "2"] },
+                "description": "Genera y descarga el PDF de la hoja de vida del postulante. Params: convocatoriaId / usuarioId"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Contrataciones",
+          "item": [
+            {
+              "name": "Listar contrataciones",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/talentoHumano/obtener-contrataciones", "host": ["{{base_url}}"], "path": ["talentoHumano", "obtener-contrataciones"] }
+              }
+            },
+            {
+              "name": "Obtener contratación por ID",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/talentoHumano/obtener-contratacion/1", "host": ["{{base_url}}"], "path": ["talentoHumano", "obtener-contratacion", "1"] }
+              }
+            },
+            {
+              "name": "Crear contratación",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+                "url": { "raw": "{{base_url}}/talentoHumano/crear-contratacion/12", "host": ["{{base_url}}"], "path": ["talentoHumano", "crear-contratacion", "12"] },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"convocatoria_id\": 3,\n  \"fecha_inicio\": \"2026-02-01\",\n  \"fecha_fin\": \"2026-12-31\",\n  \"tipo_contrato\": \"Prestación de Servicios\",\n  \"salario\": 4500000,\n  \"observaciones\": \"Contrato semestral\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "description": "Contrata el aspirante con ID 12. Verifica que tenga todos los avales.\nCambia el rol del usuario a Docente y aprueba sus documentos.\n\n**Respuesta 201:**\n```json\n{\n  \"message\": \"Contratación creada exitosamente. El usuario ha sido vinculado como Docente.\",\n  \"contratacion\": { \"id\": 5, \"user_id\": 12, \"estado\": \"Activo\" }\n}\n```\n\n**Error 422:** El aspirante no tiene todos los avales requeridos"
+              }
+            },
+            {
+              "name": "Actualizar contratación",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+                "url": { "raw": "{{base_url}}/talentoHumano/actualizar-contratacion/1", "host": ["{{base_url}}"], "path": ["talentoHumano", "actualizar-contratacion", "1"] },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{ \"fecha_fin\": \"2027-01-31\", \"observaciones\": \"Prórroga de contrato\" }",
+                  "options": { "raw": { "language": "json" } }
+                }
+              }
+            },
+            {
+              "name": "Eliminar contratación",
+              "request": {
+                "method": "DELETE",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/talentoHumano/eliminar-contratacion/1", "host": ["{{base_url}}"], "path": ["talentoHumano", "eliminar-contratacion", "1"] },
+                "description": "Elimina la contratación y revierte el rol del usuario a Aspirante."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Avales",
+          "item": [
+            {
+              "name": "Listar avales",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": {
+                  "raw": "{{base_url}}/talentoHumano/avales?convocatoria_id=1&user_id=5",
+                  "host": ["{{base_url}}"],
+                  "path": ["talentoHumano", "avales"],
+                  "query": [
+                    { "key": "convocatoria_id", "value": "1", "description": "Opcional: filtrar por convocatoria" },
+                    { "key": "user_id", "value": "5", "description": "Opcional: filtrar por usuario" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Crear / actualizar aval",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+                "url": { "raw": "{{base_url}}/talentoHumano/avales", "host": ["{{base_url}}"], "path": ["talentoHumano", "avales"] },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"user_id\": 5,\n  \"convocatoria_id\": 1,\n  \"aval\": \"Talento Humano\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                }
+              }
+            },
+            {
+              "name": "Aprobar / Rechazar aval",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+                "url": { "raw": "{{base_url}}/talentoHumano/avales/1", "host": ["{{base_url}}"], "path": ["talentoHumano", "avales", "1"] },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{ \"estado\": \"Aprobado\", \"observaciones\": \"Documentos completos y verificados\" }",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "description": "Solo el rol que corresponde al campo `aval` del registro puede actualizar este estado."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Experiencias Requeridas",
+          "item": [
+            {
+              "name": "Listar experiencias requeridas",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": { "raw": "{{base_url}}/talentoHumano/experiencias-requeridas", "host": ["{{base_url}}"], "path": ["talentoHumano", "experiencias-requeridas"] }
+              }
+            },
+            {
+              "name": "Crear experiencia requerida",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+                "url": { "raw": "{{base_url}}/talentoHumano/experiencias-requeridas", "host": ["{{base_url}}"], "path": ["talentoHumano", "experiencias-requeridas"] },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{ \"tipo_experiencia\": \"Docencia Universitaria\", \"anios_minimos\": 2 }",
+                  "options": { "raw": { "language": "json" } }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "⚙️ Administrador",
+      "description": "Gestión de usuarios, roles y normativas. Requiere rol Administrador.",
+      "item": [
+        {
+          "name": "Listar usuarios",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/admin/listar-usuarios", "host": ["{{base_url}}"], "path": ["admin", "listar-usuarios"] }
+          }
+        },
+        {
+          "name": "Editar usuario",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/admin/editar-usuario/5", "host": ["{{base_url}}"], "path": ["admin", "editar-usuario", "5"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"nombre\": \"María\", \"apellido\": \"García\", \"correo\": \"maria@example.com\" }",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Eliminar usuario",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/admin/eliminar-usuario/5", "host": ["{{base_url}}"], "path": ["admin", "eliminar-usuario", "5"] }
+          }
+        },
+        {
+          "name": "Cambiar rol de usuario",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/admin/usuarios/5/cambiar-rol", "host": ["{{base_url}}"], "path": ["admin", "usuarios", "5", "cambiar-rol"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"rol\": \"Coordinador\" }",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Exportar usuarios Excel",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/admin/usuarios/exportar-excel", "host": ["{{base_url}}"], "path": ["admin", "usuarios", "exportar-excel"] }
+          }
+        },
+        {
+          "name": "Listar roles",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/admin/listar-roles", "host": ["{{base_url}}"], "path": ["admin", "listar-roles"] }
+          }
+        },
+        {
+          "name": "Crear rol",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/admin/crear-rol", "host": ["{{base_url}}"], "path": ["admin", "crear-rol"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"nombre\": \"Nuevo Rol\" }",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Asignar rol",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/admin/asignar-rol", "host": ["{{base_url}}"], "path": ["admin", "asignar-rol"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"user_id\": 5, \"rol\": \"Coordinador\" }",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Crear normativa",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/admin/crear-normativa", "host": ["{{base_url}}"], "path": ["admin", "crear-normativa"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Resolución 001 de 2026\",\n  \"descripcion\": \"Normativa de vinculación docente\",\n  \"contenido\": \"Texto completo de la normativa...\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Listar normativas",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/admin/obtener-normativas", "host": ["{{base_url}}"], "path": ["admin", "obtener-normativas"] }
+          }
+        },
+        {
+          "name": "Ver aspirantes (Admin/TH/Vicerr./Rectoría)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/admin/aspirantes", "host": ["{{base_url}}"], "path": ["admin", "aspirantes"] }
+          }
+        },
+        {
+          "name": "Estadísticas de aspirantes",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/admin/aspirantes/estadisticas", "host": ["{{base_url}}"], "path": ["admin", "aspirantes", "estadisticas"] }
+          }
+        },
+        {
+          "name": "Dar aval a aspirante",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/admin/aspirantes/5/dar-aval", "host": ["{{base_url}}"], "path": ["admin", "aspirantes", "5", "dar-aval"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"observaciones\": \"Aspirante aprobado\" }",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "📋 Coordinador",
+      "description": "Evaluaciones del proceso de aprobación. Requiere rol Coordinador.",
+      "item": [
+        {
+          "name": "Listar evaluaciones",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/coordinador/evaluaciones", "host": ["{{base_url}}"], "path": ["coordinador", "evaluaciones"] }
+          }
+        },
+        {
+          "name": "Crear evaluación de aprobación",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/coordinador/evaluaciones", "host": ["{{base_url}}"], "path": ["coordinador", "evaluaciones"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": 5,\n  \"convocatoria_id\": 1,\n  \"resultado_psicotecnico\": \"Aprobado\",\n  \"resultado_clase\": \"Sobresaliente\",\n  \"resultado_validacion\": \"Documentos completos\",\n  \"aprobado\": true,\n  \"observaciones\": \"Candidato idóneo para la plaza\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Crea la evaluación del proceso de aprobación para un aspirante.\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Evaluación creada\", \"evaluacion\": { \"id\": 1, \"aprobado\": true } }\n```"
+          }
+        },
+        {
+          "name": "Ver evaluación de usuario",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/coordinador/evaluaciones/5", "host": ["{{base_url}}"], "path": ["coordinador", "evaluaciones", "5"] }
+          }
+        },
+        {
+          "name": "Listar aspirantes aprobados por TH",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/coordinador/aspirantes", "host": ["{{base_url}}"], "path": ["coordinador", "aspirantes"] }
+          }
+        },
+        {
+          "name": "Documentos por estado",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/coordinador/obtener-documentos/Pendiente", "host": ["{{base_url}}"], "path": ["coordinador", "obtener-documentos", "Pendiente"] },
+            "description": "Estados disponibles: Pendiente, Aprobado, Rechazado"
+          }
+        },
+        {
+          "name": "Actualizar estado de documento",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/coordinador/actualizar-documento/1", "host": ["{{base_url}}"], "path": ["coordinador", "actualizar-documento", "1"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"estado\": \"Aprobado\", \"observaciones\": \"Documento verificado\" }",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Otorgar aval Coordinador",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/coordinador/aval-hoja-vida/5", "host": ["{{base_url}}"], "path": ["coordinador", "aval-hoja-vida", "5"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"observaciones\": \"Hoja de vida verificada y aprobada\" }",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🏛️ Rectoría",
+      "description": "Avales finales y revisión de documentos. Requiere rol Rectoria.",
+      "item": [
+        {
+          "name": "Otorgar aval Rectoría",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/rectoria/aval-hoja-vida/5", "host": ["{{base_url}}"], "path": ["rectoria", "aval-hoja-vida", "5"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"observaciones\": \"Aprobado por la Rectoría\" }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Otorga el aval de Rectoría. Requiere haber recibido previamente el aval de Vicerrectoría."
+          }
+        },
+        {
+          "name": "Ver avales de usuario",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/rectoria/usuarios/5/avales", "host": ["{{base_url}}"], "path": ["rectoria", "usuarios", "5", "avales"] }
+          }
+        },
+        {
+          "name": "Listar usuarios aprobados por Vicerrectoría",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/rectoria/usuarios", "host": ["{{base_url}}"], "path": ["rectoria", "usuarios"] }
+          }
+        },
+        {
+          "name": "Documentos por estado",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/rectoria/obtener-documentos/Pendiente", "host": ["{{base_url}}"], "path": ["rectoria", "obtener-documentos", "Pendiente"] }
+          }
+        },
+        {
+          "name": "Actualizar estado de documento",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/rectoria/actualizar-documento/1", "host": ["{{base_url}}"], "path": ["rectoria", "actualizar-documento", "1"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"estado\": \"Aprobado\", \"observaciones\": \"Revisado por Rectoría\" }",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Evaluaciones con usuarios",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/rectoria/evaluaciones-con-usuarios", "host": ["{{base_url}}"], "path": ["rectoria", "evaluaciones-con-usuarios"] }
+          }
+        },
+        {
+          "name": "Generar HV PDF",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/rectoria/hoja-de-vida-pdf/5", "host": ["{{base_url}}"], "path": ["rectoria", "hoja-de-vida-pdf", "5"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🏛️ Vicerrectoría",
+      "description": "Avales de segunda instancia y revisión de documentos. Requiere rol Vicerrectoria.",
+      "item": [
+        {
+          "name": "Otorgar aval Vicerrectoría",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/vicerrectoria/aval-hoja-vida/5", "host": ["{{base_url}}"], "path": ["vicerrectoria", "aval-hoja-vida", "5"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"observaciones\": \"Aprobado por Vicerrectoría\" }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Requiere previos avales de Talento Humano y Coordinador."
+          }
+        },
+        {
+          "name": "Ver avales de usuario",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/vicerrectoria/usuarios/5/avales", "host": ["{{base_url}}"], "path": ["vicerrectoria", "usuarios", "5", "avales"] }
+          }
+        },
+        {
+          "name": "Documentos por estado",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/vicerrectoria/obtener-documentos/Pendiente", "host": ["{{base_url}}"], "path": ["vicerrectoria", "obtener-documentos", "Pendiente"] }
+          }
+        },
+        {
+          "name": "Actualizar estado de documento",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/vicerrectoria/actualizar-documento/1", "host": ["{{base_url}}"], "path": ["vicerrectoria", "actualizar-documento", "1"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"estado\": \"Aprobado\", \"observaciones\": \"Revisado\" }",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Postulaciones de usuario",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/vicerrectoria/usuarios/5/postulaciones", "host": ["{{base_url}}"], "path": ["vicerrectoria", "usuarios", "5", "postulaciones"] }
+          }
+        },
+        {
+          "name": "Evaluaciones con usuarios",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/vicerrectoria/evaluaciones-con-usuarios", "host": ["{{base_url}}"], "path": ["vicerrectoria", "evaluaciones-con-usuarios"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "👩‍🏫 Apoyo Profesoral",
+      "description": "Consulta y filtrado de docentes por competencias. Requiere rol Apoyo Profesoral.",
+      "item": [
+        {
+          "name": "Listar docentes",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/apoyoProfesoral/listar-docentes", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "listar-docentes"] }
+          }
+        },
+        {
+          "name": "Documentos por estado",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/apoyoProfesoral/obtener-documentos/Pendiente", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "obtener-documentos", "Pendiente"] }
+          }
+        },
+        {
+          "name": "Todos los estudios",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/apoyoProfesoral/mostrar-todos-estudios", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "mostrar-todos-estudios"] }
+          }
+        },
+        {
+          "name": "Filtrar docentes por tipo de estudio",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/apoyoProfesoral/filtrar-docentes-estudio/Maestría", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "filtrar-docentes-estudio", "Maestría"] }
+          }
+        },
+        {
+          "name": "Todos los idiomas",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/apoyoProfesoral/mostrar-todos-idioma", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "mostrar-todos-idioma"] }
+          }
+        },
+        {
+          "name": "Filtrar docentes por nivel de idioma",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/apoyoProfesoral/filtrar-docentes-idioma/B2", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "filtrar-docentes-idioma", "B2"] }
+          }
+        },
+        {
+          "name": "Toda la producción académica",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/apoyoProfesoral/mostrar-todos-produccion", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "mostrar-todos-produccion"] }
+          }
+        },
+        {
+          "name": "Filtrar docentes por ámbito de divulgación",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/apoyoProfesoral/filtrar-docentes-ambito/1", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "filtrar-docentes-ambito", "1"] }
+          }
+        },
+        {
+          "name": "Todas las experiencias",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/apoyoProfesoral/mostrar-todas-experiencia", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "mostrar-todas-experiencia"] }
+          }
+        },
+        {
+          "name": "Filtrar docentes por tipo de experiencia",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/apoyoProfesoral/filtrar-docentes-tipo-experiecnia/Docencia Universitaria", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "filtrar-docentes-tipo-experiecnia", "Docencia Universitaria"] }
+          }
+        },
+        {
+          "name": "Crear certificados masivos",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/apoyoProfesoral/crear-certificados-masivos", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "crear-certificados-masivos"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"user_ids\": [1, 2, 3, 5], \"tipo_certificado\": \"Vinculación Docente\" }",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🔬 Evaluador de Producción",
+      "description": "Revisión y aprobación de producción académica. Requiere rol Evaluador Produccion.",
+      "item": [
+        {
+          "name": "Listar usuarios con producción pendiente",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/evaluadorProduccion/obtener-producciones", "host": ["{{base_url}}"], "path": ["evaluadorProduccion", "obtener-producciones"] },
+            "description": "Lista todos los usuarios que tienen documentos de producción en estado Pendiente."
+          }
+        },
+        {
+          "name": "Producciones pendientes de un usuario",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/evaluadorProduccion/ver-producciones-por-usuario/5", "host": ["{{base_url}}"], "path": ["evaluadorProduccion", "ver-producciones-por-usuario", "5"] }
+          }
+        },
+        {
+          "name": "Aprobar / Rechazar documento de producción",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/evaluadorProduccion/actualizar-produccion/10", "host": ["{{base_url}}"], "path": ["evaluadorProduccion", "actualizar-produccion", "10"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"estado\": \"Aprobado\", \"observaciones\": \"Producción verificada y validada\" }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Actualiza el estado del documento de producción.\n\n**Estados válidos:** `Aprobado`, `Rechazado`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Documento actualizado\", \"estado\": \"Aprobado\" }\n```"
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "📚 Producción Académica — Catálogos",
+      "description": "Catálogos de tipos de producción y ámbitos. No requieren autenticación.",
+      "item": [
+        {
+          "name": "Tipos de productos académicos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/tiposProduccionAcademica/productos-academicos", "host": ["{{base_url}}"], "path": ["tiposProduccionAcademica", "productos-academicos"] },
+            "description": "**Respuesta 200:**\n```json\n[\n  { \"id\": 1, \"nombre\": \"Artículo de investigación\" },\n  { \"id\": 2, \"nombre\": \"Libro\" }\n]\n```"
+          }
+        },
+        {
+          "name": "Ámbitos de divulgación",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/tiposProduccionAcademica/ambitos-divulgacion", "host": ["{{base_url}}"], "path": ["tiposProduccionAcademica", "ambitos-divulgacion"] }
+          }
+        },
+        {
+          "name": "Ámbitos por tipo de producto",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/tiposProduccionAcademica/ambitos_divulgacion/1", "host": ["{{base_url}}"], "path": ["tiposProduccionAcademica", "ambitos_divulgacion", "1"] }
+          }
+        },
+        {
+          "name": "Ámbito divulgación completo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/tiposProduccionAcademica/ambito-divulgacion-completo/2", "host": ["{{base_url}}"], "path": ["tiposProduccionAcademica", "ambito-divulgacion-completo", "2"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🌐 Público",
+      "description": "Endpoints públicos de convocatorias. No requieren autenticación.",
+      "item": [
+        {
+          "name": "Convocatorias públicas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/publico/convocatorias", "host": ["{{base_url}}"], "path": ["publico", "convocatorias"] },
+            "description": "Lista todas las convocatorias activas visibles al público.\n\n**Respuesta 200:**\n```json\n{\n  \"convocatorias\": [\n    {\n      \"id\": 1,\n      \"titulo\": \"Convocatoria Docente 2026-I\",\n      \"fecha_inicio\": \"2026-01-15\",\n      \"fecha_fin\": \"2026-02-28\",\n      \"estado\": \"Abierta\"\n    }\n  ]\n}\n```"
+          }
+        },
+        {
+          "name": "Detalle convocatoria pública",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/publico/convocatorias/1", "host": ["{{base_url}}"], "path": ["publico", "convocatorias", "1"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "📍 Ubicaciones",
+      "description": "Catálogos geográficos. No requieren autenticación.",
+      "item": [
+        {
+          "name": "Listar países",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/ubicaciones/paises", "host": ["{{base_url}}"], "path": ["ubicaciones", "paises"] }
+          }
+        },
+        {
+          "name": "Listar departamentos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/ubicaciones/departamentos", "host": ["{{base_url}}"], "path": ["ubicaciones", "departamentos"] }
+          }
+        },
+        {
+          "name": "Departamentos por país",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/ubicaciones/departamentos/1", "host": ["{{base_url}}"], "path": ["ubicaciones", "departamentos", "1"] }
+          }
+        },
+        {
+          "name": "Municipios por departamento",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/ubicaciones/municipios/11", "host": ["{{base_url}}"], "path": ["ubicaciones", "municipios", "11"] }
+          }
+        },
+        {
+          "name": "Ubicación por municipio",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/ubicaciones/municipio/1101", "host": ["{{base_url}}"], "path": ["ubicaciones", "municipio", "1101"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "⚙️ Constantes",
+      "description": "Catálogos de valores fijos del sistema. No requieren autenticación.",
+      "item": [
+        {
+          "name": "Tipos de documento",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/constantes/tipos-documento", "host": ["{{base_url}}"], "path": ["constantes", "tipos-documento"] },
+            "description": "**Respuesta 200:**\n```json\n[\"CC\", \"CE\", \"TI\", \"PA\", \"NIT\"]\n```"
+          }
+        },
+        {
+          "name": "Estado civil",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/constantes/estado-civil", "host": ["{{base_url}}"], "path": ["constantes", "estado-civil"] }
+          }
+        },
+        {
+          "name": "Género",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/constantes/genero", "host": ["{{base_url}}"], "path": ["constantes", "genero"] }
+          }
+        },
+        {
+          "name": "Tipos de persona (RUT)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/constantes/tipo-persona", "host": ["{{base_url}}"], "path": ["constantes", "tipo-persona"] }
+          }
+        },
+        {
+          "name": "Códigos CIIU (RUT)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/constantes/codigo-ciiu", "host": ["{{base_url}}"], "path": ["constantes", "codigo-ciiu"] }
+          }
+        },
+        {
+          "name": "Estado afiliación EPS",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/constantes/estado-afiliacion", "host": ["{{base_url}}"], "path": ["constantes", "estado-afiliacion"] }
+          }
+        },
+        {
+          "name": "Tipo afiliación EPS",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/constantes/tipo-afiliacion", "host": ["{{base_url}}"], "path": ["constantes", "tipo-afiliacion"] }
+          }
+        },
+        {
+          "name": "Tipo afiliado EPS",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/constantes/tipo-afiliado", "host": ["{{base_url}}"], "path": ["constantes", "tipo-afiliado"] }
+          }
+        },
+        {
+          "name": "Categorías libreta militar",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/constantes/categoria-libreta-militar", "host": ["{{base_url}}"], "path": ["constantes", "categoria-libreta-militar"] }
+          }
+        },
+        {
+          "name": "Tipos de estudio",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/constantes/tipos-estudio", "host": ["{{base_url}}"], "path": ["constantes", "tipos-estudio"] },
+            "description": "**Respuesta 200:**\n```json\n[\"Pregrado\", \"Especialización\", \"Maestría\", \"Doctorado\", \"Posdoctorado\"]\n```"
+          }
+        },
+        {
+          "name": "Perfiles profesionales",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/constantes/perfiles-profesionales", "host": ["{{base_url}}"], "path": ["constantes", "perfiles-profesionales"] }
+          }
+        },
+        {
+          "name": "Tipos de experiencia",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/constantes/tipos-experiencia", "host": ["{{base_url}}"], "path": ["constantes", "tipos-experiencia"] }
+          }
+        },
+        {
+          "name": "Niveles de idioma",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/constantes/niveles-idioma", "host": ["{{base_url}}"], "path": ["constantes", "niveles-idioma"] },
+            "description": "**Respuesta 200:**\n```json\n[\"A1\", \"A2\", \"B1\", \"B2\", \"C1\", \"C2\"]\n```"
+          }
+        },
+        {
+          "name": "Tipos de cuenta bancaria",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/constantes/tipos-cuenta-bancaria", "host": ["{{base_url}}"], "path": ["constantes", "tipos-cuenta-bancaria"] }
+          }
+        },
+        {
+          "name": "Tipos de pensión (regímenes)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/constantes/tipos-pension", "host": ["{{base_url}}"], "path": ["constantes", "tipos-pension"] }
+          }
+        }
+      ]
+    }
+
+  ]
+}

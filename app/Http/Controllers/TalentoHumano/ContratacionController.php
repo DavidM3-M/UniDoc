@@ -12,6 +12,7 @@ use App\Models\TalentoHumano\ConvocatoriaAval;
 use Illuminate\Support\Facades\Auth;
 use App\Services\AprobarDocumentosService;
 use App\Services\RevertirDocumentosService;
+use Illuminate\Support\Facades\Log;
 
 class ContratacionController
 {
@@ -86,6 +87,16 @@ class ContratacionController
                 $this->aprobarDocumentosService->aprobarDocumentosDeUsuario($usuario); // Aprobar los documentos del usuario
 
             });
+
+            // Notificar al usuario que ha sido contratado
+            try {
+                $usuario = User::find($user_id);
+                if ($usuario) {
+                    NotificacionController::nuevaContratacion($usuario);
+                }
+            } catch (\Exception $notifEx) {
+                Log::error('Error al notificar nueva contratación: ' . $notifEx->getMessage());
+            }
 
             return response()->json([ // Respuesta exitosa
                 'message' => 'Contratación creada y rol actualizado a docente.',
