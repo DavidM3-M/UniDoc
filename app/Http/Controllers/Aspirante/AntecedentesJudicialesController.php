@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Aspirante;
 
-use App\Http\Requests\RequestAspirante\RequestAntecedentesJudiciales\ActualizarAntecedenteJudicialesRequest;
+use App\Http\Requests\RequestAspirante\RequestAntecedentesJudiciales\ActualizarAntecedenteJudicialRequest;
 use App\Http\Requests\RequestAspirante\RequestAntecedentesJudiciales\CrearAntecedenteJudicialRequest;
 use App\Models\Aspirante\AntecedentesJudiciales;
 use App\Services\ArchivoService;
@@ -87,7 +87,7 @@ class AntecedentesJudicialesController
     }
 
 
-    public function actualizarAntecedentesJudiciales(ActualizarAntecedenteJudicialesRequest $request)
+    public function actualizarAntecedentesJudiciales(ActualizarAntecedenteJudicialRequest $request)
     {
         try{
             DB::transaction(function () use ($request) { // Ejecutar la actualización
