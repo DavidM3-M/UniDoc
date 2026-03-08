@@ -57,13 +57,18 @@ class ConvocatoriaController
                 // Asegurar que requisitos_idiomas se guarda correctamente
                 if (isset($datosConvocatoria['requisitos_idiomas'])) {
                     $idiomas = $datosConvocatoria['requisitos_idiomas'];
-                    
+
                     // Si es array pero está vacío, establecer a null
                     if (is_array($idiomas) && empty($idiomas)) {
                         $datosConvocatoria['requisitos_idiomas'] = null;
-                    } 
-                    // Si es array asociativo, limpiar entradas inválidas
-                    elseif (is_array($idiomas)) {
+                    }
+                    // Si es array indexado (lista de niveles mínimos, ej. ['A2', 'B1'])
+                    elseif (is_array($idiomas) && array_keys($idiomas) === range(0, count($idiomas) - 1)) {
+                        $idiomasLimpios = array_values(array_filter($idiomas, fn($nivel) => !empty((string)$nivel)));
+                        $datosConvocatoria['requisitos_idiomas'] = !empty($idiomasLimpios) ? $idiomasLimpios : null;
+                    }
+                    // Si es array asociativo (idioma => nivel, ej. {'inglés': 'B2'}), limpiar entradas inválidas
+                    else {
                         $idiomasLimpios = [];
                         foreach ($idiomas as $idioma => $nivel) {
                             if (!empty((string)$idioma) && !empty((string)$nivel)) {
@@ -145,8 +150,14 @@ class ConvocatoriaController
                     $idiomas = $datosActualizacion['requisitos_idiomas'];
                     if (is_array($idiomas) && empty($idiomas)) {
                         $datosActualizacion['requisitos_idiomas'] = null;
-                    } 
-                    elseif (is_array($idiomas)) {
+                    }
+                    // Si es array indexado (lista de niveles mínimos, ej. ['A2', 'B1'])
+                    elseif (is_array($idiomas) && array_keys($idiomas) === range(0, count($idiomas) - 1)) {
+                        $idiomasLimpios = array_values(array_filter($idiomas, fn($nivel) => !empty((string)$nivel)));
+                        $datosActualizacion['requisitos_idiomas'] = !empty($idiomasLimpios) ? $idiomasLimpios : null;
+                    }
+                    // Si es array asociativo (idioma => nivel, ej. {'inglés': 'B2'})
+                    else {
                         $idiomasLimpios = [];
                         foreach ($idiomas as $idioma => $nivel) {
                             if (!empty((string)$idioma) && !empty((string)$nivel)) {

@@ -66,6 +66,11 @@ class UserController
                     'rol' => $request->rol
                 ]
             ], 200);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'message' => 'Error de validación',
+                'errors'  => $e->errors(),
+            ], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al cambiar el rol',

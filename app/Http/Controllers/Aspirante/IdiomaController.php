@@ -142,11 +142,13 @@ class IdiomaController
 
             return response()->json(['idioma' => $idioma], 200); // Retorna el idioma encontrado
 
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['message' => 'Idioma no encontrado.'], 404);
         } catch (\Exception $e) {
             return response()->json([ // Manejo de errores
                 'message' => 'Error al obtener el idioma.',
                 'error'   => $e->getMessage(),
-            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
+            ], is_numeric($e->getCode()) && $e->getCode() >= 400 ? (int) $e->getCode() : 500);
         }
     }
 
@@ -222,6 +224,8 @@ class IdiomaController
 
             return response()->json(['mensaje' => 'Idioma eliminado correctamente'], 200); // Retorna respuesta exitosa
 
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['message' => 'Idioma no encontrado.'], 404);
         } catch (\Exception $e) {
             return response()->json([ // Manejo de errores
                 'message' => 'Error al eliminar el idioma.',
