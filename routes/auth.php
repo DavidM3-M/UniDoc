@@ -11,13 +11,17 @@ Route::group([
     'prefix' => 'auth'
 ], function () {
     // Ruta para registrar un nuevo usuario
-    Route::post('registrar-usuario', [AuthController::class, 'registrar']);
-    // Ruta para iniciar sesión
-    Route::post('iniciar-sesion', [AuthController::class, 'iniciarSesion']);
-    // Ruta para restablecer la contraseña
-    Route::post('restablecer-contrasena', [AuthController::class, 'restablecerContrasena']);
+    Route::post('registrar-usuario', [AuthController::class, 'registrar'])
+        ->middleware('throttle:10,1');
+    // Ruta para iniciar sesión (máx 10 intentos por minuto por IP)
+    Route::post('iniciar-sesion', [AuthController::class, 'iniciarSesion'])
+        ->middleware('throttle:10,1');
+    // Ruta para restablecer la contraseña (máx 5 intentos por minuto)
+    Route::post('restablecer-contrasena', [AuthController::class, 'restablecerContrasena'])
+        ->middleware('throttle:5,1');
     // ruta para restablecer la contraseña cuando se te olvido
-    Route::post('restablecer-contrasena-token', [AuthController::class, 'actualizarContrasenaConToken']);
+    Route::post('restablecer-contrasena-token', [AuthController::class, 'actualizarContrasenaConToken'])
+        ->middleware('throttle:5,1');
 
     // Define un subgrupo de rutas protegidas por el middleware 'auth:api'
     Route::group(['middleware' => 'auth:api'], function () {
@@ -26,8 +30,8 @@ Route::group([
         Route::post('cerrar-sesion', [AuthController::class, 'cerrarSesion']);
         // Ruta para obtener los datos del usuario autenticado
         Route::get('obtener-usuario-autenticado', [AuthController::class, 'obtenerUsuarioAutenticado']);
-        // Ruta para actualizar la contraseña de un usuario específico
-        Route::post('actualizar-contrasena/{id}', [AuthController::class, 'actualizarContrasena']);
+        // Ruta para actualizar la contraseña del usuario autenticado (no se requiere ID externo)
+        Route::post('actualizar-contrasena', [AuthController::class, 'actualizarContrasena']);
         // Ruta para actualizar los datos del usuario autenticado
         Route::post('actualizar-usuario', [AuthController::class, 'actualizarUsuario']);
         

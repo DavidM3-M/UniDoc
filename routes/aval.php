@@ -33,8 +33,6 @@ Route::group([
 
     // Convocatorias con aspirantes
     Route::get('convocatorias', [App\Http\Controllers\Coordinador\ProcesoAprobacionController::class, 'listarConvocatoriasConAspirantes']);
-    // Convocatorias con aspirantes
-    Route::get('convocatorias', [App\Http\Controllers\Coordinador\ProcesoAprobacionController::class, 'listarConvocatoriasConAspirantes']);
 
     // Agregado para la hoja de vida
 

@@ -49,9 +49,10 @@ class UbicacionController
         fgetcsv($handle, 1000, ';'); // Ignorar encabezado
         // Leer el archivo CSV
         while (($data = fgetcsv($handle, 1000, ';')) !== false) {
+            if (count($data) < 2) continue;
             Pais::updateOrCreate(
-                ['id' => $data[0]],
-                ['nombre' => $data[1]]
+                ['id' => (int) $data[0]],
+                ['nombre' => strip_tags(trim($data[1]))]
             );
         }
         // Cerrar el archivo CSV
@@ -66,11 +67,12 @@ class UbicacionController
         fgetcsv($handle, 1000, ';'); // Ignorar encabezado
         // Leer el archivo CSV
         while (($data = fgetcsv($handle, 1000, ';')) !== false) {
+            if (count($data) < 3) continue;
             Departamento::updateOrCreate(
-                ['id' => $data[0]],
+                ['id' => (int) $data[0]],
                 [
-                    'nombre' => $data[1],
-                    'pais_id' => $data[2]
+                    'nombre'   => strip_tags(trim($data[1])),
+                    'pais_id'  => (int) $data[2]
                 ]
             );
         }
@@ -86,11 +88,12 @@ class UbicacionController
         fgetcsv($handle, 1000, ';'); // Ignorar encabezado
         // Leer el archivo CSV
         while (($data = fgetcsv($handle, 1000, ';')) !== false) {
+            if (count($data) < 3) continue;
             Municipio::updateOrCreate(
-                ['id' => $data[0]],
+                ['id' => (int) $data[0]],
                 [
-                    'nombre' => $data[2],
-                    'departamento_id' => $data[1]
+                    'nombre'          => strip_tags(trim($data[2])),
+                    'departamento_id' => (int) $data[1]
                 ]
             );
         }

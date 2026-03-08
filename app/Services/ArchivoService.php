@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Storage;
 use App\Models\Aspirante\Documento;
+use Illuminate\Support\Str;
 
 class ArchivoService
 {
@@ -12,7 +13,8 @@ class ArchivoService
      */
     public function guardarArchivoDocumento($archivo, $modelo, $carpeta)
     {
-        $nombreArchivo = time() . '_' . $archivo->getClientOriginalName();
+        $extension = $archivo->getClientOriginalExtension(); // la extensión ya fue validada por la regla `mimes`
+        $nombreArchivo = Str::uuid() . '.' . $extension;     // nombre aleatorio, sin datos del cliente
         $rutaArchivo = $archivo->storeAs("documentos/{$carpeta}", $nombreArchivo, 'public');
 
         return Documento::create([
@@ -32,7 +34,8 @@ class ArchivoService
             ->where('documentable_type', get_class($modelo))
             ->first();
 
-        $nombreArchivo = time() . '_' . $archivo->getClientOriginalName();
+        $extension = $archivo->getClientOriginalExtension(); // validada por `mimes`
+        $nombreArchivo = Str::uuid() . '.' . $extension;     // nombre aleatorio
         $rutaArchivo = $archivo->storeAs("documentos/{$carpeta}", $nombreArchivo, 'public');
 
         if ($documento) {

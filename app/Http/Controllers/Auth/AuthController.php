@@ -65,12 +65,13 @@ class AuthController
                 'token' => $token
             ], 201);
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Error al crear usuario', [
+                'error' => $e->getMessage(),
+                'file'  => $e->getFile(),
+                'line'  => $e->getLine(),
+            ]);
             return response()->json([
                 'message' => 'Error al crear el usuario',
-                'error'   => $e->getMessage(),
-                'file'    => $e->getFile(),
-                'line'    => $e->getLine(),
-                'trace'   => collect($e->getTrace())->take(5), // Opcional: muestra solo los primeros 5 pasos del stack
             ], 500);
         }
     }
@@ -297,20 +298,23 @@ class AuthController
             }
 
             $user = User::where('email', $request->email)->first(); // Recuperar el usuario por su email
+
+            // Respuesta genérica para evitar enumeración de usuarios
             if (!$user) {
-                throw new \Exception('Usuario no encontrado.', 404);
+                return response()->json(['message' => 'Si el correo está registrado, recibirás un enlace de restablecimiento.'], 200);
             }
 
             $rolesNoPermitidos = ['Administrador', 'Talento Humano', 'Apoyo Profesoral', 'Evaluador Produccion'];
             if ($user->hasAnyRole($rolesNoPermitidos)) {
-                throw new \Exception('Este usuario no tiene permitido restablecer la contraseña.', 403);
+                return response()->json(['message' => 'Si el correo está registrado, recibirás un enlace de restablecimiento.'], 200);
             }
 
-            $token = bin2hex(random_bytes(32)); // Generar un token para restablecer la contraseña
+            $token = bin2hex(random_bytes(32)); // Generar un token seguro para restablecer la contraseña
+            $tokenHasheado = hash('sha256', $token); // Guardar solo el hash en BD
 
-            DB::table('password_reset_tokens')->updateOrInsert( // Guardar el token en la base de datos
+            DB::table('password_reset_tokens')->updateOrInsert( // Guardar el hash del token en la base de datos
                 ['email' => $request->email], // Condición para buscar
-                ['token' => $token, 'created_at' => now()] // Datos a actualizar o insertar
+                ['token' => $tokenHasheado, 'created_at' => now()] // Datos a actualizar o insertar
             );
 
             $resetLink = rtrim(config('app.frontend_url'), '/') 
@@ -318,13 +322,13 @@ class AuthController
                 . '&email=' . urlencode($user->email); // Crear el enlace de restablecimiento
             Mail::to($user->email)->send(new ResetPasswordMail($user, $resetLink)); // Enviar correo
 
-            return response()->json(['message' => 'Correo electrónico enviado'], 200); // Devolver respuesta
+            return response()->json(['message' => 'Si el correo está registrado, recibirás un enlace de restablecimiento.'], 200); // Devolver respuesta
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Error al enviar correo de restablecimiento', ['error' => $e->getMessage()]);
             return response()->json([
                 'message' => 'Error al enviar el correo de restablecimiento.',
-                'error' => $e->getMessage()
-            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
+            ], 500);
         }
     }
 
@@ -344,7 +348,7 @@ class AuthController
 
             $reset = DB::table('password_reset_tokens')
                 ->where('email', $request->email)
-                ->where('token', $request->token)
+                ->where('token', hash('sha256', $request->token)) // Comparar contra el hash almacenado
                 ->first();
 
             if (!$reset) {

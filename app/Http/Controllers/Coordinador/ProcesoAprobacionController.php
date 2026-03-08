@@ -398,7 +398,7 @@ class ProcesoAprobacionController extends Controller
     public function verAspirante($id)
     {
         try {
-            $aspirante = User::role('Aspirante')
+            $aspirante = User::role(['Aspirante', 'Docente'])
                 ->with([
                     'municipioUsuarios.departamentoMunicipio',
                     'fotoPerfilUsuario.documentosFotoPerfil',

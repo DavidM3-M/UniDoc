@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "cualificacion-docentes-api",
     "name": "Cualificación Docentes API",
-    "description": "Colección completa de endpoints para el sistema de cualificación, postulación, aval, contratación y seguimiento de docentes universitarios.\n\n**Configuración:**\n- Crear variable de entorno `base_url` = `http://localhost:8000/api`\n- Crear variable de entorno `token` con el JWT obtenido al iniciar sesión\n\nTodas las rutas protegidas usan: `Authorization: Bearer {{token}}`",
+    "description": "Colección completa de endpoints para el sistema de cualificación, postulación, aval, contratación y seguimiento de docentes universitarios.\n\n## Configuración rápida\n1. Crear variable de entorno `base_url` = `http://localhost:8000/api`\n2. Ejecutar **Iniciar sesión** — el token se guarda automáticamente en `{{token}}`\n3. Todas las rutas protegidas usan: `Authorization: Bearer {{token}}`\n\n## Flujo del proceso\n1. **Aspirante** se registra y completa su hoja de vida (RUT, EPS, Pensión, ARL, Estudios, Idiomas, Experiencias, Producción, Antecedentes, Bancaria)\n2. **Talento Humano** crea convocatoria, revisa postulaciones y otorga primer aval\n3. **Coordinador** evalúa al aspirante y otorga segundo aval\n4. **Vicerrectoría** revisa y otorga tercer aval\n5. **Rectoría** da el aval final\n6. **Talento Humano** crea la contratación — el aspirante pasa a rol Docente\n\n## Códigos HTTP comunes\n| Código | Significado |\n|--------|-------------|\n| 200 | Operación exitosa |\n| 201 | Recurso creado |\n| 400 | Solicitud mal formada |\n| 401 | Token ausente o inválido |\n| 403 | Sin permisos para este recurso (rol incorrecto) |\n| 404 | Recurso no encontrado |\n| 409 | Conflicto (duplicado) |\n| 422 | Error de validación — ver campo `errors` en la respuesta |\n| 500 | Error interno del servidor |\n\n## Estructura de error de validación (422)\n```json\n{\n  \"message\": \"The given data was invalid.\",\n  \"errors\": {\n    \"campo\": [\"El campo es obligatorio.\"]\n  }\n}\n```",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -12,8 +12,8 @@
   "item": [
 
     {
-      "name": "🔐 Auth",
-      "description": "Endpoints de autenticación. Los marcados como públicos no requieren token.",
+      "name": "Auth",
+      "description": "Endpoints de autenticación. Los marcados como públicos no requieren token.\n\n| Endpoint | Autenticación |\n|----------|--------------|\n| Registrar usuario | No requerida |\n| Iniciar sesión | No requerida |\n| Solicitar/Restablecer contraseña | No requerida |\n| Cerrar sesión | Bearer {{token}} |\n| Obtener usuario autenticado | Bearer {{token}} |\n| Actualizar usuario / contraseña | Bearer {{token}} |",
       "item": [
         {
           "name": "Registrar usuario",
@@ -26,7 +26,7 @@
               "raw": "{\n  \"nombre\": \"Juan\",\n  \"apellido\": \"Pérez\",\n  \"correo\": \"juan@example.com\",\n  \"contrasena\": \"password123\",\n  \"tipo_documento\": \"CC\",\n  \"numero_documento\": \"1234567890\"\n}",
               "options": { "raw": { "language": "json" } }
             },
-            "description": "Registra un nuevo usuario con rol Aspirante y retorna un JWT.\n\n**Respuesta 201:**\n```json\n{\n  \"message\": \"Usuario registrado exitosamente\",\n  \"token\": \"eyJ...\",\n  \"usuario\": { \"id\": 1, \"nombre\": \"Juan\", \"rol\": \"Aspirante\" }\n}\n```"
+            "description": "Registra un nuevo usuario con rol Aspirante y retorna un JWT.\n\n**Headers requeridos:** ninguno (endpoint público)\n\n**Campos obligatorios:** `nombre`, `apellido`, `correo`, `contrasena`, `tipo_documento`, `numero_documento`\n\n**Respuesta 201:**\n```json\n{\n  \"message\": \"Usuario registrado exitosamente\",\n  \"token\": \"eyJ...\",\n  \"usuario\": { \"id\": 1, \"nombre\": \"Juan\", \"rol\": \"Aspirante\" }\n}\n```\n\n**Errores posibles:**\n- `422` — Correo ya registrado: `{ \"errors\": { \"correo\": [\"El correo ya ha sido tomado.\"] } }`\n- `422` — Contraseña muy corta (mínimo 8 caracteres)\n- `422` — `tipo_documento` inválido (valores: CC, CE, TI, PA, NIT)"
           }
         },
         {
@@ -52,7 +52,7 @@
               "raw": "{\n  \"correo\": \"juan@example.com\",\n  \"contrasena\": \"password123\"\n}",
               "options": { "raw": { "language": "json" } }
             },
-            "description": "Inicia sesión y retorna el JWT. El token se guarda automáticamente en la variable `token`.\n\n**Respuesta 200:**\n```json\n{\n  \"token\": \"eyJ...\",\n  \"token_type\": \"bearer\",\n  \"expires_in\": 86400\n}\n```"
+            "description": "Inicia sesión y retorna el JWT. El token se guarda automáticamente en la variable de colección `token` gracias al script de prueba.\n\n**Headers requeridos:** ninguno (endpoint público)\n\n**Respuesta 200:**\n```json\n{\n  \"token\": \"eyJ...\",\n  \"token_type\": \"bearer\",\n  \"expires_in\": 86400\n}\n```\n\n**Errores posibles:**\n- `401` — Credenciales incorrectas: `{ \"error\": \"Credenciales incorrectas\" }`\n- `422` — Campos faltantes (`correo` o `contrasena` vacíos)\n\n**Nota:** El token expira en 24 h (86400 s). Volver a ejecutar este endpoint para renovarlo."
           }
         },
         {
@@ -61,7 +61,7 @@
             "method": "POST",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": { "raw": "{{base_url}}/auth/cerrar-sesion", "host": ["{{base_url}}"], "path": ["auth", "cerrar-sesion"] },
-            "description": "Invalida el JWT del usuario autenticado.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Sesión cerrada exitosamente\" }\n```"
+            "description": "Invalida el JWT del usuario autenticado. Tras la llamada el token queda en la lista negra y no puede reutilizarse.\n\n**Headers requeridos:** `Authorization: Bearer {{token}}`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Sesión cerrada exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token ausente, expirado o ya invalidado"
           }
         },
         {
@@ -70,7 +70,7 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": { "raw": "{{base_url}}/auth/obtener-usuario-autenticado", "host": ["{{base_url}}"], "path": ["auth", "obtener-usuario-autenticado"] },
-            "description": "Retorna los datos del usuario autenticado y sus roles.\n\n**Respuesta 200:**\n```json\n{\n  \"id\": 1,\n  \"nombre\": \"Juan\",\n  \"apellido\": \"Pérez\",\n  \"correo\": \"juan@example.com\",\n  \"roles\": [\"Aspirante\"]\n}\n```"
+            "description": "Retorna los datos completos del usuario autenticado, sus roles y URL de foto de perfil.\n\n**Headers requeridos:** `Authorization: Bearer {{token}}`\n\n**Respuesta 200:**\n```json\n{\n  \"id\": 1,\n  \"nombre\": \"Juan\",\n  \"apellido\": \"Pérez\",\n  \"correo\": \"juan@example.com\",\n  \"tipo_documento\": \"CC\",\n  \"numero_documento\": \"1234567890\",\n  \"foto_perfil_url\": \"http://localhost:8000/storage/fotos/1.jpg\",\n  \"roles\": [\"Aspirante\"]\n}\n```\n\n**Errores posibles:**\n- `401` — Token ausente o inválido"
           }
         },
         {
@@ -90,7 +90,7 @@
                 { "key": "archivo_documento", "type": "file", "src": "", "description": "Opcional: archivo del documento de identidad" }
               ]
             },
-            "description": "Actualiza el perfil del usuario autenticado. Soporta carga de archivo de documento."
+            "description": "Actualiza el perfil del usuario autenticado. Usar `multipart/form-data` (no JSON) porque puede incluir archivo.\n\n**Headers requeridos:** `Authorization: Bearer {{token}}`\n\n**Campos opcionales:** cualquier combinación de `nombre`, `apellido`, `correo`, `tipo_documento`, `numero_documento`, `archivo_documento`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Usuario actualizado exitosamente\", \"usuario\": { \"id\": 1, ... } }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `422` — Correo ya en uso por otro usuario\n- `422` — `archivo_documento` no es un tipo de archivo válido (pdf, jpg, png)"
           }
         },
         {
@@ -107,7 +107,7 @@
               "raw": "{\n  \"contrasena_actual\": \"password123\",\n  \"contrasena_nueva\": \"newpassword123\",\n  \"contrasena_nueva_confirmation\": \"newpassword123\"\n}",
               "options": { "raw": { "language": "json" } }
             },
-            "description": "Actualiza la contraseña de un usuario específico por ID."
+            "description": "Actualiza la contraseña del usuario autenticado (el ID en la URL debe coincidir con el usuario del token).\n\n**Headers requeridos:** `Authorization: Bearer {{token}}`, `Content-Type: application/json`\n\n**Campos obligatorios:** `contrasena_actual`, `contrasena_nueva`, `contrasena_nueva_confirmation`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Contraseña actualizada exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido o pertenece a otro usuario\n- `422` — `contrasena_actual` incorrecta\n- `422` — `contrasena_nueva` y `contrasena_nueva_confirmation` no coinciden\n- `422` — Nueva contraseña menor de 8 caracteres"
           }
         },
         {
@@ -121,7 +121,7 @@
               "raw": "{ \"correo\": \"juan@example.com\" }",
               "options": { "raw": { "language": "json" } }
             },
-            "description": "Envía un token de restablecimiento de contraseña al correo del usuario."
+            "description": "Envía un token de restablecimiento de contraseña al correo del usuario. El token tiene validez de 60 minutos.\n\n**Headers requeridos:** ninguno (endpoint público)\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Se ha enviado el enlace de restablecimiento al correo indicado\" }\n```\n\n**Errores posibles:**\n- `422` — Correo no registrado en el sistema\n- `422` — Campo `correo` vacío o formato inválido"
           }
         },
         {
@@ -135,18 +135,19 @@
               "raw": "{\n  \"token\": \"abc123token\",\n  \"correo\": \"juan@example.com\",\n  \"contrasena\": \"nuevapassword123\",\n  \"contrasena_confirmation\": \"nuevapassword123\"\n}",
               "options": { "raw": { "language": "json" } }
             },
-            "description": "Restablece la contraseña usando el token recibido por email."
+            "description": "Restablece la contraseña usando el token recibido por email. El token solo puede usarse una vez.\n\n**Headers requeridos:** ninguno (endpoint público)\n\n**Campos obligatorios:** `token`, `correo`, `contrasena`, `contrasena_confirmation`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Contraseña restablecida exitosamente\" }\n```\n\n**Errores posibles:**\n- `422` — Token inválido o expirado\n- `422` — El correo no coincide con el del token\n- `422` — `contrasena` y `contrasena_confirmation` no coinciden\n- `422` — Contraseña menor de 8 caracteres"
           }
         }
       ]
     },
 
     {
-      "name": "👤 Aspirante",
-      "description": "Endpoints para el rol Aspirante. Requieren `Authorization: Bearer {{token}}` y rol Aspirante.",
+      "name": "Aspirante",
+      "description": "Endpoints para el rol Aspirante. Requieren `Authorization: Bearer {{token}}` y rol Aspirante.\n\n**Error global 403** (aplica a todos los endpoints de esta carpeta):\n```json\n{ \"message\": \"No tienes permisos para realizar esta acción\" }\n```\nOcurre si el token pertenece a un usuario sin rol Aspirante o Docente.\n\n**Estados de documentos:** todos los registros (RUT, EPS, Pensión, etc.) inician con estado `Pendiente` y son actualizados por los revisores a `Aprobado` o `Rechazado`.",
       "item": [
         {
           "name": "Foto de Perfil",
+          "description": "Gestión de la fotografía de perfil del aspirante. Formato jpeg/png/jpg, tamaño máximo 2 MB. Solo puede existir una foto activa por usuario.",
           "item": [
             {
               "name": "Crear foto de perfil",
@@ -158,7 +159,7 @@
                   "mode": "formdata",
                   "formdata": [{ "key": "foto_perfil", "type": "file", "src": "", "description": "jpeg/png/jpg, máx 2 MB" }]
                 },
-                "description": "Sube la foto de perfil del aspirante.\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Foto de perfil creada exitosamente\", \"url\": \"http://...\" }\n```\n\n**Errores:**\n- `422`: El archivo no es una imagen válida o supera 2 MB"
+                "description": "Sube la foto de perfil del aspirante. Si ya existía una foto previa, es reemplazada.\n\n**Content-Type:** `multipart/form-data`\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Foto de perfil creada exitosamente\", \"url\": \"http://localhost:8000/storage/fotos/1_perfil.jpg\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Aspirante\n- `422` — `foto_perfil` no es imagen válida (solo jpg, jpeg, png)\n- `422` — Archivo supera 2 MB"
               }
             },
             {
@@ -167,7 +168,7 @@
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
                 "url": { "raw": "{{base_url}}/aspirante/obtener-foto-perfil", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-foto-perfil"] },
-                "description": "Retorna la URL de la foto de perfil del aspirante.\n\n**Respuesta 200:**\n```json\n{ \"url\": \"http://localhost:8000/storage/fotos/1_perfil.jpg\" }\n```"
+                "description": "Retorna la URL pública de la foto de perfil del aspirante autenticado.\n\n**Respuesta 200:**\n```json\n{ \"url\": \"http://localhost:8000/storage/fotos/1_perfil.jpg\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `404` — El aspirante no tiene foto de perfil registrada"
               }
             },
             {
@@ -176,13 +177,14 @@
                 "method": "DELETE",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
                 "url": { "raw": "{{base_url}}/aspirante/eliminar-foto-perfil", "host": ["{{base_url}}"], "path": ["aspirante", "eliminar-foto-perfil"] },
-                "description": "Elimina la foto de perfil del aspirante.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Foto de perfil eliminada exitosamente\" }\n```"
+                "description": "Elimina la foto de perfil del aspirante y el archivo físico del almacenamiento.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Foto de perfil eliminada exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `404` — No existe foto de perfil para este usuario"
               }
             }
           ]
         },
         {
           "name": "RUT",
+          "description": "Registro Único Tributario del aspirante. Solo puede existir un RUT por usuario. Requiere archivo PDF del RUT oficial expedido por la DIAN.",
           "item": [
             {
               "name": "Obtener RUT",
@@ -190,7 +192,7 @@
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
                 "url": { "raw": "{{base_url}}/aspirante/obtener-rut", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-rut"] },
-                "description": "Retorna el RUT del aspirante autenticado.\n\n**Respuesta 200:**\n```json\n{\n  \"id\": 1,\n  \"tipo_persona\": \"Natural\",\n  \"codigo_ciiu\": \"8560\",\n  \"numero_documento\": \"1234567890\",\n  \"archivo_url\": \"http://...\",\n  \"estado\": \"Pendiente\"\n}\n```\n\n**Error 404:** RUT no encontrado"
+                "description": "Retorna el RUT del aspirante autenticado.\n\n**Respuesta 200:**\n```json\n{\n  \"id\": 1,\n  \"tipo_persona\": \"Natural\",\n  \"codigo_ciiu\": \"8560\",\n  \"numero_documento\": \"1234567890\",\n  \"archivo_url\": \"http://localhost:8000/storage/rut/1.pdf\",\n  \"estado\": \"Pendiente\"\n}\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `404` — RUT no encontrado para este usuario"
               }
             },
             {
@@ -208,7 +210,7 @@
                     { "key": "archivo_rut", "type": "file", "src": "", "description": "PDF del RUT obligatorio" }
                   ]
                 },
-                "description": "Crea el registro de RUT del aspirante (uno por usuario).\n\n**Respuesta 201:**\n```json\n{ \"message\": \"RUT creado exitosamente\", \"rut\": { \"id\": 1, ... } }\n```\n\n**Error 422:** Datos inválidos o RUT ya existente"
+                "description": "Crea el registro de RUT del aspirante. Solo uno por usuario.\n\n**Content-Type:** `multipart/form-data`\n\n**Campos obligatorios:** `tipo_persona` (Natural | Jurídica), `codigo_ciiu`, `numero_documento`, `archivo_rut` (PDF)\n\n**Respuesta 201:**\n```json\n{ \"message\": \"RUT creado exitosamente\", \"rut\": { \"id\": 1, \"tipo_persona\": \"Natural\", \"estado\": \"Pendiente\" } }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `409` — Ya existe un RUT para este usuario\n- `422` — `tipo_persona` inválido\n- `422` — `archivo_rut` no es un PDF o supera el tamaño permitido"
               }
             },
             {
@@ -226,13 +228,14 @@
                     { "key": "archivo_rut", "type": "file", "src": "", "description": "Opcional: nuevo archivo PDF" }
                   ]
                 },
-                "description": "Actualiza el RUT del aspirante."
+                "description": "Actualiza el RUT del aspirante. El archivo es opcional; si no se envía, se conserva el PDF anterior.\n\n**Content-Type:** `multipart/form-data`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"RUT actualizado exitosamente\", \"rut\": { \"id\": 1, \"estado\": \"Pendiente\" } }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `404` — RUT no encontrado (debe crearse primero)\n- `422` — `tipo_persona` inválido\n- `422` — `archivo_rut` no es PDF"
               }
             }
           ]
         },
         {
           "name": "Información de Contacto",
+          "description": "Dirección, teléfono, municipio y datos de libreta militar del aspirante. Un registro por usuario. Los campos de libreta militar solo aplican para hombres.",
           "item": [
             {
               "name": "Obtener información de contacto",
@@ -240,7 +243,7 @@
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
                 "url": { "raw": "{{base_url}}/aspirante/obtener-informacion-contacto", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-informacion-contacto"] },
-                "description": "Retorna la información de contacto del aspirante.\n\n**Respuesta 200:**\n```json\n{\n  \"id\": 1,\n  \"direccion\": \"Calle 123 #45-67\",\n  \"telefono\": \"3001234567\",\n  \"municipio\": { \"id\": 1, \"nombre\": \"Bogotá\" },\n  \"estado\": \"Pendiente\"\n}\n```"
+                "description": "Retorna la información de contacto del aspirante autenticado.\n\n**Respuesta 200:**\n```json\n{\n  \"id\": 1,\n  \"direccion\": \"Calle 123 #45-67\",\n  \"telefono\": \"3001234567\",\n  \"municipio\": { \"id\": 1, \"nombre\": \"Bogotá\" },\n  \"categoria_libreta_militar\": null,\n  \"numero_libreta_militar\": null,\n  \"estado\": \"Pendiente\"\n}\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `404` — Información de contacto no encontrada"
               }
             },
             {
@@ -261,7 +264,7 @@
                     { "key": "archivo_libreta_militar", "type": "file", "src": "", "description": "Opcional: PDF libreta militar" }
                   ]
                 },
-                "description": "Crea la información de contacto del aspirante (una por usuario).\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Información de contacto creada\", \"contacto\": { ... } }\n```"
+                "description": "Crea la información de contacto del aspirante (una por usuario).\n\n**Content-Type:** `multipart/form-data`\n\n**Campos obligatorios:** `direccion`, `telefono`, `municipio_id`\n**Campos opcionales:** `categoria_libreta_militar`, `numero_libreta_militar`, `distrito_militar`, `archivo_libreta_militar` (PDF)\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Información de contacto creada\", \"contacto\": { \"id\": 1, \"estado\": \"Pendiente\" } }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `409` — Ya existe información de contacto para este usuario\n- `422` — `municipio_id` no existe en la base de datos\n- `422` — `telefono` no tiene formato válido"
               }
             },
             {
@@ -278,13 +281,14 @@
                     { "key": "municipio_id", "value": "1", "type": "text" }
                   ]
                 },
-                "description": "Actualiza la información de contacto del aspirante."
+                "description": "Actualiza la información de contacto del aspirante.\n\n**Content-Type:** `multipart/form-data`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Información de contacto actualizada exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `404` — No existe información de contacto (crear primero)\n- `422` — `municipio_id` no existe"
               }
             }
           ]
         },
         {
           "name": "EPS",
+          "description": "Información de afiliación a Entidad Promotora de Salud. Requiere archivo PDF del certificado de afiliación vigente. Un registro por usuario.",
           "item": [
             {
               "name": "Obtener EPS",
@@ -292,7 +296,7 @@
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
                 "url": { "raw": "{{base_url}}/aspirante/obtener-eps", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-eps"] },
-                "description": "Retorna el registro de EPS del aspirante."
+                "description": "Retorna el registro de EPS del aspirante autenticado.\n\n**Respuesta 200:**\n```json\n{\n  \"id\": 1,\n  \"nombre_eps\": \"Sura EPS\",\n  \"estado_afiliacion\": \"Activo\",\n  \"tipo_afiliacion\": \"Cotizante\",\n  \"tipo_afiliado\": \"Empleado\",\n  \"archivo_url\": \"http://localhost:8000/storage/eps/1.pdf\",\n  \"estado\": \"Pendiente\"\n}\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `404` — EPS no registrada para este usuario"
               }
             },
             {
@@ -311,7 +315,7 @@
                     { "key": "archivo_eps", "type": "file", "src": "", "description": "PDF certificado de afiliación EPS" }
                   ]
                 },
-                "description": "Crea el registro de EPS.\n\n**Respuesta 201:**\n```json\n{ \"message\": \"EPS creada exitosamente\", \"eps\": { ... } }\n```"
+                "description": "Crea el registro de EPS del aspirante. Solo uno por usuario.\n\n**Content-Type:** `multipart/form-data`\n\n**Campos obligatorios:** `nombre_eps`, `estado_afiliacion`, `tipo_afiliacion`, `tipo_afiliado`, `archivo_eps` (PDF)\n\n**Respuesta 201:**\n```json\n{ \"message\": \"EPS creada exitosamente\", \"eps\": { \"id\": 1, \"nombre_eps\": \"Sura EPS\", \"estado\": \"Pendiente\" } }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `409` — Ya existe una EPS para este usuario\n- `422` — `estado_afiliacion` inválido (ver `/constantes/estado-afiliacion`)\n- `422` — `tipo_afiliacion` inválido (ver `/constantes/tipo-afiliacion`)\n- `422` — `archivo_eps` no es PDF"
               }
             },
             {
@@ -328,20 +332,23 @@
                     { "key": "tipo_afiliacion", "value": "Cotizante", "type": "text" },
                     { "key": "tipo_afiliado", "value": "Empleado", "type": "text" }
                   ]
-                }
+                },
+                "description": "Actualiza los datos de EPS del aspirante. El archivo es opcional; si se omite se conserva el PDF anterior.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"EPS actualizada exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `404` — EPS no encontrada (crear primero)\n- `422` — Valor inválido en `estado_afiliacion`, `tipo_afiliacion` o `tipo_afiliado`"
               }
             }
           ]
         },
         {
           "name": "Pensión",
+          "description": "Información de afiliación al fondo de pensiones. Requiere archivo PDF del certificado de vinculación pensional. Un registro por usuario.",
           "item": [
             {
               "name": "Obtener pensión",
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/aspirante/obtener-pension", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-pension"] }
+                "url": { "raw": "{{base_url}}/aspirante/obtener-pension", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-pension"] },
+                "description": "Retorna el registro de pensión del aspirante autenticado, incluyendo fondo y régimen pensional.\n\n**Respuesta 200:**\n```json\n{\n  \"id\": 1,\n  \"nombre_fondo\": \"Porvenir\",\n  \"regimen_pensional\": \"Ahorro Individual\",\n  \"archivo_url\": \"http://localhost:8000/storage/pension/1.pdf\",\n  \"estado\": \"Pendiente\"\n}\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `404` — Pensión no encontrada para este usuario"
               }
             },
             {
@@ -358,7 +365,7 @@
                     { "key": "archivo_pension", "type": "file", "src": "", "description": "PDF certificado de vinculación pensional" }
                   ]
                 },
-                "description": "Crea el registro de pensión del aspirante."
+                "description": "Crea el registro de pensión del aspirante. Solo uno por usuario.\n\n**Content-Type:** `multipart/form-data`\n\n**Campos obligatorios:** `nombre_fondo`, `regimen_pensional`, `archivo_pension` (PDF)\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Pensión creada exitosamente\", \"pension\": { \"id\": 1, \"estado\": \"Pendiente\" } }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `409` — Ya existe una pensión para este usuario\n- `422` — `regimen_pensional` inválido (ver `/constantes/tipos-pension`)\n- `422` — `archivo_pension` no es PDF"
               }
             },
             {
@@ -373,20 +380,23 @@
                     { "key": "nombre_fondo", "value": "Colfondos", "type": "text" },
                     { "key": "regimen_pensional", "value": "Prima Media", "type": "text" }
                   ]
-                }
+                },
+                "description": "Actualiza el fondo y régimen pensional del aspirante. El archivo es opcional.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Pensión actualizada exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `404` — Pensión no encontrada (crear primero)\n- `422` — `regimen_pensional` inválido"
               }
             }
           ]
         },
         {
           "name": "ARL",
+          "description": "Información de afiliación a la Administradora de Riesgos Laborales. Requiere archivo PDF del certificado vigente. Un registro por usuario.",
           "item": [
             {
               "name": "Obtener ARL",
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/aspirante/obtener-arl", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-arl"] }
+                "url": { "raw": "{{base_url}}/aspirante/obtener-arl", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-arl"] },
+                "description": "Retorna el registro de ARL del aspirante autenticado.\n\n**Respuesta 200:**\n```json\n{\n  \"id\": 1,\n  \"nombre_arl\": \"ARL Sura\",\n  \"archivo_url\": \"http://localhost:8000/storage/arl/1.pdf\",\n  \"estado\": \"Pendiente\"\n}\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `404` — ARL no encontrada para este usuario"
               }
             },
             {
@@ -399,9 +409,10 @@
                   "mode": "formdata",
                   "formdata": [
                     { "key": "nombre_arl", "value": "ARL Sura", "type": "text" },
-                    { "key": "archivo_arl", "type": "file", "src": "" }
+                    { "key": "archivo_arl", "type": "file", "src": "", "description": "PDF del certificado de afiliación ARL" }
                   ]
-                }
+                },
+                "description": "Crea el registro de ARL del aspirante. Solo uno por usuario.\n\n**Content-Type:** `multipart/form-data`\n\n**Campos obligatorios:** `nombre_arl`, `archivo_arl` (PDF)\n\n**Respuesta 201:**\n```json\n{ \"message\": \"ARL creada exitosamente\", \"arl\": { \"id\": 1, \"nombre_arl\": \"ARL Sura\", \"estado\": \"Pendiente\" } }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `409` — Ya existe una ARL para este usuario\n- `422` — `nombre_arl` vacío\n- `422` — `archivo_arl` no es PDF"
               }
             },
             {
@@ -415,20 +426,23 @@
                   "formdata": [
                     { "key": "nombre_arl", "value": "ARL Positiva", "type": "text" }
                   ]
-                }
+                },
+                "description": "Actualiza el nombre de la ARL del aspirante. El archivo es opcional; si se omite se conserva el PDF anterior.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"ARL actualizada exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `404` — ARL no encontrada (crear primero)\n- `422` — `nombre_arl` vacío"
               }
             }
           ]
         },
         {
           "name": "Certificación Bancaria",
+          "description": "Datos bancarios del aspirante para el pago de honorarios. Un registro por usuario. Requiere PDF del certificado bancario (no mayor a 30 días de expedición).",
           "item": [
             {
               "name": "Obtener certificación bancaria",
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/aspirante/obtener-certificacion-bancaria", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-certificacion-bancaria"] }
+                "url": { "raw": "{{base_url}}/aspirante/obtener-certificacion-bancaria", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-certificacion-bancaria"] },
+                "description": "Retorna la certificación bancaria del aspirante autenticado.\n\n**Respuesta 200:**\n```json\n{\n  \"id\": 1,\n  \"banco\": \"Bancolombia\",\n  \"numero_cuenta\": \"123456789012\",\n  \"tipo_cuenta\": \"Ahorros\",\n  \"archivo_url\": \"http://localhost:8000/storage/bancaria/1.pdf\",\n  \"estado\": \"Pendiente\"\n}\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `404` — Certificación bancaria no encontrada"
               }
             },
             {
@@ -446,7 +460,7 @@
                     { "key": "archivo_certificacion", "type": "file", "src": "", "description": "PDF del certificado bancario" }
                   ]
                 },
-                "description": "Crea la certificación bancaria del aspirante."
+                "description": "Crea la certificación bancaria del aspirante. Solo una por usuario.\n\n**Content-Type:** `multipart/form-data`\n\n**Campos obligatorios:** `banco`, `numero_cuenta`, `tipo_cuenta` (Ahorros | Corriente), `archivo_certificacion` (PDF)\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Certificación bancaria creada exitosamente\", \"bancaria\": { \"id\": 1, \"banco\": \"Bancolombia\", \"estado\": \"Pendiente\" } }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `409` — Ya existe una certificación bancaria para este usuario\n- `422` — `tipo_cuenta` inválido\n- `422` — `archivo_certificacion` no es PDF"
               }
             },
             {
@@ -462,20 +476,23 @@
                     { "key": "numero_cuenta", "value": "987654321098", "type": "text" },
                     { "key": "tipo_cuenta", "value": "Corriente", "type": "text" }
                   ]
-                }
+                },
+                "description": "Actualiza los datos bancarios del aspirante. El archivo de certificación es opcional.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Certificación bancaria actualizada exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `404` — Certificación bancaria no encontrada (crear primero)\n- `422` — `tipo_cuenta` inválido"
               }
             }
           ]
         },
         {
           "name": "Antecedentes Judiciales",
+          "description": "Certificado de antecedentes judiciales del aspirante. Un registro por usuario. Requiere archivo PDF vigente (máximo 3 meses de expedición) de la Policía Nacional.",
           "item": [
             {
               "name": "Obtener antecedentes judiciales",
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/aspirante/obtener-antecedentes-judiciales", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-antecedentes-judiciales"] }
+                "url": { "raw": "{{base_url}}/aspirante/obtener-antecedentes-judiciales", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-antecedentes-judiciales"] },
+                "description": "Retorna el certificado de antecedentes judiciales del aspirante autenticado.\n\n**Respuesta 200:**\n```json\n{\n  \"id\": 1,\n  \"archivo_url\": \"http://localhost:8000/storage/antecedentes/1.pdf\",\n  \"estado\": \"Pendiente\"\n}\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `404` — Antecedentes no encontrados para este usuario"
               }
             },
             {
@@ -489,7 +506,8 @@
                   "formdata": [
                     { "key": "archivo_antecedentes", "type": "file", "src": "", "description": "PDF de antecedentes judiciales" }
                   ]
-                }
+                },
+                "description": "Sube el archivo PDF de antecedentes judiciales del aspirante. Solo un registro por usuario.\n\n**Content-Type:** `multipart/form-data`\n\n**Campos obligatorios:** `archivo_antecedentes` (PDF)\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Antecedentes creados exitosamente\", \"antecedentes\": { \"id\": 1, \"estado\": \"Pendiente\" } }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `409` — Ya existen antecedentes para este usuario (usar PUT para actualizar)\n- `422` — `archivo_antecedentes` no es PDF o supera el tamaño máximo"
               }
             },
             {
@@ -503,13 +521,15 @@
                   "formdata": [
                     { "key": "archivo_antecedentes", "type": "file", "src": "" }
                   ]
-                }
+                },
+                "description": "Actualiza el archivo PDF de antecedentes judiciales del aspirante.\n\n**Content-Type:** `multipart/form-data`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Antecedentes actualizados exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `404` — Antecedentes no encontrados (crear primero)\n- `422` — `archivo_antecedentes` no es PDF"
               }
             }
           ]
         },
         {
           "name": "Idiomas",
+          "description": "Certificaciones de idiomas del aspirante. Permite múltiples registros. Niveles MCER: A1, A2, B1, B2, C1, C2. Se requiere archivo PDF del certificado para cada registro.",
           "item": [
             {
               "name": "Listar idiomas",
@@ -517,7 +537,7 @@
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
                 "url": { "raw": "{{base_url}}/aspirante/obtener-idiomas", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-idiomas"] },
-                "description": "Lista todos los idiomas registrados por el aspirante.\n\n**Respuesta 200:**\n```json\n[\n  {\n    \"id\": 1,\n    \"idioma\": \"Inglés\",\n    \"nivel\": \"B2\",\n    \"institucion\": \"British Council\",\n    \"fecha_expedicion\": \"2024-06-15\",\n    \"estado\": \"Pendiente\"\n  }\n]\n```"
+                "description": "Lista todos los idiomas registrados por el aspirante autenticado.\n\n**Respuesta 200:**\n```json\n[\n  {\n    \"id\": 1,\n    \"idioma\": \"Inglés\",\n    \"nivel\": \"B2\",\n    \"institucion\": \"British Council\",\n    \"fecha_expedicion\": \"2024-06-15\",\n    \"archivo_url\": \"http://localhost:8000/storage/idiomas/1.pdf\",\n    \"estado\": \"Pendiente\"\n  }\n]\n```\n\n**Errores posibles:**\n- `401` — Token inválido"
               }
             },
             {
@@ -525,7 +545,8 @@
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/aspirante/obtener-idioma/1", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-idioma", "1"] }
+                "url": { "raw": "{{base_url}}/aspirante/obtener-idioma/1", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-idioma", "1"] },
+                "description": "Retorna un registro de idioma específico del aspirante por su ID.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — El idioma pertenece a otro usuario\n- `404` — Idioma no encontrado"
               }
             },
             {
@@ -544,7 +565,7 @@
                     { "key": "archivo_certificado", "type": "file", "src": "", "description": "PDF del certificado de idioma" }
                   ]
                 },
-                "description": "Agrega un idioma al perfil del aspirante.\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Idioma creado exitosamente\", \"idioma\": { \"id\": 1, \"idioma\": \"Inglés\", \"nivel\": \"B2\" } }\n```"
+                "description": "Agrega un idioma al perfil del aspirante.\n\n**Content-Type:** `multipart/form-data`\n\n**Campos obligatorios:** `idioma`, `nivel` (A1|A2|B1|B2|C1|C2), `institucion`, `fecha_expedicion` (YYYY-MM-DD), `archivo_certificado` (PDF)\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Idioma creado exitosamente\", \"idioma\": { \"id\": 1, \"idioma\": \"Inglés\", \"nivel\": \"B2\", \"estado\": \"Pendiente\" } }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `422` — `nivel` no es un valor MCER válido\n- `422` — `fecha_expedicion` no tiene formato YYYY-MM-DD\n- `422` — `archivo_certificado` no es PDF"
               }
             },
             {
@@ -561,7 +582,8 @@
                     { "key": "institucion", "value": "Cambridge", "type": "text" },
                     { "key": "fecha_expedicion", "value": "2025-01-20", "type": "text" }
                   ]
-                }
+                },
+                "description": "Actualiza un registro de idioma del aspirante. El nivel debe ser A1, A2, B1, B2, C1 o C2. El archivo de certificado es opcional.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Idioma actualizado exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — El idioma pertenece a otro usuario\n- `404` — Idioma no encontrado\n- `422` — `nivel` inválido"
               }
             },
             {
@@ -569,20 +591,23 @@
               "request": {
                 "method": "DELETE",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/aspirante/eliminar-idioma/1", "host": ["{{base_url}}"], "path": ["aspirante", "eliminar-idioma", "1"] }
+                "url": { "raw": "{{base_url}}/aspirante/eliminar-idioma/1", "host": ["{{base_url}}"], "path": ["aspirante", "eliminar-idioma", "1"] },
+                "description": "Elimina un registro de idioma del aspirante por su ID.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Idioma eliminado exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — El idioma pertenece a otro usuario\n- `404` — Idioma no encontrado"
               }
             }
           ]
         },
         {
           "name": "Experiencias Laborales",
+          "description": "Historial de experiencias laborales y académicas del aspirante. Permite múltiples registros. El tipo de experiencia debe coincidir con los valores del catálogo `/constantes/tipos-experiencia`.",
           "item": [
             {
               "name": "Listar experiencias",
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/aspirante/obtener-experiencias", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-experiencias"] }
+                "url": { "raw": "{{base_url}}/aspirante/obtener-experiencias", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-experiencias"] },
+                "description": "Lista todas las experiencias laborales registradas por el aspirante autenticado.\n\n**Respuesta 200:**\n```json\n[\n  {\n    \"id\": 1,\n    \"empresa\": \"Universidad Nacional\",\n    \"cargo\": \"Docente de Cátedra\",\n    \"tipo_experiencia\": \"Docencia Universitaria\",\n    \"fecha_inicio\": \"2020-01-15\",\n    \"fecha_fin\": \"2023-12-31\",\n    \"estado\": \"Pendiente\"\n  }\n]\n```\n\n**Errores posibles:**\n- `401` — Token inválido"
               }
             },
             {
@@ -590,7 +615,8 @@
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/aspirante/obtener-experiencia/1", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-experiencia", "1"] }
+                "url": { "raw": "{{base_url}}/aspirante/obtener-experiencia/1", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-experiencia", "1"] },
+                "description": "Retorna una experiencia laboral específica del aspirante por su ID.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — La experiencia pertenece a otro usuario\n- `404` — Experiencia no encontrada"
               }
             },
             {
@@ -612,7 +638,7 @@
                     { "key": "archivo_certificado", "type": "file", "src": "", "description": "PDF certificado laboral" }
                   ]
                 },
-                "description": "Agrega una experiencia laboral.\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Experiencia creada\", \"experiencia\": { \"id\": 1, \"empresa\": \"...\", \"estado\": \"Pendiente\" } }\n```"
+                "description": "Agrega una experiencia laboral al perfil del aspirante.\n\n**Content-Type:** `multipart/form-data`\n\n**Campos obligatorios:** `empresa`, `cargo`, `tipo_experiencia`, `fecha_inicio` (YYYY-MM-DD), `municipio_id`\n**Campos opcionales:** `fecha_fin` (vacío si es trabajo actual), `descripcion`, `archivo_certificado` (PDF)\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Experiencia creada\", \"experiencia\": { \"id\": 1, \"empresa\": \"...\", \"estado\": \"Pendiente\" } }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `422` — `tipo_experiencia` no está en el catálogo\n- `422` — `municipio_id` no existe\n- `422` — `fecha_fin` es anterior a `fecha_inicio`\n- `422` — `archivo_certificado` no es PDF"
               }
             },
             {
@@ -630,7 +656,8 @@
                     { "key": "fecha_inicio", "value": "2023-02-01", "type": "text" },
                     { "key": "municipio_id", "value": "1", "type": "text" }
                   ]
-                }
+                },
+                "description": "Actualiza una experiencia laboral del aspirante. El archivo de certificado es opcional. Dejar `fecha_fin` vacío si es empleo actual.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Experiencia actualizada exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — La experiencia pertenece a otro usuario\n- `404` — Experiencia no encontrada\n- `422` — Campos inválidos"
               }
             },
             {
@@ -638,20 +665,23 @@
               "request": {
                 "method": "DELETE",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/aspirante/eliminar-experiencia/1", "host": ["{{base_url}}"], "path": ["aspirante", "eliminar-experiencia", "1"] }
+                "url": { "raw": "{{base_url}}/aspirante/eliminar-experiencia/1", "host": ["{{base_url}}"], "path": ["aspirante", "eliminar-experiencia", "1"] },
+                "description": "Elimina una experiencia laboral del aspirante por su ID.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Experiencia eliminada exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — La experiencia pertenece a otro usuario\n- `404` — Experiencia no encontrada"
               }
             }
           ]
         },
         {
           "name": "Estudios Académicos",
+          "description": "Títulos académicos y formación del aspirante (Pregrado, Especialización, Maestría, Doctorado, Posdoctorado).",
           "item": [
             {
               "name": "Listar estudios",
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/aspirante/obtener-estudios", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-estudios"] }
+                "url": { "raw": "{{base_url}}/aspirante/obtener-estudios", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-estudios"] },
+                "description": "Lista todos los títulos académicos registrados por el aspirante autenticado.\n\n**Respuesta 200:**\n```json\n[\n  {\n    \"id\": 1,\n    \"institucion\": \"Universidad Nacional de Colombia\",\n    \"titulo\": \"Ingeniero de Sistemas\",\n    \"tipo_estudio\": \"Pregrado\",\n    \"fecha_grado\": \"2018-11-30\",\n    \"estado\": \"Pendiente\"\n  }\n]\n```\n\n**Errores posibles:**\n- `401` — Token inválido"
               }
             },
             {
@@ -659,7 +689,8 @@
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/aspirante/obtener-estudio/1", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-estudio", "1"] }
+                "url": { "raw": "{{base_url}}/aspirante/obtener-estudio/1", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-estudio", "1"] },
+                "description": "Retorna un registro de estudio académico específico del aspirante por su ID.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — El estudio pertenece a otro usuario\n- `404` — Estudio no encontrado"
               }
             },
             {
@@ -680,7 +711,7 @@
                     { "key": "archivo_diploma", "type": "file", "src": "", "description": "PDF diploma o acta de grado" }
                   ]
                 },
-                "description": "Agrega un título académico.\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Estudio creado\", \"estudio\": { \"id\": 1, \"titulo\": \"Ingeniero de Sistemas\", \"estado\": \"Pendiente\" } }\n```"
+                "description": "Agrega un título académico al perfil del aspirante.\n\n**Content-Type:** `multipart/form-data`\n\n**Campos obligatorios:** `institucion`, `titulo`, `tipo_estudio`, `perfil_profesional`, `fecha_grado` (YYYY-MM-DD), `municipio_id`, `archivo_diploma` (PDF)\n\n**`tipo_estudio` válidos:** Pregrado, Especialización, Maestría, Doctorado, Posdoctorado\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Estudio creado\", \"estudio\": { \"id\": 1, \"titulo\": \"Ingeniero de Sistemas\", \"estado\": \"Pendiente\" } }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `422` — `tipo_estudio` inválido (no está en el catálogo)\n- `422` — `municipio_id` no existe\n- `422` — `archivo_diploma` no es PDF"
               }
             },
             {
@@ -699,7 +730,8 @@
                     { "key": "fecha_grado", "value": "2022-05-20", "type": "text" },
                     { "key": "municipio_id", "value": "1", "type": "text" }
                   ]
-                }
+                },
+                "description": "Actualiza un título académico del aspirante. El archivo de diploma es opcional.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Estudio actualizado exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — El estudio pertenece a otro usuario\n- `404` — Estudio no encontrado\n- `422` — `tipo_estudio` inválido"
               }
             },
             {
@@ -707,20 +739,23 @@
               "request": {
                 "method": "DELETE",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/aspirante/eliminar-estudio/1", "host": ["{{base_url}}"], "path": ["aspirante", "eliminar-estudio", "1"] }
+                "url": { "raw": "{{base_url}}/aspirante/eliminar-estudio/1", "host": ["{{base_url}}"], "path": ["aspirante", "eliminar-estudio", "1"] },
+                "description": "Elimina un registro de estudio académico del aspirante por su ID.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Estudio eliminado exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — El estudio pertenece a otro usuario\n- `404` — Estudio no encontrado"
               }
             }
           ]
         },
         {
           "name": "Producción Académica",
+          "description": "Publicaciones, libros, ponencias y otros productos académicos del aspirante. Permite múltiples registros.",
           "item": [
             {
               "name": "Listar producciones",
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/aspirante/obtener-producciones", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-producciones"] }
+                "url": { "raw": "{{base_url}}/aspirante/obtener-producciones", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-producciones"] },
+                "description": "Lista todas las producciones académicas registradas por el aspirante autenticado.\n\n**Respuesta 200:**\n```json\n[\n  {\n    \"id\": 1,\n    \"titulo\": \"Algoritmos de aprendizaje automático\",\n    \"producto_academico\": { \"id\": 1, \"nombre\": \"Artículo de investigación\" },\n    \"ambito_divulgacion\": { \"id\": 2, \"nombre\": \"Nacional\" },\n    \"anio\": 2024,\n    \"estado\": \"Pendiente\"\n  }\n]\n```\n\n**Errores posibles:**\n- `401` — Token inválido"
               }
             },
             {
@@ -728,7 +763,8 @@
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/aspirante/obtener-produccion/1", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-produccion", "1"] }
+                "url": { "raw": "{{base_url}}/aspirante/obtener-produccion/1", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-produccion", "1"] },
+                "description": "Retorna una producción académica específica del aspirante por su ID.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — La producción pertenece a otro usuario\n- `404` — Producción no encontrada"
               }
             },
             {
@@ -748,7 +784,7 @@
                     { "key": "archivo_produccion", "type": "file", "src": "", "description": "PDF que certifica la producción" }
                   ]
                 },
-                "description": "Agrega una producción académica.\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Producción creada\", \"produccion\": { \"id\": 1, \"titulo\": \"...\", \"estado\": \"Pendiente\" } }\n```"
+                "description": "Agrega una producción académica al perfil del aspirante.\n\n**Content-Type:** `multipart/form-data`\n\n**Campos obligatorios:** `titulo`, `id_producto_academico`, `id_ambito_divulgacion`, `anio`, `archivo_produccion` (PDF)\n**Campos opcionales:** `descripcion`\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Producción creada\", \"produccion\": { \"id\": 1, \"titulo\": \"...\", \"estado\": \"Pendiente\" } }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `422` — `id_producto_academico` no existe en el catálogo\n- `422` — `id_ambito_divulgacion` no corresponde al tipo de producto\n- `422` — `anio` fuera de rango (no puede ser futuro)\n- `422` — `archivo_produccion` no es PDF"
               }
             },
             {
@@ -765,7 +801,8 @@
                     { "key": "id_ambito_divulgacion", "value": "2", "type": "text" },
                     { "key": "anio", "value": "2025", "type": "text" }
                   ]
-                }
+                },
+                "description": "Actualiza una producción académica del aspirante. El archivo es opcional.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Producción actualizada exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — La producción pertenece a otro usuario\n- `404` — Producción no encontrada\n- `422` — `id_ambito_divulgacion` no corresponde al tipo de producto"
               }
             },
             {
@@ -773,20 +810,23 @@
               "request": {
                 "method": "DELETE",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/aspirante/eliminar-produccion/1", "host": ["{{base_url}}"], "path": ["aspirante", "eliminar-produccion", "1"] }
+                "url": { "raw": "{{base_url}}/aspirante/eliminar-produccion/1", "host": ["{{base_url}}"], "path": ["aspirante", "eliminar-produccion", "1"] },
+                "description": "Elimina una producción académica del aspirante por su ID.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Producción eliminada exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — La producción pertenece a otro usuario\n- `404` — Producción no encontrada"
               }
             }
           ]
         },
         {
           "name": "Aptitudes",
+          "description": "Habilidades y aptitudes del aspirante. No requieren archivo adjunto. Se ingresan como texto libre.",
           "item": [
             {
               "name": "Listar aptitudes",
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/aspirante/obtener-aptitudes", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-aptitudes"] }
+                "url": { "raw": "{{base_url}}/aspirante/obtener-aptitudes", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-aptitudes"] },
+                "description": "Lista todas las aptitudes registradas en el perfil del aspirante autenticado.\n\n**Respuesta 200:**\n```json\n[\n  { \"id\": 1, \"nombre\": \"Liderazgo\", \"descripcion\": \"Gestión de equipos de trabajo\" }\n]\n```\n\n**Errores posibles:**\n- `401` — Token inválido"
               }
             },
             {
@@ -799,7 +839,8 @@
                   "mode": "raw",
                   "raw": "{ \"nombre\": \"Liderazgo\", \"descripcion\": \"Gestión de equipos de trabajo\" }",
                   "options": { "raw": { "language": "json" } }
-                }
+                },
+                "description": "Agrega una aptitud al perfil del aspirante.\n\n**Content-Type:** `application/json`\n\n**Campos obligatorios:** `nombre`\n**Campos opcionales:** `descripcion`\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Aptitud creada exitosamente\", \"aptitud\": { \"id\": 1, \"nombre\": \"Liderazgo\" } }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `422` — `nombre` vacío"
               }
             },
             {
@@ -807,13 +848,15 @@
               "request": {
                 "method": "DELETE",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/aspirante/eliminar-aptitud/1", "host": ["{{base_url}}"], "path": ["aspirante", "eliminar-aptitud", "1"] }
+                "url": { "raw": "{{base_url}}/aspirante/eliminar-aptitud/1", "host": ["{{base_url}}"], "path": ["aspirante", "eliminar-aptitud", "1"] },
+                "description": "Elimina una aptitud del perfil del aspirante por su ID.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Aptitud eliminada exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — La aptitud pertenece a otro usuario\n- `404` — Aptitud no encontrada"
               }
             }
           ]
         },
         {
           "name": "Convocatorias y Postulaciones",
+          "description": "Visualización de convocatorias disponibles y gestión de postulaciones activas del aspirante. El aspirante solo puede tener una postulación activa por convocatoria.",
           "item": [
             {
               "name": "Ver convocatorias disponibles",
@@ -821,7 +864,7 @@
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
                 "url": { "raw": "{{base_url}}/aspirante/ver-convocatorias", "host": ["{{base_url}}"], "path": ["aspirante", "ver-convocatorias"] },
-                "description": "Lista las convocatorias abiertas disponibles para el aspirante."
+                "description": "Lista las convocatorias con estado `Abierta` disponibles para el aspirante.\n\n**Respuesta 200:**\n```json\n[\n  {\n    \"id\": 1,\n    \"titulo\": \"Docente Ingeniería 2026-I\",\n    \"tipo_cargo\": \"Docente de Cátedra\",\n    \"fecha_inicio\": \"2026-03-01\",\n    \"fecha_fin\": \"2026-04-30\",\n    \"requisitos_idioma\": [{ \"idioma\": \"Inglés\", \"nivel\": \"B2\" }],\n    \"requisitos_experiencia\": [{ \"tipo\": \"Docencia Universitaria\", \"anios\": 2 }]\n  }\n]\n```\n\n**Errores posibles:**\n- `401` — Token inválido"
               }
             },
             {
@@ -829,7 +872,8 @@
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/aspirante/ver-convocatoria/1", "host": ["{{base_url}}"], "path": ["aspirante", "ver-convocatoria", "1"] }
+                "url": { "raw": "{{base_url}}/aspirante/ver-convocatoria/1", "host": ["{{base_url}}"], "path": ["aspirante", "ver-convocatoria", "1"] },
+                "description": "Retorna el detalle completo de una convocatoria específica, incluyendo requisitos de idioma y experiencia.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `404` — Convocatoria no encontrada o no está abierta"
               }
             },
             {
@@ -838,7 +882,7 @@
                 "method": "POST",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
                 "url": { "raw": "{{base_url}}/aspirante/crear-postulacion/1", "host": ["{{base_url}}"], "path": ["aspirante", "crear-postulacion", "1"] },
-                "description": "Postula el aspirante a la convocatoria con ID 1. Valida requisitos mínimos (estudios, idiomas, experiencias).\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Postulación creada exitosamente\", \"postulacion\": { \"id\": 1, \"estado\": \"Pendiente\" } }\n```\n\n**Error 422:** No cumple requisitos de la convocatoria\n\n**Error 409:** Ya está postulado a esta convocatoria"
+                "description": "Postula el aspirante a la convocatoria con ID en la URL. Valida automáticamente que el aspirante cumpla los requisitos mínimos.\n\n**Validaciones automáticas:**\n- El aspirante debe tener al menos un estudio académico\n- El nivel de idioma debe cumplir el requisito de la convocatoria\n- Los años de experiencia deben cumplir el mínimo requerido\n- La convocatoria debe estar en estado `Abierta`\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Postulación creada exitosamente\", \"postulacion\": { \"id\": 1, \"estado\": \"Pendiente\" } }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `404` — Convocatoria no encontrada\n- `409` — Ya está postulado a esta convocatoria\n- `422` — No cumple nivel de idioma requerido\n- `422` — No cumple años de experiencia requeridos\n- `422` — La convocatoria ya está cerrada"
               }
             },
             {
@@ -846,7 +890,8 @@
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/aspirante/ver-postulaciones", "host": ["{{base_url}}"], "path": ["aspirante", "ver-postulaciones"] }
+                "url": { "raw": "{{base_url}}/aspirante/ver-postulaciones", "host": ["{{base_url}}"], "path": ["aspirante", "ver-postulaciones"] },
+                "description": "Lista todas las postulaciones activas e históricas del aspirante autenticado con su estado actual.\n\n**Respuesta 200:**\n```json\n[\n  {\n    \"id\": 1,\n    \"convocatoria\": { \"id\": 1, \"titulo\": \"Docente Ingeniería 2026-I\" },\n    \"estado\": \"Pendiente\",\n    \"created_at\": \"2026-03-05T10:00:00Z\"\n  }\n]\n```\n\n**Errores posibles:**\n- `401` — Token inválido"
               }
             },
             {
@@ -854,20 +899,23 @@
               "request": {
                 "method": "DELETE",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/aspirante/eliminar-postulacion/1", "host": ["{{base_url}}"], "path": ["aspirante", "eliminar-postulacion", "1"] }
+                "url": { "raw": "{{base_url}}/aspirante/eliminar-postulacion/1", "host": ["{{base_url}}"], "path": ["aspirante", "eliminar-postulacion", "1"] },
+                "description": "Elimina la postulación del aspirante. Solo disponible mientras la postulación esté en estado `Pendiente`.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Postulación eliminada exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — La postulación pertenece a otro usuario\n- `404` — Postulación no encontrada\n- `422` — La postulación ya fue procesada (estado Aprobado o Rechazado)"
               }
             }
           ]
         },
         {
           "name": "Normativas",
+          "description": "Normativas institucionales vigentes sobre vinculación y cualificación docente. Son de solo lectura para el aspirante; la creación la maneja el Administrador.",
           "item": [
             {
               "name": "Listar normativas",
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/aspirante/obtener-normativas", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-normativas"] }
+                "url": { "raw": "{{base_url}}/aspirante/obtener-normativas", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-normativas"] },
+                "description": "Lista todas las normativas institucionales vigentes sobre vinculación y cualificación docente.\n\n**Respuesta 200:**\n```json\n[\n  {\n    \"id\": 1,\n    \"titulo\": \"Resolución 001 de 2026\",\n    \"descripcion\": \"Normativa de vinculación docente\",\n    \"created_at\": \"2026-01-10T08:00:00Z\"\n  }\n]\n```\n\n**Errores posibles:**\n- `401` — Token inválido"
               }
             },
             {
@@ -875,7 +923,8 @@
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/aspirante/obtener-normativa/1", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-normativa", "1"] }
+                "url": { "raw": "{{base_url}}/aspirante/obtener-normativa/1", "host": ["{{base_url}}"], "path": ["aspirante", "obtener-normativa", "1"] },
+                "description": "Retorna el detalle de una normativa específica por su ID.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `404` — Normativa no encontrada"
               }
             }
           ]
@@ -884,8 +933,8 @@
     },
 
     {
-      "name": "🎓 Docente",
-      "description": "Endpoints exclusivos para el rol Docente. Incluye toda la gestión de HV del Aspirante más los endpoints propios.",
+      "name": "Docente",
+      "description": "Endpoints exclusivos para el rol Docente. Incluye toda la gestión de HV del Aspirante más los endpoints propios de seguimiento docente.\n\n**Error global 403** (aplica a todos los endpoints de esta carpeta):\n```json\n{ \"message\": \"No tienes permisos para realizar esta acción\" }\n```\nOcurre si el token no pertenece a un usuario con rol Docente.",
       "item": [
         {
           "name": "Ver contratación",
@@ -893,7 +942,7 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": { "raw": "{{base_url}}/docente/ver-contratacion", "host": ["{{base_url}}"], "path": ["docente", "ver-contratacion"] },
-            "description": "Retorna la información de contratación del docente autenticado.\n\n**Respuesta 200:**\n```json\n{\n  \"id\": 5,\n  \"convocatoria\": { \"id\": 3, \"titulo\": \"...\" },\n  \"fecha_inicio\": \"2026-02-01\",\n  \"fecha_fin\": \"2026-12-31\",\n  \"tipo_contrato\": \"Prestación de Servicios\",\n  \"estado\": \"Activo\"\n}\n```"
+            "description": "Retorna la información de contratación activa del docente autenticado.\n\n**Respuesta 200:**\n```json\n{\n  \"id\": 5,\n  \"convocatoria\": { \"id\": 3, \"titulo\": \"Docente Ingeniería 2026-I\" },\n  \"fecha_inicio\": \"2026-02-01\",\n  \"fecha_fin\": \"2026-12-31\",\n  \"tipo_contrato\": \"Prestación de Servicios\",\n  \"salario\": 4500000,\n  \"estado\": \"Activo\"\n}\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — El usuario no tiene rol Docente\n- `404` — No existe contratación para este docente"
           }
         },
         {
@@ -907,7 +956,7 @@
               "raw": "{\n  \"calificacion_docencia\": 85,\n  \"calificacion_investigacion\": 70,\n  \"calificacion_extension\": 60,\n  \"observaciones\": \"Actividades realizadas durante el semestre\"\n}",
               "options": { "raw": { "language": "json" } }
             },
-            "description": "Crea la evaluación docente inicial (estado Pendiente, una por docente).\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Evaluación creada\", \"evaluacion\": { \"id\": 1, \"estado\": \"Pendiente\" } }\n```"
+            "description": "Crea la evaluación docente inicial. Solo puede existir una evaluación activa por docente.\n\n**Content-Type:** `application/json`\n\n**Campos opcionales:** `calificacion_docencia`, `calificacion_investigacion`, `calificacion_extension`, `observaciones`\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Evaluación creada\", \"evaluacion\": { \"id\": 1, \"estado\": \"Pendiente\" } }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — El usuario no tiene rol Docente\n- `409` — Ya existe una evaluación activa para este docente"
           }
         },
         {
@@ -915,7 +964,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/docente/ver-evaluaciones", "host": ["{{base_url}}"], "path": ["docente", "ver-evaluaciones"] }
+            "url": { "raw": "{{base_url}}/docente/ver-evaluaciones", "host": ["{{base_url}}"], "path": ["docente", "ver-evaluaciones"] },
+            "description": "Lista todas las evaluaciones docentes del usuario autenticado con su estado y calificaciones.\n\n**Respuesta 200:**\n```json\n[\n  {\n    \"id\": 1,\n    \"calificacion_docencia\": 85,\n    \"calificacion_investigacion\": 70,\n    \"calificacion_extension\": 60,\n    \"estado\": \"Pendiente\",\n    \"observaciones\": \"...\"\n  }\n]\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Docente"
           }
         },
         {
@@ -928,7 +978,8 @@
               "mode": "raw",
               "raw": "{\n  \"calificacion_docencia\": 90,\n  \"calificacion_investigacion\": 75,\n  \"calificacion_extension\": 65,\n  \"observaciones\": \"Actualización de calificaciones\"\n}",
               "options": { "raw": { "language": "json" } }
-            }
+            },
+            "description": "Actualiza las calificaciones de la evaluación docente. Solo modificable mientras el estado sea `Pendiente`.\n\n**Content-Type:** `application/json`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Evaluación actualizada exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Docente\n- `404` — Evaluación no encontrada\n- `422` — La evaluación ya está en estado Aprobado o Rechazado (no se puede modificar)"
           }
         },
         {
@@ -937,25 +988,27 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": { "raw": "{{base_url}}/docente/evaluar-puntaje", "host": ["{{base_url}}"], "path": ["docente", "evaluar-puntaje"] },
-            "description": "Calcula y guarda el puntaje total del docente (estudios + idiomas + experiencia + producción + evaluación).\n\n**Respuesta 200:**\n```json\n{ \"puntaje_total\": 87.5, \"desglose\": { \"estudios\": 30, \"idiomas\": 15, \"experiencia\": 20, \"produccion\": 12.5, \"evaluacion\": 10 } }\n```"
+            "description": "Calcula y guarda el puntaje total del docente sumando ponderaciones de estudios, idiomas, experiencia, producción académica y evaluación docente.\n\n**Respuesta 200:**\n```json\n{\n  \"puntaje_total\": 87.5,\n  \"desglose\": {\n    \"estudios\": 30,\n    \"idiomas\": 15,\n    \"experiencia\": 20,\n    \"produccion\": 12.5,\n    \"evaluacion\": 10\n  }\n}\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Docente\n- `422` — El docente no tiene evaluación creada (crearla primero)"
           }
         }
       ]
     },
 
     {
-      "name": "🏢 Talento Humano",
-      "description": "Gestión de convocatorias, postulaciones, avales y contrataciones. Requiere rol Talento Humano.",
+      "name": "Talento Humano",
+      "description": "Gestión de convocatorias, postulaciones, avales y contrataciones. Requiere rol Talento Humano.\n\n**Error global 403:**\n```json\n{ \"message\": \"No tienes permisos para realizar esta acción\" }\n```\nOcurre si el token no pertenece a un usuario con rol `Talento Humano`.",
       "item": [
         {
           "name": "Convocatorias",
+          "description": "Creación y administración de convocatorias docentes. Permite adjuntar PDF oficial de la convocatoria. Los campos `requisitos_idioma` y `requisitos_experiencia` son JSON strings serializados.",
           "item": [
             {
               "name": "Listar convocatorias",
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/talentoHumano/obtener-convocatorias", "host": ["{{base_url}}"], "path": ["talentoHumano", "obtener-convocatorias"] }
+                "url": { "raw": "{{base_url}}/talentoHumano/obtener-convocatorias", "host": ["{{base_url}}"], "path": ["talentoHumano", "obtener-convocatorias"] },
+                "description": "Lista todas las convocatorias registradas con su estado, requisitos y número de postulantes.\n\n**Respuesta 200:**\n```json\n[\n  {\n    \"id\": 1,\n    \"titulo\": \"Docente Ingeniería 2026-I\",\n    \"estado\": \"Abierta\",\n    \"fecha_inicio\": \"2026-03-01\",\n    \"fecha_fin\": \"2026-04-30\",\n    \"total_postulantes\": 5\n  }\n]\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Talento Humano"
               }
             },
             {
@@ -963,7 +1016,8 @@
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/talentoHumano/obtener-convocatoria/1", "host": ["{{base_url}}"], "path": ["talentoHumano", "obtener-convocatoria", "1"] }
+                "url": { "raw": "{{base_url}}/talentoHumano/obtener-convocatoria/1", "host": ["{{base_url}}"], "path": ["talentoHumano", "obtener-convocatoria", "1"] },
+                "description": "Retorna el detalle completo de una convocatoria, incluyendo requisitos de idioma, experiencia y lista de postulantes.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Talento Humano\n- `404` — Convocatoria no encontrada"
               }
             },
             {
@@ -971,7 +1025,8 @@
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/talentoHumano/obtener-tipos-cargos", "host": ["{{base_url}}"], "path": ["talentoHumano", "obtener-tipos-cargos"] }
+                "url": { "raw": "{{base_url}}/talentoHumano/obtener-tipos-cargos", "host": ["{{base_url}}"], "path": ["talentoHumano", "obtener-tipos-cargos"] },
+                "description": "Retorna el catálogo de tipos de cargo disponibles para la creación de convocatorias.\n\n**Respuesta 200:**\n```json\n[\n  { \"id\": 1, \"nombre\": \"Docente de Cátedra\" },\n  { \"id\": 2, \"nombre\": \"Docente de Planta\" }\n]\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Talento Humano"
               }
             },
             {
@@ -993,7 +1048,7 @@
                     { "key": "archivo_convocatoria", "type": "file", "src": "", "description": "PDF oficial de la convocatoria" }
                   ]
                 },
-                "description": "Crea una nueva convocatoria docente.\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Convocatoria creada\", \"convocatoria\": { \"id\": 1, \"titulo\": \"...\", \"estado\": \"Abierta\" } }\n```"
+                "description": "Crea una nueva convocatoria docente.\n\n**Content-Type:** `multipart/form-data`\n\n**Campos obligatorios:** `titulo`, `descripcion`, `tipo_cargo_id`, `fecha_inicio`, `fecha_fin`\n**Campos opcionales:** `requisitos_idioma` (JSON string), `requisitos_experiencia` (JSON string), `archivo_convocatoria` (PDF)\n\n**Formato `requisitos_idioma`:** `[{\"idioma\":\"Inglés\",\"nivel\":\"B2\"}]`\n**Formato `requisitos_experiencia`:** `[{\"tipo\":\"Docencia Universitaria\",\"anios\":2}]`\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Convocatoria creada\", \"convocatoria\": { \"id\": 1, \"titulo\": \"...\", \"estado\": \"Abierta\" } }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Talento Humano\n- `422` — `tipo_cargo_id` no existe\n- `422` — `fecha_fin` es anterior a `fecha_inicio`\n- `422` — Formato JSON inválido en `requisitos_idioma` o `requisitos_experiencia`"
               }
             },
             {
@@ -1008,7 +1063,8 @@
                     { "key": "titulo", "value": "Docente Ingeniería 2026-I (Actualizada)", "type": "text" },
                     { "key": "fecha_fin", "value": "2026-05-31", "type": "text" }
                   ]
-                }
+                },
+                "description": "Actualiza los datos de una convocatoria existente. Solo posible si no tiene postulaciones en estado `Aprobado`.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Convocatoria actualizada exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Talento Humano\n- `404` — Convocatoria no encontrada\n- `422` — La convocatoria tiene postulaciones aprobadas y no puede modificarse"
               }
             },
             {
@@ -1016,7 +1072,8 @@
               "request": {
                 "method": "DELETE",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/talentoHumano/eliminar-convocatoria/1", "host": ["{{base_url}}"], "path": ["talentoHumano", "eliminar-convocatoria", "1"] }
+                "url": { "raw": "{{base_url}}/talentoHumano/eliminar-convocatoria/1", "host": ["{{base_url}}"], "path": ["talentoHumano", "eliminar-convocatoria", "1"] },
+                "description": "Elimina una convocatoria del sistema. Solo posible si no tiene postulaciones asociadas.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Convocatoria eliminada exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Talento Humano\n- `404` — Convocatoria no encontrada\n- `422` — La convocatoria tiene postulaciones y no puede eliminarse"
               }
             },
             {
@@ -1025,20 +1082,22 @@
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
                 "url": { "raw": "{{base_url}}/talentoHumano/exportar-convocatorias-excel", "host": ["{{base_url}}"], "path": ["talentoHumano", "exportar-convocatorias-excel"] },
-                "description": "Descarga un archivo Excel con todas las convocatorias."
+                "description": "Descarga un archivo Excel (.xlsx) con la lista completa de convocatorias, fechas, estados y número de postulantes.\n\n**Respuesta 200:** Archivo binario Excel (Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet)\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Talento Humano"
               }
             }
           ]
         },
         {
           "name": "Postulaciones",
+          "description": "Administración de postulaciones: revisión de candidatos, cambio de estado y generación de hojas de vida en PDF. Los estados válidos son: `Pendiente`, `Aprobado`, `Rechazado`.",
           "item": [
             {
               "name": "Listar todas las postulaciones",
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/talentoHumano/obtener-postulaciones", "host": ["{{base_url}}"], "path": ["talentoHumano", "obtener-postulaciones"] }
+                "url": { "raw": "{{base_url}}/talentoHumano/obtener-postulaciones", "host": ["{{base_url}}"], "path": ["talentoHumano", "obtener-postulaciones"] },
+                "description": "Lista todas las postulaciones de todos los aspirantes en todas las convocatorias con estado actual.\n\n**Respuesta 200:**\n```json\n[\n  {\n    \"id\": 1,\n    \"usuario\": { \"id\": 5, \"nombre\": \"Juan Pérez\" },\n    \"convocatoria\": { \"id\": 1, \"titulo\": \"...\" },\n    \"estado\": \"Pendiente\",\n    \"created_at\": \"2026-03-05T10:00:00Z\"\n  }\n]\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Talento Humano"
               }
             },
             {
@@ -1051,7 +1110,8 @@
                   "mode": "raw",
                   "raw": "{ \"estado\": \"Aprobado\", \"observaciones\": \"Cumple todos los requisitos\" }",
                   "options": { "raw": { "language": "json" } }
-                }
+                },
+                "description": "Actualiza el estado de una postulación. Estados válidos: `Pendiente`, `Aprobado`, `Rechazado`.\n\n**Content-Type:** `application/json`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Postulación actualizada exitosamente\", \"estado\": \"Aprobado\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Talento Humano\n- `404` — Postulación no encontrada\n- `422` — Estado inválido"
               }
             },
             {
@@ -1059,7 +1119,8 @@
               "request": {
                 "method": "DELETE",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/talentoHumano/eliminar-postulacion/1", "host": ["{{base_url}}"], "path": ["talentoHumano", "eliminar-postulacion", "1"] }
+                "url": { "raw": "{{base_url}}/talentoHumano/eliminar-postulacion/1", "host": ["{{base_url}}"], "path": ["talentoHumano", "eliminar-postulacion", "1"] },
+                "description": "Elimina permanentemente una postulación. Esta acción no puede deshacerse.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Postulación eliminada exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Talento Humano\n- `404` — Postulación no encontrada"
               }
             },
             {
@@ -1068,20 +1129,22 @@
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
                 "url": { "raw": "{{base_url}}/talentoHumano/hoja-de-vida-pdf/1/2", "host": ["{{base_url}}"], "path": ["talentoHumano", "hoja-de-vida-pdf", "1", "2"] },
-                "description": "Genera y descarga el PDF de la hoja de vida del postulante. Params: convocatoriaId / usuarioId"
+                "description": "Genera y descarga el PDF de la hoja de vida del postulante. Parámetros de ruta: `{convocatoriaId}/{usuarioId}`\n\n**Respuesta 200:** Archivo binario PDF (Content-Type: application/pdf)\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Talento Humano\n- `404` — Postulante o convocatoria no encontrada"
               }
             }
           ]
         },
         {
           "name": "Contrataciones",
+          "description": "Gestión de contratos docentes. Al crear una contratación, el aspirante obtiene automáticamente el rol Docente y sus documentos pasan a estado `Aprobado`.",
           "item": [
             {
               "name": "Listar contrataciones",
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/talentoHumano/obtener-contrataciones", "host": ["{{base_url}}"], "path": ["talentoHumano", "obtener-contrataciones"] }
+                "url": { "raw": "{{base_url}}/talentoHumano/obtener-contrataciones", "host": ["{{base_url}}"], "path": ["talentoHumano", "obtener-contrataciones"] },
+                "description": "Lista todas las contrataciones activas e históricas con datos del docente y la convocatoria asociada.\n\n**Respuesta 200:**\n```json\n[\n  {\n    \"id\": 5,\n    \"usuario\": { \"id\": 12, \"nombre\": \"María Pérez\" },\n    \"convocatoria\": { \"id\": 3, \"titulo\": \"...\" },\n    \"fecha_inicio\": \"2026-02-01\",\n    \"tipo_contrato\": \"Prestación de Servicios\",\n    \"estado\": \"Activo\"\n  }\n]\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Talento Humano"
               }
             },
             {
@@ -1089,7 +1152,8 @@
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/talentoHumano/obtener-contratacion/1", "host": ["{{base_url}}"], "path": ["talentoHumano", "obtener-contratacion", "1"] }
+                "url": { "raw": "{{base_url}}/talentoHumano/obtener-contratacion/1", "host": ["{{base_url}}"], "path": ["talentoHumano", "obtener-contratacion", "1"] },
+                "description": "Retorna el detalle completo de una contratación específica por su ID.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Talento Humano\n- `404` — Contratación no encontrada"
               }
             },
             {
@@ -1103,7 +1167,7 @@
                   "raw": "{\n  \"convocatoria_id\": 3,\n  \"fecha_inicio\": \"2026-02-01\",\n  \"fecha_fin\": \"2026-12-31\",\n  \"tipo_contrato\": \"Prestación de Servicios\",\n  \"salario\": 4500000,\n  \"observaciones\": \"Contrato semestral\"\n}",
                   "options": { "raw": { "language": "json" } }
                 },
-                "description": "Contrata el aspirante con ID 12. Verifica que tenga todos los avales.\nCambia el rol del usuario a Docente y aprueba sus documentos.\n\n**Respuesta 201:**\n```json\n{\n  \"message\": \"Contratación creada exitosamente. El usuario ha sido vinculado como Docente.\",\n  \"contratacion\": { \"id\": 5, \"user_id\": 12, \"estado\": \"Activo\" }\n}\n```\n\n**Error 422:** El aspirante no tiene todos los avales requeridos"
+                "description": "Contrata al aspirante con ID en la URL. Realiza estas acciones automáticamente:\n1. Crea el registro de contratación\n2. Cambia el rol del usuario a `Docente`\n3. Marca todos sus documentos como `Aprobado`\n\n**Content-Type:** `application/json`\n\n**Campos obligatorios:** `convocatoria_id`, `fecha_inicio`, `fecha_fin`, `tipo_contrato`, `salario`\n\n**Respuesta 201:**\n```json\n{\n  \"message\": \"Contratación creada exitosamente. El usuario ha sido vinculado como Docente.\",\n  \"contratacion\": { \"id\": 5, \"user_id\": 12, \"estado\": \"Activo\" }\n}\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Talento Humano\n- `404` — Usuario o convocatoria no encontrada\n- `422` — El aspirante no tiene todos los avales requeridos (TH, Coordinador, Vicerrectoría, Rectoría)\n- `422` — El usuario ya tiene una contratación activa"
               }
             },
             {
@@ -1125,13 +1189,14 @@
                 "method": "DELETE",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
                 "url": { "raw": "{{base_url}}/talentoHumano/eliminar-contratacion/1", "host": ["{{base_url}}"], "path": ["talentoHumano", "eliminar-contratacion", "1"] },
-                "description": "Elimina la contratación y revierte el rol del usuario a Aspirante."
+                "description": "Elimina la contratación y revierte el rol del usuario a `Aspirante`. Los documentos del ex-docente volverán a estado `Pendiente`.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Contratación eliminada. El usuario ha vuelto al rol Aspirante.\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Talento Humano\n- `404` — Contratación no encontrada"
               }
             }
           ]
         },
         {
           "name": "Avales",
+          "description": "Control de avales multi-instancia (Talento Humano → Coordinador → Vicerrectoría → Rectoría). Cada instancia solo puede aprobar su propio aval y en el orden establecido.",
           "item": [
             {
               "name": "Listar avales",
@@ -1146,7 +1211,8 @@
                     { "key": "convocatoria_id", "value": "1", "description": "Opcional: filtrar por convocatoria" },
                     { "key": "user_id", "value": "5", "description": "Opcional: filtrar por usuario" }
                   ]
-                }
+                },
+                "description": "Lista los avales del proceso. Acepta parámetros opcionales para filtrar por convocatoria (`convocatoria_id`) y/o usuario (`user_id`).\n\n**Respuesta 200:**\n```json\n[\n  {\n    \"id\": 1,\n    \"user_id\": 5,\n    \"convocatoria_id\": 1,\n    \"aval\": \"Talento Humano\",\n    \"estado\": \"Aprobado\",\n    \"observaciones\": \"Documentos verificados\"\n  }\n]\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Talento Humano"
               }
             },
             {
@@ -1159,7 +1225,8 @@
                   "mode": "raw",
                   "raw": "{\n  \"user_id\": 5,\n  \"convocatoria_id\": 1,\n  \"aval\": \"Talento Humano\"\n}",
                   "options": { "raw": { "language": "json" } }
-                }
+                },
+                "description": "Crea o actualiza el registro de aval de un aspirante en una convocatoria.\n\n**Content-Type:** `application/json`\n\n**Campos obligatorios:** `user_id`, `convocatoria_id`, `aval`\n\n**Valores válidos para `aval`:** `Talento Humano`, `Coordinador`, `Vicerrectoria`, `Rectoria`\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Aval creado/actualizado exitosamente\", \"aval\": { \"id\": 1, \"estado\": \"Pendiente\" } }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Talento Humano\n- `404` — `user_id` o `convocatoria_id` no encontrados\n- `422` — Valor inválido en campo `aval`"
               }
             },
             {
@@ -1173,20 +1240,22 @@
                   "raw": "{ \"estado\": \"Aprobado\", \"observaciones\": \"Documentos completos y verificados\" }",
                   "options": { "raw": { "language": "json" } }
                 },
-                "description": "Solo el rol que corresponde al campo `aval` del registro puede actualizar este estado."
+                "description": "Aprueba o rechaza el aval. Solo puede actualizarlo el rol que corresponde al campo `aval` del registro.\n\n**Content-Type:** `application/json`\n\n**Campos obligatorios:** `estado` (Aprobado | Rechazado)\n**Campos opcionales:** `observaciones`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Aval actualizado exitosamente\", \"estado\": \"Aprobado\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — El rol del usuario no coincide con el tipo de aval\n- `404` — Aval no encontrado\n- `422` — Estado inválido (solo `Aprobado` o `Rechazado`)\n- `422` — No se cumplen los avales previos requeridos"
               }
             }
           ]
         },
         {
           "name": "Experiencias Requeridas",
+          "description": "Catálogo de tipos de experiencia mínima exigidos para participar en las convocatorias. Usado para validar las postulaciones de aspirantes.",
           "item": [
             {
               "name": "Listar experiencias requeridas",
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": { "raw": "{{base_url}}/talentoHumano/experiencias-requeridas", "host": ["{{base_url}}"], "path": ["talentoHumano", "experiencias-requeridas"] }
+                "url": { "raw": "{{base_url}}/talentoHumano/experiencias-requeridas", "host": ["{{base_url}}"], "path": ["talentoHumano", "experiencias-requeridas"] },
+                "description": "Lista los tipos de experiencia mínima requeridos en las convocatorias docentes.\n\n**Respuesta 200:**\n```json\n[\n  { \"id\": 1, \"tipo_experiencia\": \"Docencia Universitaria\", \"anios_minimos\": 2 },\n  { \"id\": 2, \"tipo_experiencia\": \"Investigación\", \"anios_minimos\": 1 }\n]\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Talento Humano"
               }
             },
             {
@@ -1199,7 +1268,8 @@
                   "mode": "raw",
                   "raw": "{ \"tipo_experiencia\": \"Docencia Universitaria\", \"anios_minimos\": 2 }",
                   "options": { "raw": { "language": "json" } }
-                }
+                },
+                "description": "Agrega un tipo de experiencia requerida al catálogo del sistema para uso en futuras convocatorias.\n\n**Content-Type:** `application/json`\n\n**Campos obligatorios:** `tipo_experiencia`, `anios_minimos`\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Experiencia requerida creada\", \"experiencia\": { \"id\": 3, \"tipo_experiencia\": \"...\", \"anios_minimos\": 2 } }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Talento Humano\n- `422` — `tipo_experiencia` vacío\n- `422` — `anios_minimos` no es número entero positivo\n- `409` — Ya existe ese tipo de experiencia en el catálogo"
               }
             }
           ]
@@ -1208,15 +1278,16 @@
     },
 
     {
-      "name": "⚙️ Administrador",
-      "description": "Gestión de usuarios, roles y normativas. Requiere rol Administrador.",
+      "name": "Administrador",
+      "description": "Gestión de usuarios, roles y normativas. Requiere rol Administrador.\n\n**Error global 403:**\n```json\n{ \"message\": \"No tienes permisos para realizar esta acción\" }\n```\nOcurre si el token no pertenece a un usuario con rol `Administrador`.",
       "item": [
         {
           "name": "Listar usuarios",
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/admin/listar-usuarios", "host": ["{{base_url}}"], "path": ["admin", "listar-usuarios"] }
+            "url": { "raw": "{{base_url}}/admin/listar-usuarios", "host": ["{{base_url}}"], "path": ["admin", "listar-usuarios"] },
+            "description": "Lista todos los usuarios registrados en el sistema con sus datos básicos y roles asignados.\n\n**Respuesta 200:**\n```json\n[\n  {\n    \"id\": 1,\n    \"nombre\": \"Juan\",\n    \"apellido\": \"Pérez\",\n    \"correo\": \"juan@example.com\",\n    \"tipo_documento\": \"CC\",\n    \"numero_documento\": \"1234567890\",\n    \"roles\": [\"Aspirante\"]\n  }\n]\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador"
           }
         },
         {
@@ -1229,7 +1300,8 @@
               "mode": "raw",
               "raw": "{ \"nombre\": \"María\", \"apellido\": \"García\", \"correo\": \"maria@example.com\" }",
               "options": { "raw": { "language": "json" } }
-            }
+            },
+            "description": "Actualiza los datos básicos del usuario (nombre, apellido, correo).\n\n**Content-Type:** `application/json`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Usuario actualizado exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `404` — Usuario no encontrado\n- `422` — Correo ya en uso por otro usuario"
           }
         },
         {
@@ -1237,7 +1309,8 @@
           "request": {
             "method": "DELETE",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/admin/eliminar-usuario/5", "host": ["{{base_url}}"], "path": ["admin", "eliminar-usuario", "5"] }
+            "url": { "raw": "{{base_url}}/admin/eliminar-usuario/5", "host": ["{{base_url}}"], "path": ["admin", "eliminar-usuario", "5"] },
+            "description": "Elimina permanentemente un usuario del sistema. Esta acción no puede deshacerse y eliminará también todos sus documentos asociados.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Usuario eliminado exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `404` — Usuario no encontrado\n- `422` — No se puede eliminar un usuario con contratación activa"
           }
         },
         {
@@ -1250,7 +1323,8 @@
               "mode": "raw",
               "raw": "{ \"rol\": \"Coordinador\" }",
               "options": { "raw": { "language": "json" } }
-            }
+            },
+            "description": "Reemplaza el rol actual del usuario por el nuevo rol especificado.\n\n**Content-Type:** `application/json`\n\n**Roles disponibles:** `Aspirante`, `Docente`, `Coordinador`, `Administrador`, `Talento Humano`, `Rectoria`, `Vicerrectoria`, `Apoyo Profesoral`, `Evaluador Produccion`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Rol actualizado exitosamente\", \"usuario\": { \"id\": 5, \"roles\": [\"Coordinador\"] } }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `404` — Usuario no encontrado\n- `422` — Nombre de rol inválido"
           }
         },
         {
@@ -1258,7 +1332,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/admin/usuarios/exportar-excel", "host": ["{{base_url}}"], "path": ["admin", "usuarios", "exportar-excel"] }
+            "url": { "raw": "{{base_url}}/admin/usuarios/exportar-excel", "host": ["{{base_url}}"], "path": ["admin", "usuarios", "exportar-excel"] },
+            "description": "Descarga un archivo Excel (.xlsx) con la lista completa de usuarios, sus datos personales y roles asignados.\n\n**Respuesta 200:** Archivo binario Excel\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador"
           }
         },
         {
@@ -1266,7 +1341,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/admin/listar-roles", "host": ["{{base_url}}"], "path": ["admin", "listar-roles"] }
+            "url": { "raw": "{{base_url}}/admin/listar-roles", "host": ["{{base_url}}"], "path": ["admin", "listar-roles"] },
+            "description": "Lista todos los roles disponibles en el sistema.\n\n**Respuesta 200:**\n```json\n[\n  { \"id\": 1, \"name\": \"Aspirante\" },\n  { \"id\": 2, \"name\": \"Docente\" }\n]\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador"
           }
         },
         {
@@ -1279,7 +1355,8 @@
               "mode": "raw",
               "raw": "{ \"nombre\": \"Nuevo Rol\" }",
               "options": { "raw": { "language": "json" } }
-            }
+            },
+            "description": "Crea un nuevo rol en el sistema.\n\n**Content-Type:** `application/json`\n\n**Campos obligatorios:** `nombre`\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Rol creado exitosamente\", \"rol\": { \"id\": 9, \"nombre\": \"Nuevo Rol\" } }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `409` — Ya existe un rol con ese nombre\n- `422` — `nombre` vacío"
           }
         },
         {
@@ -1292,7 +1369,8 @@
               "mode": "raw",
               "raw": "{ \"user_id\": 5, \"rol\": \"Coordinador\" }",
               "options": { "raw": { "language": "json" } }
-            }
+            },
+            "description": "Asigna un rol adicional a un usuario sin eliminar sus roles existentes. Útil para usuarios con múltiples roles.\n\n**Content-Type:** `application/json`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Rol asignado exitosamente\", \"roles\": [\"Aspirante\", \"Coordinador\"] }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `404` — Usuario no encontrado\n- `409` — El usuario ya tiene ese rol asignado\n- `422` — Nombre de rol inválido"
           }
         },
         {
@@ -1305,7 +1383,8 @@
               "mode": "raw",
               "raw": "{\n  \"titulo\": \"Resolución 001 de 2026\",\n  \"descripcion\": \"Normativa de vinculación docente\",\n  \"contenido\": \"Texto completo de la normativa...\"\n}",
               "options": { "raw": { "language": "json" } }
-            }
+            },
+            "description": "Crea una nueva normativa institucional visible para todos los roles del sistema.\n\n**Content-Type:** `application/json`\n\n**Campos obligatorios:** `titulo`, `descripcion`, `contenido`\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Normativa creada exitosamente\", \"normativa\": { \"id\": 1, \"titulo\": \"Resolución 001...\" } }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `422` — `titulo` o `contenido` vacíos"
           }
         },
         {
@@ -1313,7 +1392,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/admin/obtener-normativas", "host": ["{{base_url}}"], "path": ["admin", "obtener-normativas"] }
+            "url": { "raw": "{{base_url}}/admin/obtener-normativas", "host": ["{{base_url}}"], "path": ["admin", "obtener-normativas"] },
+            "description": "Lista todas las normativas institucionales registradas en el sistema.\n\n**Respuesta 200:**\n```json\n[\n  {\n    \"id\": 1,\n    \"titulo\": \"Resolución 001 de 2026\",\n    \"descripcion\": \"Normativa de vinculación docente\",\n    \"created_at\": \"2026-01-10\"\n  }\n]\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador"
           }
         },
         {
@@ -1321,7 +1401,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/admin/aspirantes", "host": ["{{base_url}}"], "path": ["admin", "aspirantes"] }
+            "url": { "raw": "{{base_url}}/admin/aspirantes", "host": ["{{base_url}}"], "path": ["admin", "aspirantes"] },
+            "description": "Lista todos los aspirantes registrados con el resumen de su hoja de vida. Accesible también por Talento Humano, Vicerrectoría y Rectoría.\n\n**Respuesta 200:**\n```json\n[\n  {\n    \"id\": 5,\n    \"nombre\": \"María García\",\n    \"correo\": \"maria@example.com\",\n    \"total_estudios\": 2,\n    \"total_idiomas\": 1,\n    \"total_experiencias\": 3,\n    \"estado_documentos\": \"Pendiente\"\n  }\n]\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol autorizado"
           }
         },
         {
@@ -1329,7 +1410,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/admin/aspirantes/estadisticas", "host": ["{{base_url}}"], "path": ["admin", "aspirantes", "estadisticas"] }
+            "url": { "raw": "{{base_url}}/admin/aspirantes/estadisticas", "host": ["{{base_url}}"], "path": ["admin", "aspirantes", "estadisticas"] },
+            "description": "Retorna estadísticas generales del sistema.\n\n**Respuesta 200:**\n```json\n{\n  \"total_aspirantes\": 45,\n  \"total_postulados\": 30,\n  \"total_docentes\": 12,\n  \"pendientes_aval\": 8,\n  \"rechazados\": 5\n}\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador"
           }
         },
         {
@@ -1342,22 +1424,24 @@
               "mode": "raw",
               "raw": "{ \"observaciones\": \"Aspirante aprobado\" }",
               "options": { "raw": { "language": "json" } }
-            }
+            },
+            "description": "Otorga el aval administrativo al aspirante identificado por su ID.\n\n**Content-Type:** `application/json`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Aval otorgado exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `404` — Aspirante no encontrado\n- `422` — El aspirante ya tiene aval otorgado"
           }
         }
       ]
     },
 
     {
-      "name": "📋 Coordinador",
-      "description": "Evaluaciones del proceso de aprobación. Requiere rol Coordinador.",
+      "name": "Coordinador",
+      "description": "Evaluaciones del proceso de aprobación. Requiere rol Coordinador.\n\n**Error global 403:**\n```json\n{ \"message\": \"No tienes permisos para realizar esta acción\" }\n```\nOcurre si el token no pertenece a un usuario con rol `Coordinador`.",
       "item": [
         {
           "name": "Listar evaluaciones",
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/coordinador/evaluaciones", "host": ["{{base_url}}"], "path": ["coordinador", "evaluaciones"] }
+            "url": { "raw": "{{base_url}}/coordinador/evaluaciones", "host": ["{{base_url}}"], "path": ["coordinador", "evaluaciones"] },
+            "description": "Lista todas las evaluaciones del proceso de aprobación gestionadas por el Coordinador.\n\n**Respuesta 200:**\n```json\n[\n  {\n    \"id\": 1,\n    \"usuario\": { \"id\": 5, \"nombre\": \"Juan Pérez\" },\n    \"resultado_psicotecnico\": \"Aprobado\",\n    \"resultado_clase\": \"Sobresaliente\",\n    \"aprobado\": true\n  }\n]\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Coordinador"
           }
         },
         {
@@ -1371,7 +1455,7 @@
               "raw": "{\n  \"user_id\": 5,\n  \"convocatoria_id\": 1,\n  \"resultado_psicotecnico\": \"Aprobado\",\n  \"resultado_clase\": \"Sobresaliente\",\n  \"resultado_validacion\": \"Documentos completos\",\n  \"aprobado\": true,\n  \"observaciones\": \"Candidato idóneo para la plaza\"\n}",
               "options": { "raw": { "language": "json" } }
             },
-            "description": "Crea la evaluación del proceso de aprobación para un aspirante.\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Evaluación creada\", \"evaluacion\": { \"id\": 1, \"aprobado\": true } }\n```"
+            "description": "Crea la evaluación del proceso de aprobación para un aspirante.\n\n**Content-Type:** `application/json`\n\n**Campos obligatorios:** `user_id`, `convocatoria_id`, `aprobado` (boolean)\n**Campos opcionales:** `resultado_psicotecnico`, `resultado_clase`, `resultado_validacion`, `observaciones`\n\n**Respuesta 201:**\n```json\n{ \"message\": \"Evaluación creada\", \"evaluacion\": { \"id\": 1, \"aprobado\": true } }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Coordinador\n- `404` — Usuario o convocatoria no encontrada\n- `409` — Ya existe una evaluación para este usuario en esta convocatoria\n- `422` — El aspirante no tiene aval de Talento Humano previo"
           }
         },
         {
@@ -1379,7 +1463,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/coordinador/evaluaciones/5", "host": ["{{base_url}}"], "path": ["coordinador", "evaluaciones", "5"] }
+            "url": { "raw": "{{base_url}}/coordinador/evaluaciones/5", "host": ["{{base_url}}"], "path": ["coordinador", "evaluaciones", "5"] },
+            "description": "Retorna la evaluación del proceso de aprobación de un usuario específico.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Coordinador\n- `404` — Evaluación no encontrada para ese usuario"
           }
         },
         {
@@ -1387,7 +1472,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/coordinador/aspirantes", "host": ["{{base_url}}"], "path": ["coordinador", "aspirantes"] }
+            "url": { "raw": "{{base_url}}/coordinador/aspirantes", "host": ["{{base_url}}"], "path": ["coordinador", "aspirantes"] },
+            "description": "Lista los aspirantes que han recibido el aval de Talento Humano y están pendientes de evaluación por el Coordinador.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Coordinador"
           }
         },
         {
@@ -1396,7 +1482,7 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": { "raw": "{{base_url}}/coordinador/obtener-documentos/Pendiente", "host": ["{{base_url}}"], "path": ["coordinador", "obtener-documentos", "Pendiente"] },
-            "description": "Estados disponibles: Pendiente, Aprobado, Rechazado"
+            "description": "Lista documentos de todos los aspirantes filtrados por estado.\n\n**Parámetro de ruta:** `{estado}` — Valores: `Pendiente`, `Aprobado`, `Rechazado`\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Coordinador\n- `422` — Estado inválido en la URL"
           }
         },
         {
@@ -1409,7 +1495,8 @@
               "mode": "raw",
               "raw": "{ \"estado\": \"Aprobado\", \"observaciones\": \"Documento verificado\" }",
               "options": { "raw": { "language": "json" } }
-            }
+            },
+            "description": "Aprueba o rechaza un documento del aspirante desde el nivel de Coordinador.\n\n**Content-Type:** `application/json`\n\n**Campos obligatorios:** `estado` (Aprobado | Rechazado)\n**Campos opcionales:** `observaciones`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Documento actualizado\", \"estado\": \"Aprobado\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Coordinador\n- `404` — Documento no encontrado\n- `422` — Estado inválido"
           }
         },
         {
@@ -1422,15 +1509,16 @@
               "mode": "raw",
               "raw": "{ \"observaciones\": \"Hoja de vida verificada y aprobada\" }",
               "options": { "raw": { "language": "json" } }
-            }
+            },
+            "description": "Otorga el aval del Coordinador a la hoja de vida del aspirante. Se requiere haber revisado todos los documentos previamente.\n\n**Content-Type:** `application/json`\n\n**Prerrequisito:** Todos los documentos del aspirante deben estar en estado `Aprobado`.\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Aval del Coordinador otorgado exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Coordinador\n- `404` — Aspirante no encontrado\n- `422` — Existen documentos pendientes de revisión\n- `422` — El aspirante no tiene aval de Talento Humano previo"
           }
         }
       ]
     },
 
     {
-      "name": "🏛️ Rectoría",
-      "description": "Avales finales y revisión de documentos. Requiere rol Rectoria.",
+      "name": "Rectoría",
+      "description": "Avales finales y revisión de documentos. Requiere rol Rectoria.\n\n**Error global 403:**\n```json\n{ \"message\": \"No tienes permisos para realizar esta acción\" }\n```\nOcurre si el token no pertenece a un usuario con rol `Rectoria`.",
       "item": [
         {
           "name": "Otorgar aval Rectoría",
@@ -1443,7 +1531,7 @@
               "raw": "{ \"observaciones\": \"Aprobado por la Rectoría\" }",
               "options": { "raw": { "language": "json" } }
             },
-            "description": "Otorga el aval de Rectoría. Requiere haber recibido previamente el aval de Vicerrectoría."
+            "description": "Otorga el aval de Rectoría. Requiere haber recibido previamente el aval de Vicerrectoría.\n\n**Content-Type:** `application/json`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Aval de Rectoría otorgado exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Rectoria\n- `404` — Aspirante no encontrado\n- `422` — El aspirante no tiene aval de Vicerrectoría previo\n- `422` — Existen documentos pendientes de revisión"
           }
         },
         {
@@ -1451,7 +1539,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/rectoria/usuarios/5/avales", "host": ["{{base_url}}"], "path": ["rectoria", "usuarios", "5", "avales"] }
+            "url": { "raw": "{{base_url}}/rectoria/usuarios/5/avales", "host": ["{{base_url}}"], "path": ["rectoria", "usuarios", "5", "avales"] },
+            "description": "Lista todos los avales del proceso para un usuario específico, incluyendo el estado de cada instancia.\n\n**Respuesta 200:**\n```json\n[\n  { \"aval\": \"Talento Humano\", \"estado\": \"Aprobado\" },\n  { \"aval\": \"Coordinador\", \"estado\": \"Aprobado\" },\n  { \"aval\": \"Vicerrectoria\", \"estado\": \"Aprobado\" },\n  { \"aval\": \"Rectoria\", \"estado\": \"Pendiente\" }\n]\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Rectoria\n- `404` — Usuario no encontrado"
           }
         },
         {
@@ -1459,7 +1548,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/rectoria/usuarios", "host": ["{{base_url}}"], "path": ["rectoria", "usuarios"] }
+            "url": { "raw": "{{base_url}}/rectoria/usuarios", "host": ["{{base_url}}"], "path": ["rectoria", "usuarios"] },
+            "description": "Lista los usuarios que han recibido el aval de Vicerrectoría y están pendientes del aval final de Rectoría.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Rectoria"
           }
         },
         {
@@ -1467,7 +1557,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/rectoria/obtener-documentos/Pendiente", "host": ["{{base_url}}"], "path": ["rectoria", "obtener-documentos", "Pendiente"] }
+            "url": { "raw": "{{base_url}}/rectoria/obtener-documentos/Pendiente", "host": ["{{base_url}}"], "path": ["rectoria", "obtener-documentos", "Pendiente"] },
+            "description": "Lista los documentos de todos los aspirantes filtrados por estado.\n\n**Parámetro de ruta:** `{estado}` — Valores: `Pendiente`, `Aprobado`, `Rechazado`\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Rectoria\n- `422` — Estado inválido en la URL"
           }
         },
         {
@@ -1480,7 +1571,8 @@
               "mode": "raw",
               "raw": "{ \"estado\": \"Aprobado\", \"observaciones\": \"Revisado por Rectoría\" }",
               "options": { "raw": { "language": "json" } }
-            }
+            },
+            "description": "Aprueba o rechaza un documento del aspirante desde el nivel de Rectoría.\n\n**Content-Type:** `application/json`\n\n**Campos obligatorios:** `estado` (Aprobado | Rechazado)\n**Campos opcionales:** `observaciones`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Documento actualizado\", \"estado\": \"Aprobado\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Rectoria\n- `404` — Documento no encontrado\n- `422` — Estado inválido"
           }
         },
         {
@@ -1488,7 +1580,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/rectoria/evaluaciones-con-usuarios", "host": ["{{base_url}}"], "path": ["rectoria", "evaluaciones-con-usuarios"] }
+            "url": { "raw": "{{base_url}}/rectoria/evaluaciones-con-usuarios", "host": ["{{base_url}}"], "path": ["rectoria", "evaluaciones-con-usuarios"] },
+            "description": "Lista todas las evaluaciones del proceso junto con los datos del usuario asociado.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Rectoria"
           }
         },
         {
@@ -1496,15 +1589,16 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/rectoria/hoja-de-vida-pdf/5", "host": ["{{base_url}}"], "path": ["rectoria", "hoja-de-vida-pdf", "5"] }
+            "url": { "raw": "{{base_url}}/rectoria/hoja-de-vida-pdf/5", "host": ["{{base_url}}"], "path": ["rectoria", "hoja-de-vida-pdf", "5"] },
+            "description": "Genera y descarga el PDF de la hoja de vida completa de un aspirante o docente por su ID de usuario.\n\n**Respuesta 200:** Archivo binario PDF (Content-Type: application/pdf)\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Rectoria\n- `404` — Usuario no encontrado"
           }
         }
       ]
     },
 
     {
-      "name": "🏛️ Vicerrectoría",
-      "description": "Avales de segunda instancia y revisión de documentos. Requiere rol Vicerrectoria.",
+      "name": "Vicerrectoría",
+      "description": "Avales de segunda instancia y revisión de documentos. Requiere rol Vicerrectoria.\n\n**Error global 403:**\n```json\n{ \"message\": \"No tienes permisos para realizar esta acción\" }\n```\nOcurre si el token no pertenece a un usuario con rol `Vicerrectoria`.",
       "item": [
         {
           "name": "Otorgar aval Vicerrectoría",
@@ -1517,7 +1611,7 @@
               "raw": "{ \"observaciones\": \"Aprobado por Vicerrectoría\" }",
               "options": { "raw": { "language": "json" } }
             },
-            "description": "Requiere previos avales de Talento Humano y Coordinador."
+            "description": "Otorga el aval de Vicerrectoría. Requiere previos avales de Talento Humano y Coordinador.\n\n**Content-Type:** `application/json`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Aval de Vicerrectoría otorgado exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Vicerrectoria\n- `404` — Aspirante no encontrado\n- `422` — El aspirante no tiene aval de Coordinador previo\n- `422` — Existen documentos pendientes de revisión"
           }
         },
         {
@@ -1525,7 +1619,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/vicerrectoria/usuarios/5/avales", "host": ["{{base_url}}"], "path": ["vicerrectoria", "usuarios", "5", "avales"] }
+            "url": { "raw": "{{base_url}}/vicerrectoria/usuarios/5/avales", "host": ["{{base_url}}"], "path": ["vicerrectoria", "usuarios", "5", "avales"] },
+            "description": "Lista todos los avales del proceso para un usuario específico, incluyendo el estado de cada instancia (TH, Coordinador, Vicerrectoría, Rectoría).\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Vicerrectoria\n- `404` — Usuario no encontrado"
           }
         },
         {
@@ -1533,7 +1628,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/vicerrectoria/obtener-documentos/Pendiente", "host": ["{{base_url}}"], "path": ["vicerrectoria", "obtener-documentos", "Pendiente"] }
+            "url": { "raw": "{{base_url}}/vicerrectoria/obtener-documentos/Pendiente", "host": ["{{base_url}}"], "path": ["vicerrectoria", "obtener-documentos", "Pendiente"] },
+            "description": "Lista documentos de todos los aspirantes filtrados por estado.\n\n**Parámetro de ruta:** `{estado}` — Valores: `Pendiente`, `Aprobado`, `Rechazado`\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Vicerrectoria\n- `422` — Estado inválido en la URL"
           }
         },
         {
@@ -1546,7 +1642,8 @@
               "mode": "raw",
               "raw": "{ \"estado\": \"Aprobado\", \"observaciones\": \"Revisado\" }",
               "options": { "raw": { "language": "json" } }
-            }
+            },
+            "description": "Aprueba o rechaza un documento del aspirante desde el nivel de Vicerrectoría.\n\n**Content-Type:** `application/json`\n\n**Campos obligatorios:** `estado` (Aprobado | Rechazado)\n**Campos opcionales:** `observaciones`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Documento actualizado\", \"estado\": \"Aprobado\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Vicerrectoria\n- `404` — Documento no encontrado\n- `422` — Estado inválido"
           }
         },
         {
@@ -1554,7 +1651,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/vicerrectoria/usuarios/5/postulaciones", "host": ["{{base_url}}"], "path": ["vicerrectoria", "usuarios", "5", "postulaciones"] }
+            "url": { "raw": "{{base_url}}/vicerrectoria/usuarios/5/postulaciones", "host": ["{{base_url}}"], "path": ["vicerrectoria", "usuarios", "5", "postulaciones"] },
+            "description": "Lista las postulaciones de un usuario específico con el detalle de cada convocatoria.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Vicerrectoria\n- `404` — Usuario no encontrado"
           }
         },
         {
@@ -1562,22 +1660,24 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/vicerrectoria/evaluaciones-con-usuarios", "host": ["{{base_url}}"], "path": ["vicerrectoria", "evaluaciones-con-usuarios"] }
+            "url": { "raw": "{{base_url}}/vicerrectoria/evaluaciones-con-usuarios", "host": ["{{base_url}}"], "path": ["vicerrectoria", "evaluaciones-con-usuarios"] },
+            "description": "Lista todas las evaluaciones del proceso con los datos del usuario asociado para revisión de Vicerrectoría.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Vicerrectoria"
           }
         }
       ]
     },
 
     {
-      "name": "👩‍🏫 Apoyo Profesoral",
-      "description": "Consulta y filtrado de docentes por competencias. Requiere rol Apoyo Profesoral.",
+      "name": "Apoyo Profesoral",
+      "description": "Consulta y filtrado de docentes por competencias. Requiere rol Apoyo Profesoral.\n\n**Error global 403:**\n```json\n{ \"message\": \"No tienes permisos para realizar esta acción\" }\n```\nOcurre si el token no pertenece a un usuario con rol `Apoyo Profesoral`.",
       "item": [
         {
           "name": "Listar docentes",
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/apoyoProfesoral/listar-docentes", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "listar-docentes"] }
+            "url": { "raw": "{{base_url}}/apoyoProfesoral/listar-docentes", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "listar-docentes"] },
+            "description": "Lista todos los docentes activos con su información personal, estudios, idiomas, experiencias y producción académica.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Apoyo Profesoral"
           }
         },
         {
@@ -1585,7 +1685,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/apoyoProfesoral/obtener-documentos/Pendiente", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "obtener-documentos", "Pendiente"] }
+            "url": { "raw": "{{base_url}}/apoyoProfesoral/obtener-documentos/Pendiente", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "obtener-documentos", "Pendiente"] },
+            "description": "Lista los documentos de todos los aspirantes filtrados por estado.\n\n**Parámetro de ruta:** `{estado}` — Valores: `Pendiente`, `Aprobado`, `Rechazado`\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Apoyo Profesoral\n- `422` — Estado inválido en la URL"
           }
         },
         {
@@ -1593,7 +1694,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/apoyoProfesoral/mostrar-todos-estudios", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "mostrar-todos-estudios"] }
+            "url": { "raw": "{{base_url}}/apoyoProfesoral/mostrar-todos-estudios", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "mostrar-todos-estudios"] },
+            "description": "Lista todos los títulos académicos registrados por los docentes activos.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Apoyo Profesoral"
           }
         },
         {
@@ -1601,7 +1703,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/apoyoProfesoral/filtrar-docentes-estudio/Maestría", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "filtrar-docentes-estudio", "Maestría"] }
+            "url": { "raw": "{{base_url}}/apoyoProfesoral/filtrar-docentes-estudio/Maestría", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "filtrar-docentes-estudio", "Maestría"] },
+            "description": "Filtra docentes que posean estudios del tipo indicado en el parámetro de ruta.\n\n**Parámetro de ruta:** `{tipo}` — Valores: `Pregrado`, `Especialización`, `Maestría`, `Doctorado`, `Posdoctorado`\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Apoyo Profesoral"
           }
         },
         {
@@ -1609,7 +1712,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/apoyoProfesoral/mostrar-todos-idioma", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "mostrar-todos-idioma"] }
+            "url": { "raw": "{{base_url}}/apoyoProfesoral/mostrar-todos-idioma", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "mostrar-todos-idioma"] },
+            "description": "Lista todas las certificaciones de idiomas registradas por los docentes activos.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Apoyo Profesoral"
           }
         },
         {
@@ -1617,7 +1721,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/apoyoProfesoral/filtrar-docentes-idioma/B2", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "filtrar-docentes-idioma", "B2"] }
+            "url": { "raw": "{{base_url}}/apoyoProfesoral/filtrar-docentes-idioma/B2", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "filtrar-docentes-idioma", "B2"] },
+            "description": "Filtra docentes según el nivel de idioma acreditado indicado en el parámetro de ruta.\n\n**Parámetro de ruta:** `{nivel}` — Valores: `A1`, `A2`, `B1`, `B2`, `C1`, `C2`\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Apoyo Profesoral"
           }
         },
         {
@@ -1625,7 +1730,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/apoyoProfesoral/mostrar-todos-produccion", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "mostrar-todos-produccion"] }
+            "url": { "raw": "{{base_url}}/apoyoProfesoral/mostrar-todos-produccion", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "mostrar-todos-produccion"] },
+            "description": "Lista toda la producción académica registrada por los docentes activos (artículos, libros, ponencias, etc.).\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Apoyo Profesoral"
           }
         },
         {
@@ -1633,7 +1739,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/apoyoProfesoral/filtrar-docentes-ambito/1", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "filtrar-docentes-ambito", "1"] }
+            "url": { "raw": "{{base_url}}/apoyoProfesoral/filtrar-docentes-ambito/1", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "filtrar-docentes-ambito", "1"] },
+            "description": "Filtra docentes por el ID del ámbito de divulgación de su producción académica.\n\n**Parámetro de ruta:** `{ambito_id}` — ID numérico del ámbito (ver `/tiposProduccionAcademica/ambitos-divulgacion`)\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Apoyo Profesoral\n- `404` — Ámbito no encontrado"
           }
         },
         {
@@ -1641,7 +1748,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/apoyoProfesoral/mostrar-todas-experiencia", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "mostrar-todas-experiencia"] }
+            "url": { "raw": "{{base_url}}/apoyoProfesoral/mostrar-todas-experiencia", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "mostrar-todas-experiencia"] },
+            "description": "Lista todas las experiencias laborales registradas por los docentes activos.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Apoyo Profesoral"
           }
         },
         {
@@ -1649,7 +1757,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/apoyoProfesoral/filtrar-docentes-tipo-experiecnia/Docencia Universitaria", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "filtrar-docentes-tipo-experiecnia", "Docencia Universitaria"] }
+            "url": { "raw": "{{base_url}}/apoyoProfesoral/filtrar-docentes-tipo-experiecnia/Docencia Universitaria", "host": ["{{base_url}}"], "path": ["apoyoProfesoral", "filtrar-docentes-tipo-experiecnia", "Docencia Universitaria"] },
+            "description": "Filtra docentes según el tipo de experiencia laboral indicado en la ruta.\n\n**Parámetro de ruta:** `{tipo}` — Valores: ver `/constantes/tipos-experiencia`\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Apoyo Profesoral"
           }
         },
         {
@@ -1662,15 +1771,16 @@
               "mode": "raw",
               "raw": "{ \"user_ids\": [1, 2, 3, 5], \"tipo_certificado\": \"Vinculación Docente\" }",
               "options": { "raw": { "language": "json" } }
-            }
+            },
+            "description": "Genera certificados de vinculación para múltiples docentes a la vez, identificados por sus IDs.\n\n**Content-Type:** `application/json`\n\n**Campos obligatorios:** `user_ids` (array de enteros), `tipo_certificado`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Certificados generados exitosamente\", \"total\": 4 }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Apoyo Profesoral\n- `404` — Uno o más IDs de usuario no encontrados\n- `422` — `user_ids` must be an array"
           }
         }
       ]
     },
 
     {
-      "name": "🔬 Evaluador de Producción",
-      "description": "Revisión y aprobación de producción académica. Requiere rol Evaluador Produccion.",
+      "name": "Evaluador de Producción",
+      "description": "Revisión y aprobación de producción académica. Requiere rol Evaluador Produccion.\n\n**Error global 403:**\n```json\n{ \"message\": \"No tienes permisos para realizar esta acción\" }\n```\nOcurre si el token no pertenece a un usuario con rol `Evaluador Produccion`.",
       "item": [
         {
           "name": "Listar usuarios con producción pendiente",
@@ -1678,7 +1788,7 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": { "raw": "{{base_url}}/evaluadorProduccion/obtener-producciones", "host": ["{{base_url}}"], "path": ["evaluadorProduccion", "obtener-producciones"] },
-            "description": "Lista todos los usuarios que tienen documentos de producción en estado Pendiente."
+            "description": "Lista todos los usuarios que tienen documentos de producción en estado Pendiente.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Evaluador Produccion"
           }
         },
         {
@@ -1686,7 +1796,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/evaluadorProduccion/ver-producciones-por-usuario/5", "host": ["{{base_url}}"], "path": ["evaluadorProduccion", "ver-producciones-por-usuario", "5"] }
+            "url": { "raw": "{{base_url}}/evaluadorProduccion/ver-producciones-por-usuario/5", "host": ["{{base_url}}"], "path": ["evaluadorProduccion", "ver-producciones-por-usuario", "5"] },
+            "description": "Lista las producciones académicas en estado Pendiente del usuario especificado por ID.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Evaluador Produccion\n- `404` — Usuario no encontrado"
           }
         },
         {
@@ -1700,15 +1811,15 @@
               "raw": "{ \"estado\": \"Aprobado\", \"observaciones\": \"Producción verificada y validada\" }",
               "options": { "raw": { "language": "json" } }
             },
-            "description": "Actualiza el estado del documento de producción.\n\n**Estados válidos:** `Aprobado`, `Rechazado`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Documento actualizado\", \"estado\": \"Aprobado\" }\n```"
+            "description": "Aprueba o rechaza un documento de producción académica.\n\n**Content-Type:** `application/json`\n\n**Campos obligatorios:** `estado` (Aprobado | Rechazado)\n**Campos opcionales:** `observaciones`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Documento actualizado\", \"estado\": \"Aprobado\" }\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Evaluador Produccion\n- `404` — Documento no encontrado\n- `422` — Estado inválido"
           }
         }
       ]
     },
 
     {
-      "name": "📚 Producción Académica — Catálogos",
-      "description": "Catálogos de tipos de producción y ámbitos. No requieren autenticación.",
+      "name": "Producción Académica — Catálogos",
+      "description": "Catálogos de tipos de producción y ámbitos. No requieren autenticación; son públicos y se usan al registrar producción académica.",
       "item": [
         {
           "name": "Tipos de productos académicos",
@@ -1716,7 +1827,7 @@
             "method": "GET",
             "header": [],
             "url": { "raw": "{{base_url}}/tiposProduccionAcademica/productos-academicos", "host": ["{{base_url}}"], "path": ["tiposProduccionAcademica", "productos-academicos"] },
-            "description": "**Respuesta 200:**\n```json\n[\n  { \"id\": 1, \"nombre\": \"Artículo de investigación\" },\n  { \"id\": 2, \"nombre\": \"Libro\" }\n]\n```"
+            "description": "Retorna todos los tipos de productos académicos disponibles para clasificar la producción.\n\n**Respuesta 200:**\n```json\n[\n  { \"id\": 1, \"nombre\": \"Artículo de investigación\" },\n  { \"id\": 2, \"nombre\": \"Libro\" }\n]\n```"
           }
         },
         {
@@ -1724,7 +1835,8 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{base_url}}/tiposProduccionAcademica/ambitos-divulgacion", "host": ["{{base_url}}"], "path": ["tiposProduccionAcademica", "ambitos-divulgacion"] }
+            "url": { "raw": "{{base_url}}/tiposProduccionAcademica/ambitos-divulgacion", "host": ["{{base_url}}"], "path": ["tiposProduccionAcademica", "ambitos-divulgacion"] },
+            "description": "Retorna todos los ámbitos de divulgación disponibles (Internacional, Nacional, Regional, Local).\n\n**Respuesta 200:**\n```json\n[\n  { \"id\": 1, \"nombre\": \"Internacional\" },\n  { \"id\": 2, \"nombre\": \"Nacional\" }\n]\n```"
           }
         },
         {
@@ -1732,7 +1844,8 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{base_url}}/tiposProduccionAcademica/ambitos_divulgacion/1", "host": ["{{base_url}}"], "path": ["tiposProduccionAcademica", "ambitos_divulgacion", "1"] }
+            "url": { "raw": "{{base_url}}/tiposProduccionAcademica/ambitos_divulgacion/1", "host": ["{{base_url}}"], "path": ["tiposProduccionAcademica", "ambitos_divulgacion", "1"] },
+            "description": "Retorna los ámbitos de divulgación asociados al tipo de producto académico especificado por ID.\n\n**Errores posibles:**\n- `404` — Tipo de producto no encontrado"
           }
         },
         {
@@ -1740,15 +1853,16 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{base_url}}/tiposProduccionAcademica/ambito-divulgacion-completo/2", "host": ["{{base_url}}"], "path": ["tiposProduccionAcademica", "ambito-divulgacion-completo", "2"] }
+            "url": { "raw": "{{base_url}}/tiposProduccionAcademica/ambito-divulgacion-completo/2", "host": ["{{base_url}}"], "path": ["tiposProduccionAcademica", "ambito-divulgacion-completo", "2"] },
+            "description": "Retorna el detalle completo de un ámbito de divulgación específico por su ID, incluyendo tipos de producto asociados.\n\n**Errores posibles:**\n- `404` — Ámbito no encontrado"
           }
         }
       ]
     },
 
     {
-      "name": "🌐 Público",
-      "description": "Endpoints públicos de convocatorias. No requieren autenticación.",
+      "name": "Público",
+      "description": "Endpoints públicos de convocatorias. No requieren autenticación; disponibles para cualquier visitante del sistema.",
       "item": [
         {
           "name": "Convocatorias públicas",
@@ -1764,22 +1878,24 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{base_url}}/publico/convocatorias/1", "host": ["{{base_url}}"], "path": ["publico", "convocatorias", "1"] }
+            "url": { "raw": "{{base_url}}/publico/convocatorias/1", "host": ["{{base_url}}"], "path": ["publico", "convocatorias", "1"] },
+            "description": "Retorna el detalle completo de una convocatoria pública activa por su ID, incluyendo requisitos y fechas.\n\n**Errores posibles:**\n- `404` — Convocatoria no encontrada o no publicada"
           }
         }
       ]
     },
 
     {
-      "name": "📍 Ubicaciones",
-      "description": "Catálogos geográficos. No requieren autenticación.",
+      "name": "Ubicaciones",
+      "description": "Catálogos geográficos de países, departamentos y municipios. No requieren autenticación.",
       "item": [
         {
           "name": "Listar países",
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{base_url}}/ubicaciones/paises", "host": ["{{base_url}}"], "path": ["ubicaciones", "paises"] }
+            "url": { "raw": "{{base_url}}/ubicaciones/paises", "host": ["{{base_url}}"], "path": ["ubicaciones", "paises"] },
+            "description": "Retorna el listado de todos los países disponibles en el sistema.\n\n**Respuesta 200:**\n```json\n[ { \"id\": 1, \"nombre\": \"Colombia\" }, { \"id\": 2, \"nombre\": \"Venezuela\" } ]\n```"
           }
         },
         {
@@ -1787,7 +1903,8 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{base_url}}/ubicaciones/departamentos", "host": ["{{base_url}}"], "path": ["ubicaciones", "departamentos"] }
+            "url": { "raw": "{{base_url}}/ubicaciones/departamentos", "host": ["{{base_url}}"], "path": ["ubicaciones", "departamentos"] },
+            "description": "Retorna todos los departamentos registrados en el sistema.\n\n**Respuesta 200:**\n```json\n[ { \"id\": 11, \"nombre\": \"Bogotá D.C.\", \"pais_id\": 1 } ]\n```"
           }
         },
         {
@@ -1795,7 +1912,8 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{base_url}}/ubicaciones/departamentos/1", "host": ["{{base_url}}"], "path": ["ubicaciones", "departamentos", "1"] }
+            "url": { "raw": "{{base_url}}/ubicaciones/departamentos/1", "host": ["{{base_url}}"], "path": ["ubicaciones", "departamentos", "1"] },
+            "description": "Retorna los departamentos pertenecientes a un país específico por su ID.\n\n**Errores posibles:**\n- `404` — País no encontrado"
           }
         },
         {
@@ -1803,7 +1921,8 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{base_url}}/ubicaciones/municipios/11", "host": ["{{base_url}}"], "path": ["ubicaciones", "municipios", "11"] }
+            "url": { "raw": "{{base_url}}/ubicaciones/municipios/11", "host": ["{{base_url}}"], "path": ["ubicaciones", "municipios", "11"] },
+            "description": "Retorna los municipios pertenecientes a un departamento específico por su ID.\n\n**Errores posibles:**\n- `404` — Departamento no encontrado"
           }
         },
         {
@@ -1811,15 +1930,16 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{base_url}}/ubicaciones/municipio/1101", "host": ["{{base_url}}"], "path": ["ubicaciones", "municipio", "1101"] }
+            "url": { "raw": "{{base_url}}/ubicaciones/municipio/1101", "host": ["{{base_url}}"], "path": ["ubicaciones", "municipio", "1101"] },
+            "description": "Retorna la información completa (país, departamento, municipio) de un municipio por su ID.\n\n**Errores posibles:**\n- `404` — Municipio no encontrado"
           }
         }
       ]
     },
 
     {
-      "name": "⚙️ Constantes",
-      "description": "Catálogos de valores fijos del sistema. No requieren autenticación.",
+      "name": "Constantes",
+      "description": "Catálogos de valores fijos del sistema. No requieren autenticación. Se usan como referencia al enviar campos con valores enumerados en otros endpoints.",
       "item": [
         {
           "name": "Tipos de documento",
@@ -1827,7 +1947,7 @@
             "method": "GET",
             "header": [],
             "url": { "raw": "{{base_url}}/constantes/tipos-documento", "host": ["{{base_url}}"], "path": ["constantes", "tipos-documento"] },
-            "description": "**Respuesta 200:**\n```json\n[\"CC\", \"CE\", \"TI\", \"PA\", \"NIT\"]\n```"
+            "description": "Retorna los tipos de documento de identidad válidos.\n\n**Respuesta 200:**\n```json\n[\"CC\", \"CE\", \"TI\", \"PA\", \"NIT\"]\n```"
           }
         },
         {
@@ -1835,7 +1955,8 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{base_url}}/constantes/estado-civil", "host": ["{{base_url}}"], "path": ["constantes", "estado-civil"] }
+            "url": { "raw": "{{base_url}}/constantes/estado-civil", "host": ["{{base_url}}"], "path": ["constantes", "estado-civil"] },
+            "description": "Retorna los valores de estado civil disponibles (Soltero, Casado, Unión Libre, Divorciado, Viudo)."
           }
         },
         {
@@ -1843,7 +1964,8 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{base_url}}/constantes/genero", "host": ["{{base_url}}"], "path": ["constantes", "genero"] }
+            "url": { "raw": "{{base_url}}/constantes/genero", "host": ["{{base_url}}"], "path": ["constantes", "genero"] },
+            "description": "Retorna los valores de género disponibles en el sistema."
           }
         },
         {
@@ -1851,7 +1973,8 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{base_url}}/constantes/tipo-persona", "host": ["{{base_url}}"], "path": ["constantes", "tipo-persona"] }
+            "url": { "raw": "{{base_url}}/constantes/tipo-persona", "host": ["{{base_url}}"], "path": ["constantes", "tipo-persona"] },
+            "description": "Retorna los tipos de persona para el diligenciamiento del RUT (Natural, Jurídica)."
           }
         },
         {
@@ -1859,7 +1982,8 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{base_url}}/constantes/codigo-ciiu", "host": ["{{base_url}}"], "path": ["constantes", "codigo-ciiu"] }
+            "url": { "raw": "{{base_url}}/constantes/codigo-ciiu", "host": ["{{base_url}}"], "path": ["constantes", "codigo-ciiu"] },
+            "description": "Retorna los códigos CIIU (Clasificación Industrial Internacional Uniforme) para el RUT."
           }
         },
         {
@@ -1867,7 +1991,8 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{base_url}}/constantes/estado-afiliacion", "host": ["{{base_url}}"], "path": ["constantes", "estado-afiliacion"] }
+            "url": { "raw": "{{base_url}}/constantes/estado-afiliacion", "host": ["{{base_url}}"], "path": ["constantes", "estado-afiliacion"] },
+            "description": "Retorna los estados de afiliación disponibles para EPS (Activo, Inactivo, Suspendido, etc.)."
           }
         },
         {
@@ -1875,7 +2000,8 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{base_url}}/constantes/tipo-afiliacion", "host": ["{{base_url}}"], "path": ["constantes", "tipo-afiliacion"] }
+            "url": { "raw": "{{base_url}}/constantes/tipo-afiliacion", "host": ["{{base_url}}"], "path": ["constantes", "tipo-afiliacion"] },
+            "description": "Retorna los tipos de afiliación a EPS (Cotizante, Beneficiario, Subsidiado)."
           }
         },
         {
@@ -1883,7 +2009,8 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{base_url}}/constantes/tipo-afiliado", "host": ["{{base_url}}"], "path": ["constantes", "tipo-afiliado"] }
+            "url": { "raw": "{{base_url}}/constantes/tipo-afiliado", "host": ["{{base_url}}"], "path": ["constantes", "tipo-afiliado"] },
+            "description": "Retorna los tipos de afiliado a EPS (Empleado, Independiente, Pensionado, etc.)."
           }
         },
         {
@@ -1891,7 +2018,8 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{base_url}}/constantes/categoria-libreta-militar", "host": ["{{base_url}}"], "path": ["constantes", "categoria-libreta-militar"] }
+            "url": { "raw": "{{base_url}}/constantes/categoria-libreta-militar", "host": ["{{base_url}}"], "path": ["constantes", "categoria-libreta-militar"] },
+            "description": "Retorna las categorías de libreta militar disponibles. Requerido en Información de Contacto para hombres."
           }
         },
         {
@@ -1900,7 +2028,7 @@
             "method": "GET",
             "header": [],
             "url": { "raw": "{{base_url}}/constantes/tipos-estudio", "host": ["{{base_url}}"], "path": ["constantes", "tipos-estudio"] },
-            "description": "**Respuesta 200:**\n```json\n[\"Pregrado\", \"Especialización\", \"Maestría\", \"Doctorado\", \"Posdoctorado\"]\n```"
+            "description": "Retorna los tipos de estudio académico disponibles.\n\n**Respuesta 200:**\n```json\n[\"Pregrado\", \"Especialización\", \"Maestría\", \"Doctorado\", \"Posdoctorado\"]\n```"
           }
         },
         {
@@ -1908,7 +2036,8 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{base_url}}/constantes/perfiles-profesionales", "host": ["{{base_url}}"], "path": ["constantes", "perfiles-profesionales"] }
+            "url": { "raw": "{{base_url}}/constantes/perfiles-profesionales", "host": ["{{base_url}}"], "path": ["constantes", "perfiles-profesionales"] },
+            "description": "Retorna los perfiles profesionales disponibles para clasificar los estudios académicos (Ingeniería, Ciencias, Artes, etc.)."
           }
         },
         {
@@ -1916,7 +2045,8 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{base_url}}/constantes/tipos-experiencia", "host": ["{{base_url}}"], "path": ["constantes", "tipos-experiencia"] }
+            "url": { "raw": "{{base_url}}/constantes/tipos-experiencia", "host": ["{{base_url}}"], "path": ["constantes", "tipos-experiencia"] },
+            "description": "Retorna los tipos de experiencia laboral disponibles (Docencia Universitaria, Industria, Investigación, etc.)."
           }
         },
         {
@@ -1925,7 +2055,7 @@
             "method": "GET",
             "header": [],
             "url": { "raw": "{{base_url}}/constantes/niveles-idioma", "host": ["{{base_url}}"], "path": ["constantes", "niveles-idioma"] },
-            "description": "**Respuesta 200:**\n```json\n[\"A1\", \"A2\", \"B1\", \"B2\", \"C1\", \"C2\"]\n```"
+            "description": "Retorna los niveles de idioma disponibles según el Marco Común Europeo.\n\n**Respuesta 200:**\n```json\n[\"A1\", \"A2\", \"B1\", \"B2\", \"C1\", \"C2\"]\n```"
           }
         },
         {
@@ -1933,7 +2063,8 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{base_url}}/constantes/tipos-cuenta-bancaria", "host": ["{{base_url}}"], "path": ["constantes", "tipos-cuenta-bancaria"] }
+            "url": { "raw": "{{base_url}}/constantes/tipos-cuenta-bancaria", "host": ["{{base_url}}"], "path": ["constantes", "tipos-cuenta-bancaria"] },
+            "description": "Retorna los tipos de cuenta bancaria disponibles (Ahorros, Corriente)."
           }
         },
         {
@@ -1941,7 +2072,8 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{base_url}}/constantes/tipos-pension", "host": ["{{base_url}}"], "path": ["constantes", "tipos-pension"] }
+            "url": { "raw": "{{base_url}}/constantes/tipos-pension", "host": ["{{base_url}}"], "path": ["constantes", "tipos-pension"] },
+            "description": "Retorna los regímenes pensionales disponibles (Prima Media con Prestación Definida, Ahorro Individual con Solidaridad)."
           }
         }
       ]

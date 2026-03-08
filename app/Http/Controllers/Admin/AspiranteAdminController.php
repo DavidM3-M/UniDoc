@@ -211,7 +211,7 @@ class AspiranteAdminController extends Controller
     public function obtenerAspirantePorId($id)
     {
         try {
-            $aspirante = User::role('Aspirante')
+            $aspirante = User::role(['Aspirante', 'Docente'])
                 ->with([
                     'municipioUsuarios.departamentoMunicipio',
                     'fotoPerfilUsuario.documentosFotoPerfil',
@@ -315,7 +315,7 @@ class AspiranteAdminController extends Controller
     public function obtenerAspiranteParaTalentoHumano($id)
     {
         try {
-            $aspirante = User::role('Aspirante')
+            $aspirante = User::role(['Aspirante', 'Docente'])
                 ->with([
                     'fotoPerfilUsuario.documentosFotoPerfil',
                     'informacionContactoUsuario',

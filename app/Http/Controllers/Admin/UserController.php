@@ -88,7 +88,7 @@ class UserController
     }
 
     //Editar un usuario
-    public function editarUsuario(Request $request,$id){
+    public function editarUsuario(Request $request, $id){
 
         //Buscar el usuario por id
         $user = User::find($id);
@@ -98,8 +98,23 @@ class UserController
             return response()->json(['message' => 'Usuario no encontrado'], 404);
         }
 
-        //Actualizar el usuario
-        $user->update($request->all());
+        // Validar solo los campos editables por un administrador
+        $validated = $request->validate([
+            'primer_nombre'         => 'sometimes|string|max:100|regex:/^[\pL\pN\s\-]+$/u',
+            'segundo_nombre'        => 'nullable|string|max:100|regex:/^[\pL\pN\s\-]+$/u',
+            'primer_apellido'       => 'sometimes|string|max:50|regex:/^[\pL\pN\s\-]+$/u',
+            'segundo_apellido'      => 'nullable|string|max:50|regex:/^[\pL\pN\s\-]+$/u',
+            'tipo_identificacion'   => 'sometimes|string|max:50',
+            'numero_identificacion' => 'sometimes|string|max:50|unique:users,numero_identificacion,' . $id,
+            'genero'                => 'nullable|string|max:30',
+            'fecha_nacimiento'      => 'sometimes|date|before:today',
+            'estado_civil'          => 'nullable|string|max:30',
+            'municipio_id'          => 'sometimes|exists:municipios,id_municipio',
+            'email'                 => 'sometimes|email|max:100|unique:users,email,' . $id,
+        ]);
+
+        //Actualizar el usuario solo con los campos validados
+        $user->update($validated);
 
         //Devolver respuesta con el usuario actualizado
         return response()->json($user, 200);

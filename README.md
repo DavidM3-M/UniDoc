@@ -30,6 +30,8 @@
    - [Constantes](#constantes)
 9. [Formatos de Respuesta](#formatos-de-respuesta)
 10. [Colección Postman](#colección-postman)
+11. [Flujo de Trabajo del Sistema](#flujo-de-trabajo-del-sistema)
+12. [Errores Verificados y Corregidos](#errores-verificados-y-corregidos)
 
 ---
 
@@ -185,7 +187,7 @@ La API usa **JWT (JSON Web Token)**. Pasos:
 | POST | `/auth/restablecer-contrasena-token` | No | Actualiza contraseña usando el token del email |
 | POST | `/auth/cerrar-sesion` | Sí | Invalida el JWT del usuario en sesión |
 | GET | `/auth/obtener-usuario-autenticado` | Sí | Retorna datos del usuario autenticado |
-| POST | `/auth/actualizar-contrasena/{id}` | Sí | Actualiza contraseña de un usuario específico |
+| POST | `/auth/actualizar-contrasena` | Sí | Actualiza contraseña del usuario autenticado |
 | POST | `/auth/actualizar-usuario` | Sí | Actualiza el perfil del usuario autenticado |
 
 #### `POST /auth/registrar-usuario` — Cuerpo
@@ -592,11 +594,9 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | Método | URI | Descripción |
 |--------|-----|-------------|
 | GET | `/admin/listar-roles` | Lista todos los roles |
-| POST | `/admin/crear-rol` | Crea nuevo rol |
 | POST | `/admin/asignar-rol` | Asigna rol a usuario |
 | POST | `/admin/remover-rol/{id}` | Remueve rol de usuario |
-| PUT | `/admin/actualizar-rol` | Actualiza nombre de rol |
-| DELETE | `/admin/eliminar-rol` | Elimina rol |
+| PUT | `/admin/actualizar-rol/{id}` | Actualiza nombre de rol |
 
 #### Normativas
 
@@ -758,7 +758,7 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | GET | `/apoyoProfesoral/filtrar-docentes-ambito/{ambitoId}` | Filtrar por ámbito de divulgación |
 | GET | `/apoyoProfesoral/mostrar-todas-experiencia` | Docentes con experiencias |
 | GET | `/apoyoProfesoral/filtrar-docentes-experiencia-id/{id}` | Experiencias de un docente |
-| GET | `/apoyoProfesoral/filtrar-docentes-tipo-experiecnia/{tipo}` | Filtrar por tipo de experiencia |
+| GET | `/apoyoProfesoral/filtrar-docentes-tipo-experiencia/{tipo}` | Filtrar por tipo de experiencia |
 | POST | `/apoyoProfesoral/crear-certificados-masivos` | Genera certificados en masa |
 
 ---
@@ -944,6 +944,93 @@ Contratación (TH) ──► Rol cambia a Docente
        ▼
 Gestión Docente + Apoyo Profesoral + Evaluador Producción
 ```
+
+---
+
+## Errores Verificados y Corregidos
+
+Los siguientes errores fueron detectados mediante revisión del código fuente y corregidos directamente en los archivos correspondientes.
+
+---
+
+### BUG-001 — Ruta duplicada en `routes/aval.php` (Rectoría)
+
+**Archivo:** `routes/aval.php`  
+**Gravedad:** Media — la segunda definición de la ruta sobrescribe silenciosamente a la primera en Laravel, lo que puede provocar comportamientos inesperados ante futuras modificaciones.
+
+**Causa:** Se definió dos veces seguidas la misma ruta dentro del grupo `role:Rectoria`:
+```php
+// Antes (duplicado)
+Route::get('convocatorias', [ProcesoAprobacionController::class, 'listarConvocatoriasConAspirantes']);
+// Convocatorias con aspirantes
+Route::get('convocatorias', [ProcesoAprobacionController::class, 'listarConvocatoriasConAspirantes']);
+```
+
+**Corrección:** Se eliminó la línea duplicada. La ruta queda definida una sola vez:
+```php
+// Después (corregido)
+Route::get('convocatorias', [ProcesoAprobacionController::class, 'listarConvocatoriasConAspirantes']);
+```
+
+---
+
+### BUG-002 — Typo en el nombre de la URI de Apoyo Profesoral
+
+**Archivo:** `routes/apoyo_profesoral.php`  
+**Gravedad:** Alta — cualquier cliente que usara la URL documentada (`filtrar-docentes-tipo-experiencia`) recibiría un `404`.
+
+**Causa:** El nombre del segmento de ruta tenía una letra transpuesta: `experiecnia` en lugar de `experiencia`.
+```php
+// Antes (typo)
+Route::get('filtrar-docentes-tipo-experiecnia/{tipo}', [...]);
+```
+
+**Corrección:**
+```php
+// Después (corregido)
+Route::get('filtrar-docentes-tipo-experiencia/{tipo}', [...]);
+```
+
+**Nota:** Si existen clientes ya integrados con la URI incorrecta, deben actualizar su URL.
+
+---
+
+### BUG-003 — README documenta ruta inexistente `POST /auth/actualizar-contrasena/{id}`
+
+**Archivo:** `README.md` (documentación), `routes/auth.php` (código fuente)  
+**Gravedad:** Media — podría llevar a integraciones incorrectas del frontend.
+
+**Causa:** El README indicaba que la ruta recibía un `{id}` de usuario externo. La implementación real opera sobre el usuario **autenticado** en la sesión; no acepta ningún ID en la URL.
+```
+// Antes (incorrecto en README)
+POST /auth/actualizar-contrasena/{id}
+
+// Real (en routes/auth.php)
+Route::post('actualizar-contrasena', [AuthController::class, 'actualizarContrasena']);
+```
+
+**Corrección:** Se actualizó la tabla de endpoints en el README:
+```
+POST /auth/actualizar-contrasena   — Actualiza contraseña del usuario autenticado
+```
+
+---
+
+### BUG-004 — README documenta rutas de Administrador que no están implementadas
+
+**Archivo:** `README.md` (documentación), `routes/admin.php` (código fuente)  
+**Gravedad:** Baja — genera confusión pero no afecta el runtime.
+
+**Causa:** El README listaba `POST /admin/crear-rol` y `DELETE /admin/eliminar-rol` como endpoints disponibles. En `routes/admin.php` solo existe el comentario explícito: _"crearRol y eliminarRol están deshabilitados (métodos no implementados)"_. Los métodos no existen en `RoleController`.
+
+**Corrección:** Se eliminaron esas dos filas de la tabla de Roles en el README. Los endpoints activos son:
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| GET | `/admin/listar-roles` | Lista todos los roles |
+| POST | `/admin/asignar-rol` | Asigna rol a usuario |
+| POST | `/admin/remover-rol/{id}` | Remueve rol de usuario |
+| PUT | `/admin/actualizar-rol/{id}` | Actualiza nombre de rol |
 
 ---
 
