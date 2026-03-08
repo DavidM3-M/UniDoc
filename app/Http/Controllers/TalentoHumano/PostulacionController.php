@@ -275,28 +275,54 @@ class PostulacionController
     {
         try {
             $request->validate([
-                'estado_postulacion' => ['required', 'string', Rule::in(EstadoPostulacion::all())], // Validar el estado de la postulación
+                'estado_postulacion' => ['required', 'string', Rule::in(EstadoPostulacion::all())],
+                'motivo_rechazo'     => ['nullable', 'string', 'max:1000'],
             ]);
-            DB::transaction(function () use ($request, $idPostulacion) { // Iniciar una transacción para garantizar la integridad de los datos
-                $postulacion = Postulacion::find($idPostulacion); // Buscar la postulación por su ID
 
-                if (!$postulacion) { // Verificar si la postulación existe
-                    throw new \Exception('No se encontro una postulación.', 404);
+            // El motivo es obligatorio cuando se rechaza la postulación
+            if ($request->estado_postulacion === EstadoPostulacion::RECHAZADA && empty($request->motivo_rechazo)) {
+                return response()->json([
+                    'message' => 'El motivo de rechazo es obligatorio cuando se rechaza una postulación.',
+                ], 422);
+            }
+
+            DB::transaction(function () use ($request, $idPostulacion) {
+                $postulacion = Postulacion::find($idPostulacion);
+
+                if (!$postulacion) {
+                    throw new \Exception('No se encontró una postulación.', 404);
                 }
 
-                $postulacion->estado_postulacion = $request->estado_postulacion; // Actualizar el estado de la postulación
-                $postulacion->save(); // Guardar los cambios en la base de datos
+                $postulacion->estado_postulacion = $request->estado_postulacion;
 
+                if ($request->estado_postulacion === EstadoPostulacion::RECHAZADA) {
+                    $postulacion->motivo_rechazo = $request->motivo_rechazo;
+                    $postulacion->rechazado_por  = $request->user()->getRoleNames()->first() ?? 'Talento Humano';
+                } else {
+                    // Limpiar el motivo si el estado vuelve a uno no rechazado
+                    $postulacion->motivo_rechazo = null;
+                    $postulacion->rechazado_por  = null;
+                }
+
+                $postulacion->save();
             });
 
             // Notificar al usuario postulante sobre el cambio de estado
             try {
                 $postulacion = Postulacion::with('usuarioPostulacion')->find($idPostulacion);
                 if ($postulacion && $postulacion->usuarioPostulacion) {
-                    NotificacionController::cambioEstadoPostulacion(
-                        $postulacion->usuarioPostulacion,
-                        $request->estado_postulacion
-                    );
+                    if ($request->estado_postulacion === EstadoPostulacion::RECHAZADA) {
+                        NotificacionController::postulacionRechazada(
+                            $postulacion->usuarioPostulacion,
+                            $request->motivo_rechazo,
+                            $postulacion->rechazado_por
+                        );
+                    } else {
+                        NotificacionController::cambioEstadoPostulacion(
+                            $postulacion->usuarioPostulacion,
+                            $request->estado_postulacion
+                        );
+                    }
                 }
             } catch (\Exception $notifEx) {
                 Log::error('Error al notificar cambio de estado de postulación: ' . $notifEx->getMessage());
@@ -660,18 +686,19 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
     {
         $experienciasUsuario = $user->experienciasUsuario;
 
-        foreach ($requisitosExperiencia as $tipoExperiencia => $anosRequeridos) {
-            // Verificar que el tipo de experiencia esté definido en constantes
-            if (!in_array($tipoExperiencia, TiposExperiencia::all())) {
-                throw new \Exception("Tipo de experiencia no válido: {$tipoExperiencia}.", 400);
-            }
+        // Sumar todos los años requeridos a través de todos los tipos
+        $totalAnosRequeridos = array_sum(array_values($requisitosExperiencia));
 
-            $anosUsuario = $this->calcularAniosExperienciaPorTipo($experienciasUsuario, $tipoExperiencia);
+        // Sumar todos los días de experiencia del usuario sin filtrar por tipo
+        $totalDias = $this->calcularTotalDiasExperiencia($experienciasUsuario, null);
+        $totalAnosUsuario = round($totalDias / 365.25, 1);
 
-            if ($anosUsuario < $anosRequeridos) {
-                $tipoExperienciaFormateado = ucfirst(str_replace('_', ' ', $tipoExperiencia));
-                throw new \Exception("No cumples con los años de experiencia requeridos en {$tipoExperienciaFormateado}. Se requieren {$anosRequeridos} años y tienes {$anosUsuario} años.", 403);
-            }
+        if ($totalAnosUsuario < $totalAnosRequeridos) {
+            throw new \Exception(
+                "No cumples con los años de experiencia requeridos. " .
+                "Se requieren {$totalAnosRequeridos} años en total y tienes {$totalAnosUsuario} años.",
+                403
+            );
         }
     }
 
@@ -717,18 +744,33 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
         if (empty($requisitosIdiomas) || !is_array($requisitosIdiomas)) {
             return;
         }
-        
-        // Detectar si llegó como array indexado (estructura corrupta)
-        $esIndexado = array_keys($requisitosIdiomas) === range(0, count($requisitosIdiomas) - 1);
-        if ($esIndexado) {
-            throw new \Exception(
-                'Error interno: estructura de requisitos_idiomas corrupta (array indexado). ' .
-                'Contacte al administrador del sistema.',
-                500
-            );
-        }
-        
+
         $idiomasUsuario = $user->idiomasUsuario;
+
+        // Detectar si llegó como array indexado (lista de niveles mínimos, ej. ['A2', 'B1'])
+        $esIndexado = array_keys($requisitosIdiomas) === range(0, count($requisitosIdiomas) - 1);
+
+        if ($esIndexado) {
+            // El usuario debe tener al menos un idioma con nivel >= al requerido para cada entrada
+            foreach ($requisitosIdiomas as $nivelRequerido) {
+                if (!in_array(strtoupper($nivelRequerido), NivelIdioma::all())) {
+                    throw new \Exception("Nivel de idioma no válido: {$nivelRequerido}. Los niveles válidos son: " . implode(', ', NivelIdioma::all()) . ".", 400);
+                }
+
+                $cumpleRequisito = false;
+                foreach ($idiomasUsuario as $idiomaUsuario) {
+                    if ($this->compararNivelesIdioma($idiomaUsuario->nivel, $nivelRequerido)) {
+                        $cumpleRequisito = true;
+                        break;
+                    }
+                }
+
+                if (!$cumpleRequisito) {
+                    throw new \Exception("No cumples con el requisito de certificación de idioma nivel {$nivelRequerido} o superior.", 403);
+                }
+            }
+            return;
+        }
 
         foreach ($requisitosIdiomas as $idiomaRequerido => $nivelRequerido) {
             // Verificar que el nivel requerido sea válido

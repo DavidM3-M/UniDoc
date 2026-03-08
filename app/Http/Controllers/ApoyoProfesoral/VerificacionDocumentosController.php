@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\ApoyoProfesoral;
 // Se importan las clases y dependencias necesarias para el funcionamiento del controlador.
 use App\Constants\ConstDocumentos\EstadoDocumentos; // Constantes de estados válidos para documentos.
+use App\Http\Controllers\TalentoHumano\NotificacionController;
 use App\Models\Aspirante\Documento; // Modelo Documento, representa los documentos en la base de datos.
 use App\Models\Usuario\User; // Modelo User, representa a los usuarios del sistema.
 use Illuminate\Support\Facades\Storage; // Facade para interactuar con el sistema de archivos.
 use Illuminate\Http\Request; // Clase para manejar solicitudes HTTP.
 use Illuminate\Validation\Rule; // Clase para reglas de validación.
 use Illuminate\Support\Facades\DB; // Facade para ejecutar consultas SQL directas.
+use Illuminate\Support\Facades\Log;
 
 class VerificacionDocumentosController
 {
@@ -371,32 +373,77 @@ class VerificacionDocumentosController
     public function actualizarEstadoDocumento(Request $request, $documento_id)
     {
         try {
-            // Valida que el campo 'estado' esté presente en la solicitud y que su valor sea uno de los permitidos.
-            // Rule::in(EstadoDocumentos::all()) asegura que solo se acepten estados válidos definidos en la constante.
             $request->validate([
-                'estado' => ['required', Rule::in(EstadoDocumentos::all())],
+                'estado'         => ['required', Rule::in(EstadoDocumentos::all())],
+                'motivo_rechazo' => ['nullable', 'string', 'max:1000'],
             ]);
-            // Busca el documento en la base de datos usando el ID proporcionado.
-            // Si no se encuentra, lanza una excepción ModelNotFoundException que será capturada por el catch.
+
+            // El motivo es obligatorio cuando se rechaza el documento
+            if ($request->estado === EstadoDocumentos::RECHAZADO && empty($request->motivo_rechazo)) {
+                return response()->json([
+                    'message' => 'El motivo de rechazo es obligatorio al rechazar un documento.',
+                ], 422);
+            }
+
             $documento = Documento::findOrFail($documento_id);
-            // Asigna el nuevo estado al documento usando el valor recibido en la solicitud.
             $documento->estado = $request->estado;
-            // Guarda los cambios realizados en el documento en la base de datos.
+
+            if ($request->estado === EstadoDocumentos::RECHAZADO) {
+                $documento->motivo_rechazo = $request->motivo_rechazo;
+            } else {
+                $documento->motivo_rechazo = null;
+            }
+
             $documento->save();
-            // El mensaje informa que el estado del documento fue actualizado correctamente.
+
+            // Notificar al propietario del documento si fue rechazado
+            if ($request->estado === EstadoDocumentos::RECHAZADO) {
+                try {
+                    $propietario = $this->resolverPropietarioDocumento($documento);
+                    if ($propietario) {
+                        $rol = $request->user()?->getRoleNames()->first();
+                        NotificacionController::documentoRechazado($propietario, $request->motivo_rechazo, $rol);
+                    }
+                } catch (\Exception $notifEx) {
+                    Log::error("Error al notificar rechazo de documento {$documento_id}: " . $notifEx->getMessage());
+                }
+            }
+
             return response()->json([
                 'message' => 'Estado del documento actualizado correctamente.',
             ]);
         } catch (\Exception $e) {
-            // Si ocurre cualquier excepción durante el proceso (validación, búsqueda o guardado),
-            // se captura aquí y se retorna una respuesta JSON con un mensaje de error.
-            // También se incluye el mensaje específico de la excepción para facilitar la depuración.
-            // El código de estado HTTP es 500, indicando un error interno del servidor.
             return response()->json([
                 'message' => 'Error al actualizar el estado del documento.',
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Resuelve el usuario propietario de un documento a partir de su relación polimórfica.
+     *
+     * @param Documento $documento
+     * @return User|null
+     */
+    private function resolverPropietarioDocumento(Documento $documento): ?User
+    {
+        $documentable = $documento->documentable;
+
+        if (!$documentable) {
+            return null;
+        }
+
+        if ($documentable instanceof User) {
+            return $documentable;
+        }
+
+        // Cualquier otro modelo relacionado debe tener user_id
+        if (isset($documentable->user_id)) {
+            return User::find($documentable->user_id);
+        }
+
+        return null;
     }
 
     /**

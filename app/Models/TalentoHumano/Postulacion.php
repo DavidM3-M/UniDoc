@@ -25,7 +25,8 @@ class Postulacion extends Model
         'user_id',
         'convocatoria_id',
         'estado_postulacion',
-        
+        'motivo_rechazo',
+        'rechazado_por',
     ];
     // Define los campos que se pueden asignar masivamente (mass assignment).
 
