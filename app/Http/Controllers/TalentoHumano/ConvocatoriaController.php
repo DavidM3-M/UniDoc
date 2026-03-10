@@ -54,29 +54,21 @@ class ConvocatoriaController
 
                 $datosConvocatoria = $request->validated(); // Validamos los datos de la solicitud
                 
-                \Log::info('DEBUG crearConvocatoria - Datos VALIDADOS recibidos:', [
-                    'tiene_requisitos_idiomas' => isset($datosConvocatoria['requisitos_idiomas']),
-                    'requisitos_idiomas' => $datosConvocatoria['requisitos_idiomas'] ?? 'NO PRESENTE',
-                    'tipo_requisitos_idiomas' => gettype($datosConvocatoria['requisitos_idiomas'] ?? null),
-                ]);
-                
                 // Asegurar que requisitos_idiomas se guarda correctamente
                 if (isset($datosConvocatoria['requisitos_idiomas'])) {
                     $idiomas = $datosConvocatoria['requisitos_idiomas'];
-                    
-                    \Log::info('DEBUG crearConvocatoria - Procesando requisitos_idiomas:', [
-                        'es_array' => is_array($idiomas),
-                        'es_vacio' => empty($idiomas),
-                        'contenido' => $idiomas,
-                    ]);
-                    
+
                     // Si es array pero está vacío, establecer a null
                     if (is_array($idiomas) && empty($idiomas)) {
                         $datosConvocatoria['requisitos_idiomas'] = null;
-                        \Log::info('DEBUG crearConvocatoria - Array vacío, estableciendo a null');
-                    } 
-                    // Si es array asociativo, limpiar entradas inválidas
-                    elseif (is_array($idiomas)) {
+                    }
+                    // Si es array indexado (lista de niveles mínimos, ej. ['A2', 'B1'])
+                    elseif (is_array($idiomas) && array_keys($idiomas) === range(0, count($idiomas) - 1)) {
+                        $idiomasLimpios = array_values(array_filter($idiomas, fn($nivel) => !empty((string)$nivel)));
+                        $datosConvocatoria['requisitos_idiomas'] = !empty($idiomasLimpios) ? $idiomasLimpios : null;
+                    }
+                    // Si es array asociativo (idioma => nivel, ej. {'inglés': 'B2'}), limpiar entradas inválidas
+                    else {
                         $idiomasLimpios = [];
                         foreach ($idiomas as $idioma => $nivel) {
                             if (!empty((string)$idioma) && !empty((string)$nivel)) {
@@ -84,9 +76,6 @@ class ConvocatoriaController
                             }
                         }
                         $datosConvocatoria['requisitos_idiomas'] = !empty($idiomasLimpios) ? $idiomasLimpios : null;
-                        \Log::info('DEBUG crearConvocatoria - Después de limpiar:', [
-                            'resultado' => $datosConvocatoria['requisitos_idiomas'],
-                        ]);
                     }
                 }
                 
@@ -96,12 +85,6 @@ class ConvocatoriaController
                 }
                 
                 $convocatoria = Convocatoria::create($datosConvocatoria); // Creamos la convocatoria en la base de datos
-
-                \Log::info('DEBUG crearConvocatoria - Convocatoria guardada en BD:', [
-                    'id_convocatoria' => $convocatoria->id_convocatoria,
-                    'requisitos_idiomas_en_bd' => $convocatoria->requisitos_idiomas,
-                    'tipo' => gettype($convocatoria->requisitos_idiomas),
-                ]);
 
                 if ($request->hasFile('archivo')) { // Verificamos si se ha subido un archivo
 
@@ -162,18 +145,19 @@ class ConvocatoriaController
                 
                 $datosActualizacion = $request->validated(); 
                 
-                \Log::info('DEBUG actualizarConvocatoria - Datos VALIDADOS:', [
-                    'tiene_requisitos_idiomas' => isset($datosActualizacion['requisitos_idiomas']),
-                    'requisitos_idiomas' => $datosActualizacion['requisitos_idiomas'] ?? 'NO PRESENTE',
-                ]);
-                
                 // Procesar requisitos_idiomas similar a create
                 if (isset($datosActualizacion['requisitos_idiomas'])) {
                     $idiomas = $datosActualizacion['requisitos_idiomas'];
                     if (is_array($idiomas) && empty($idiomas)) {
                         $datosActualizacion['requisitos_idiomas'] = null;
-                    } 
-                    elseif (is_array($idiomas)) {
+                    }
+                    // Si es array indexado (lista de niveles mínimos, ej. ['A2', 'B1'])
+                    elseif (is_array($idiomas) && array_keys($idiomas) === range(0, count($idiomas) - 1)) {
+                        $idiomasLimpios = array_values(array_filter($idiomas, fn($nivel) => !empty((string)$nivel)));
+                        $datosActualizacion['requisitos_idiomas'] = !empty($idiomasLimpios) ? $idiomasLimpios : null;
+                    }
+                    // Si es array asociativo (idioma => nivel, ej. {'inglés': 'B2'})
+                    else {
                         $idiomasLimpios = [];
                         foreach ($idiomas as $idioma => $nivel) {
                             if (!empty((string)$idioma) && !empty((string)$nivel)) {
@@ -190,11 +174,6 @@ class ConvocatoriaController
                 }
                 
                 $convocatoria->update($datosActualizacion); // Actualizamos la convocatoria con los datos validados
-
-                \Log::info('DEBUG actualizarConvocatoria - Convocatoria actualizada en BD:', [
-                    'id_convocatoria' => $convocatoria->id_convocatoria,
-                    'requisitos_idiomas_en_bd' => $convocatoria->requisitos_idiomas,
-                ]);
 
                 if ($request->hasFile('archivo')) { // Verificamos si se ha subido un archivo
                     $this->archivoService->actualizarArchivoDocumento($request->file('archivo'), $convocatoria, 'Convocatorias'); // Actualizamos el archivo asociado a la convocatoria

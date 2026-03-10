@@ -12,23 +12,24 @@ Route::group([
     'middleware' => [ 'api','auth:api', 'role:Administrador'],
     'prefix' => 'admin'
 ], function () {
-    // // Rutas de roles
+    // Rutas de roles
     Route::get('listar-roles', [RoleController::class, 'listarRoles']);
-    Route::post('crear-rol', [RoleController::class, 'crearRol']);
+    // crearRol y eliminarRol están deshabilitados (métodos no implementados)
     Route::post('asignar-rol', [RoleController::class, 'asignarRol']);
     Route::post('remover-rol/{id}', [RoleController::class, 'removerRol']);
-    Route::put('actualizar-rol', [RoleController::class, 'actualizarRol']);
-    Route::delete('eliminar-rol', [RoleController::class, 'eliminarRol']);
+    Route::put('actualizar-rol/{id}', [RoleController::class, 'actualizarRol']);
 
     // Rutas de subir un archivo CSV para ubicaciones
     Route::post('uploadCsv', [UbicacionController::class, 'uploadCsv']);
-    // // Rutas de usuarios
+
+    // Rutas de usuarios
     Route::get('listar-usuarios', [UserController::class, 'listarUsuarios']);
+    Route::put('/usuarios/{id}/cambiar-rol', [UserController::class, 'cambiarRol']);
+    Route::get('/usuarios/exportar-excel', [UserController::class, 'exportarUsuariosExcel']);
     Route::put('editar-usuario/{id}', [UserController::class, 'editarUsuario']);
     Route::delete('eliminar-usuario/{id}', [UserController::class, 'eliminarUsuario']);
 
-
-    //normativas
+    // Normativas
     Route::post('crear-normativa', [NormativaController::class, 'crearNormativa']);
     Route::get('obtener-normativas', [NormativaController::class, 'obtenerNormativas']);
     Route::get('obtener-normativa/{id}', [NormativaController::class, 'obtenerNormativaPorId']);
@@ -37,26 +38,6 @@ Route::group([
 
     // Rutas de reportes
     Route::get('usuarios-excel', [ReporteController::class, 'usuariosExcel']);
-
-
-
-
-    //cree estos nuevos endpoints (Brayan Cuellar)
-     // Gestión de usuarios
-    Route::get('/usuarios', [UserController::class, 'listarUsuarios']);
-    Route::put('/usuarios/{id}/cambiar-rol', [UserController::class, 'cambiarRol']);
-    Route::get('/usuarios/exportar-excel', [UserController::class, 'exportarUsuariosExcel']);
-    Route::put('/usuarios/{id}', [UserController::class, 'editarUsuario']);
-    Route::delete('/usuarios/{id}', [UserController::class, 'eliminarUsuario']);
-
-    // Gestión de roles
-    Route::get('/roles', [RoleController::class, 'listarRoles']);
-    Route::post('/roles/asignar', [RoleController::class, 'asignarRol']);
-    Route::post('/roles/remover', [RoleController::class, 'removerRol']);
-    Route::put('/roles/{id}', [RoleController::class, 'actualizarRol']);
-
-
-// Rutas compartidas para Vicerrectoria y Rectoria
 });
 Route::group([
     'middleware' => ['api', 'auth:api', 'role:Vicerrectoria|Rectoria|Talento Humano'],

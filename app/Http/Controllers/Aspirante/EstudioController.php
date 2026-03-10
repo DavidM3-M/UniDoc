@@ -146,12 +146,13 @@ class EstudioController
             });
 
             return response()->json(['estudio' => $estudio], 200); // Devuelve el estudio encontrado
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['message' => 'Estudio no encontrado.'], 404);
         } catch (\Exception $e) {
-
             return response()->json([ // Manejo de errores
                 'message' => 'Error al obtener el estudio',
                 'error'   => $e->getMessage()
-            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
+            ], is_numeric($e->getCode()) && $e->getCode() >= 400 ? (int) $e->getCode() : 500);
         }
     }
 
@@ -226,6 +227,8 @@ class EstudioController
 
             return response()->json(['message' => 'Estudio eliminado correctamente'], 200); // Respuesta exitosa
 
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['message' => 'Estudio no encontrado.'], 404);
         } catch (\Exception $e) {
             return response()->json([ // Manejo de errores
                 'message' => 'Error al eliminar el estudio',

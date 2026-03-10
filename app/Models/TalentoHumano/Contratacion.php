@@ -13,6 +13,7 @@ class Contratacion extends Model
     // Define la clave primaria de la tabla como `id_contratacion`.
     protected $fillable = [
         'user_id',
+        'id_convocatoria',
         'tipo_contrato',
         'area',
         'fecha_inicio',
@@ -22,6 +23,11 @@ class Contratacion extends Model
     ];
     // Define los campos que se pueden asignar masivamente (mass assignment) en este modelo.
 
+    public function convocatoria()
+    {
+        return $this->belongsTo(Convocatoria::class, 'id_convocatoria', 'id_convocatoria');
+    }
+
     public function usuarioContratacion()
     // Define una relación entre el modelo `Contratacion` y el modelo `User`.
     {
@@ -29,7 +35,4 @@ class Contratacion extends Model
         // Establece una relación de uno a muchos inversa entre `Contratacion` y `User`.
         // Usa la clave foránea `user_id` en la tabla `contratacions` y la clave primaria `id` del modelo `User`.
     }
-
-
-
 }

@@ -28,8 +28,13 @@
    - [Público](#público)
    - [Ubicaciones](#ubicaciones)
    - [Constantes](#constantes)
+   - [Notificaciones](#notificaciones)
 9. [Formatos de Respuesta](#formatos-de-respuesta)
 10. [Colección Postman](#colección-postman)
+11. [Flujo de Trabajo del Sistema](#flujo-de-trabajo-del-sistema)
+12. [Flujo de Rechazo](#flujo-de-rechazo)
+13. [Errores Verificados y Corregidos](#errores-verificados-y-corregidos)
+14. [Mejoras de Lógica de Negocio](#mejoras-de-lógica-de-negocio)
 
 ---
 
@@ -45,6 +50,8 @@ El sistema gestiona el ciclo de vida completo de la vinculación docente univers
 6. **Apoyo Profesoral** filtra y analiza docentes por competencias.
 7. **Evaluador de Producción** revisa y aprueba/rechaza documentos de producción académica.
 
+En cada paso del flujo el sistema envía **notificaciones automáticas** (correo electrónico + base de datos) a los actores relevantes: publicación de convocatoria, confirmación de postulación, cambio de estado, contratación y transición de avales entre instancias.
+
 ---
 
 ## Tecnologías
@@ -59,6 +66,8 @@ El sistema gestiona el ciclo de vida completo de la vinculación docente univers
 | Exportación Excel | `maatwebsite/excel` |
 | PDF | `barryvdh/laravel-dompdf` |
 | Documentación API | L5-Swagger (OpenAPI 3.0) |
+| Notificaciones | Laravel Notifications (`database` + correo electrónico) |
+| Correo | Laravel Mail + Mailable (`NotificacionMail`) |
 | Imágenes | `intervention/image` |
 
 ---
@@ -177,16 +186,20 @@ La API usa **JWT (JSON Web Token)**. Pasos:
 
 **Prefijo:** `/auth`
 
-| Método | URI | Auth | Descripción |
-|--------|-----|------|-------------|
-| POST | `/auth/registrar-usuario` | No | Registra un nuevo usuario con rol Aspirante |
-| POST | `/auth/iniciar-sesion` | No | Inicia sesión y retorna el JWT |
-| POST | `/auth/restablecer-contrasena` | No | Solicita restablecimiento de contraseña (envía email) |
-| POST | `/auth/restablecer-contrasena-token` | No | Actualiza contraseña usando el token del email |
-| POST | `/auth/cerrar-sesion` | Sí | Invalida el JWT del usuario en sesión |
-| GET | `/auth/obtener-usuario-autenticado` | Sí | Retorna datos del usuario autenticado |
-| POST | `/auth/actualizar-contrasena/{id}` | Sí | Actualiza contraseña de un usuario específico |
-| POST | `/auth/actualizar-usuario` | Sí | Actualiza el perfil del usuario autenticado |
+> **Rate limiting (seguridad):** Los endpoints públicos tienen límite de intentos por minuto por IP:
+> - `registrar-usuario` e `iniciar-sesion`: **10 req/min**
+> - `restablecer-contrasena` y `restablecer-contrasena-token`: **5 req/min**
+
+| Método | URI | Auth | Rate limit | Descripción |
+|--------|-----|------|------------|-------------|
+| POST | `/auth/registrar-usuario` | No | 10/min | Registra un nuevo usuario con rol Aspirante |
+| POST | `/auth/iniciar-sesion` | No | 10/min | Inicia sesión y retorna el JWT |
+| POST | `/auth/restablecer-contrasena` | No | 5/min | Solicita restablecimiento (respuesta genérica para no revelar si el correo existe) |
+| POST | `/auth/restablecer-contrasena-token` | No | 5/min | Actualiza contraseña usando el token del email (token comparado con hash SHA-256) |
+| POST | `/auth/cerrar-sesion` | Sí | — | Invalida el JWT del usuario en sesión |
+| GET | `/auth/obtener-usuario-autenticado` | Sí | — | Retorna datos del usuario autenticado |
+| POST | `/auth/actualizar-contrasena` | Sí | — | Actualiza contraseña del usuario autenticado (sin ID en URL; usa el token) |
+| POST | `/auth/actualizar-usuario` | Sí | — | Actualiza el perfil del usuario autenticado |
 
 #### `POST /auth/registrar-usuario` — Cuerpo
 
@@ -454,6 +467,15 @@ La API usa **JWT (JSON Web Token)**. Pasos:
 | GET | `/aspirante/ver-postulaciones` | Lista mis postulaciones |
 | DELETE | `/aspirante/eliminar-postulacion/{id}` | Elimina mi postulación |
 
+**Validaciones automáticas en `POST /aspirante/crear-postulacion/{convocatoriaId}`:**
+
+| Requisito | Lógica aplicada |
+|-----------|----------------|
+| **Experiencia** | Se suman los años de **todas** las experiencias del aspirante (sin filtrar por tipo). El total debe ser ≥ a la suma de todos los años requeridos en `requisitos_experiencia`. |
+| **Idiomas** | Se aplica lógica de **mínimos MCER**. Si la convocatoria exige nivel A2 y el aspirante acredita C1 en cualquier idioma, el requisito se considera cumplido. Para el formato asociativo `{"inglés":"B2"}` se valida el idioma específico; para el formato de lista `["B1"]` basta con que cualquier idioma registrado tenga nivel ≥ al requerido. |
+| **Estudios** | El aspirante debe tener al menos un estudio académico registrado. |
+| **Estado** | La convocatoria debe estar en estado `Abierta`. |
+
 #### Normativas
 
 | Método | URI | Descripción |
@@ -504,8 +526,15 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | `tipo_cargo_id` | integer | Sí | ID del tipo de cargo |
 | `fecha_inicio` | date | Sí | Inicio de la convocatoria |
 | `fecha_fin` | date | Sí | Cierre de la convocatoria |
-| `requisitos_idioma` | JSON string | No | `[{"idioma":"Inglés","nivel":"B2"}]` |
-| `requisitos_experiencia` | JSON string | No | Array de requisitos de experiencia |
+| `requisitos_idiomas` | JSON object / array | No | Ver formatos abajo |
+| `requisitos_experiencia` | JSON object | No | `{"Docencia Universitaria": 2, "Investigación": 1}` — la clave es el tipo y el valor los años mínimos. Al postular se valida la **suma total** de todos los valores. |
+
+**Formatos aceptados para `requisitos_idiomas`:**
+
+| Formato | Ejemplo | Comportamiento |
+|---------|---------|----------------|
+| Objeto asociativo | `{"inglés": "B2", "francés": "A2"}` | Se verifica idioma + nivel mínimo por idioma específico. |
+| Array de niveles | `["B1", "A2"]` | Se verifica que el aspirante tenga **al menos un idioma** con nivel ≥ al requerido por cada entrada (sin restricción de idioma específico). |
 | `archivo_convocatoria` | file (PDF) | Sí | Documento oficial |
 
 #### Experiencias Requeridas
@@ -523,9 +552,16 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | Método | URI | Descripción |
 |--------|-----|-------------|
 | GET | `/talentoHumano/obtener-postulaciones` | Lista todas las postulaciones |
-| PUT | `/talentoHumano/actualizar-postulacion/{idPostulacion}` | Actualiza estado |
+| PUT | `/talentoHumano/actualizar-postulacion/{idPostulacion}` | Actualiza estado (puede rechazar con motivo) |
 | DELETE | `/talentoHumano/eliminar-postulacion/{idPostulacion}` | Elimina postulación |
 | GET | `/talentoHumano/hoja-de-vida-pdf/{idConvocatoria}/{idUsuario}` | Genera PDF de HV |
+
+**Campos `PUT /talentoHumano/actualizar-postulacion/{idPostulacion}` (JSON):**
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `estado_postulacion` | string | Sí | `Enviada`, `Faltan documentos`, `Rechazada`, `Aprobada` |
+| `motivo_rechazo` | string | **Sí si `Rechazada`** | Motivo del rechazo (ej: `"Falta de documentos"`, `"Perfil no cumple requisitos"`) |
 
 #### Contrataciones
 
@@ -570,6 +606,20 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | GET | `/talentoHumano/avales` | Lista avales (filtros: `convocatoria_id`, `user_id`) |
 | POST | `/talentoHumano/avales` | Crea / actualiza aval |
 | PUT | `/talentoHumano/avales/{id}` | Aprueba o rechaza aval |
+| POST | `/talento-humano/rechazar-aval/{userId}` | Rechaza perfil del aspirante (cadena de avales) |
+
+**Campos `PUT /talentoHumano/avales/{id}` (JSON):**
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `estado` | string | Sí | `pending`, `aprobado`, `rechazado` |
+| `motivo_rechazo` | string | **Sí si `rechazado`** | Motivo del rechazo |
+
+**Campos `POST /talento-humano/rechazar-aval/{userId}` (JSON):**
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `motivo_rechazo` | string | Sí | Razón del rechazo. Se notifica al aspirante y se marcan sus postulaciones activas como `Rechazada` |
 
 ---
 
@@ -592,11 +642,9 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | Método | URI | Descripción |
 |--------|-----|-------------|
 | GET | `/admin/listar-roles` | Lista todos los roles |
-| POST | `/admin/crear-rol` | Crea nuevo rol |
 | POST | `/admin/asignar-rol` | Asigna rol a usuario |
 | POST | `/admin/remover-rol/{id}` | Remueve rol de usuario |
-| PUT | `/admin/actualizar-rol` | Actualiza nombre de rol |
-| DELETE | `/admin/eliminar-rol` | Elimina rol |
+| PUT | `/admin/actualizar-rol/{id}` | Actualiza nombre de rol |
 
 #### Normativas
 
@@ -657,8 +705,8 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 
 | Método | URI | Descripción |
 |--------|-----|-------------|
-| GET | `/coordinador/obtener-documentos/{estado}` | Documentos por estado (`Pendiente`, `Aprobado`, `Rechazado`) |
-| PUT | `/coordinador/actualizar-documento/{id}` | Actualiza estado de documento |
+| GET | `/coordinador/obtener-documentos/{estado}` | Documentos por estado (`pendiente`, `aprobado`, `rechazado`) |
+| PUT | `/coordinador/actualizar-documento/{id}` | Actualiza estado de documento (requiere motivo si `rechazado`) |
 | GET | `/coordinador/listar-docentes` | Lista docentes |
 | GET | `/coordinador/ver-documentos-docente/{id}` | Documentos de un docente |
 | GET | `/coordinador/ver-documento/{id}` | Ver documento |
@@ -682,6 +730,7 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | Método | URI | Descripción |
 |--------|-----|-------------|
 | POST | `/coordinador/aval-hoja-vida/{userId}` | Otorga aval del Coordinador |
+| POST | `/coordinador/rechazar-aval/{userId}` | Rechaza el perfil (requiere aval de TH previo) |
 | GET | `/coordinador/usuarios/{userId}/avales` | Avales de un usuario |
 | GET | `/coordinador/usuarios` | Lista usuarios aprobados por TH |
 
@@ -694,11 +743,12 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | Método | URI | Descripción |
 |--------|-----|-------------|
 | POST | `/rectoria/aval-hoja-vida/{userId}` | Otorga aval de Rectoría (requiere aval previo de Vicerrectoría) |
+| POST | `/rectoria/rechazar-aval/{userId}` | Rechaza el perfil (requiere aval de Vicerrectoría previo) |
 | GET | `/rectoria/usuarios/{userId}/avales` | Avales de un usuario |
 | GET | `/rectoria/usuarios` | Usuarios aprobados por Vicerrectoría |
 | GET | `/rectoria/usuarios-convocatorias` | Usuarios con avales y sus convocatorias |
 | GET | `/rectoria/obtener-documentos/{estado}` | Documentos por estado |
-| PUT | `/rectoria/actualizar-documento/{id}` | Actualiza estado de documento |
+| PUT | `/rectoria/actualizar-documento/{id}` | Actualiza estado de documento (requiere motivo si `rechazado`) |
 | GET | `/rectoria/listar-docentes` | Lista docentes |
 | GET | `/rectoria/ver-documentos-docente/{id}` | Documentos de docente |
 | GET | `/rectoria/ver-documento/{id}` | Ver documento |
@@ -719,10 +769,11 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | Método | URI | Descripción |
 |--------|-----|-------------|
 | POST | `/vicerrectoria/aval-hoja-vida/{userId}` | Otorga aval de Vicerrectoría (requiere avales de TH y Coordinador) |
+| POST | `/vicerrectoria/rechazar-aval/{userId}` | Rechaza el perfil (requiere avales de TH y Coordinador previos) |
 | GET | `/vicerrectoria/usuarios/{userId}/avales` | Avales de usuario |
 | GET | `/vicerrectoria/usuarios` | Lista usuarios |
 | GET | `/vicerrectoria/obtener-documentos/{estado}` | Documentos por estado |
-| PUT | `/vicerrectoria/actualizar-documento/{id}` | Actualiza estado de documento |
+| PUT | `/vicerrectoria/actualizar-documento/{id}` | Actualiza estado de documento (requiere motivo si `rechazado`) |
 | GET | `/vicerrectoria/listar-docentes` | Lista docentes |
 | GET | `/vicerrectoria/ver-documentos-docente/{id}` | Documentos de docente |
 | GET | `/vicerrectoria/ver-documento/{id}` | Ver documento |
@@ -758,7 +809,7 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | GET | `/apoyoProfesoral/filtrar-docentes-ambito/{ambitoId}` | Filtrar por ámbito de divulgación |
 | GET | `/apoyoProfesoral/mostrar-todas-experiencia` | Docentes con experiencias |
 | GET | `/apoyoProfesoral/filtrar-docentes-experiencia-id/{id}` | Experiencias de un docente |
-| GET | `/apoyoProfesoral/filtrar-docentes-tipo-experiecnia/{tipo}` | Filtrar por tipo de experiencia |
+| GET | `/apoyoProfesoral/filtrar-docentes-tipo-experiencia/{tipo}` | Filtrar por tipo de experiencia |
 | POST | `/apoyoProfesoral/crear-certificados-masivos` | Genera certificados en masa |
 
 ---
@@ -833,6 +884,50 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | GET | `/ubicaciones/departamentos/{pais_id}` | Departamentos de un país |
 | GET | `/ubicaciones/municipios/{departamento_id}` | Municipios de un departamento |
 | GET | `/ubicaciones/municipio/{municipio_id}` | Información completa de un municipio |
+
+---
+
+### Notificaciones
+
+**Prefijo:** ninguno (rutas raíz) | **Middleware:** `auth:api` (cualquier rol autenticado)
+
+Permite a cualquier usuario autenticado consultar y gestionar sus propias notificaciones. Las notificaciones se generan automáticamente por eventos del sistema (nueva convocatoria, cambio de estado de postulación, contratación, etc.).
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| GET | `/notificaciones` | Lista todas las notificaciones del usuario autenticado, ordenadas de más reciente a más antigua |
+| PUT | `/notificaciones/{id}/leer` | Marca una notificación específica como leída |
+| PUT | `/notificaciones/leer-todas` | Marca todas las notificaciones no leídas como leídas |
+
+**Respuesta `GET /notificaciones` `200`:**
+```json
+{
+  "notificaciones": [
+    {
+      "id": "uuid",
+      "mensaje": "Se ha publicado una nueva convocatoria en el sistema UniDoc.",
+      "leida": false,
+      "created_at": "2026-03-05T14:30:00.000000Z"
+    }
+  ]
+}
+```
+
+**Eventos que disparan notificaciones automáticas:**
+
+| Evento | Canal | Destinatarios |
+|--------|-------|---------------|
+| Nueva convocatoria publicada | DB + Email | Todos los Aspirantes y Docentes |
+| Aspirante se postula | DB + Email | TH (aviso) + Aspirante (confirmación) |
+| Cambio de estado de postulación | DB + Email | El aspirante postulado |
+| **Postulación rechazada** | DB + Email | El aspirante (con motivo y quién rechazó) |
+| Nueva contratación | DB + Email | El usuario contratado |
+| Aval de TH aprobado | DB + Email | Coordinadores |
+| Aval de Coordinación aprobado | DB + Email | Vicerrectoría |
+| Aval de Vicerrectoría aprobado | DB + Email | Rectoría |
+| Aval final de Rectoría completado | DB + Email | El aspirante |
+| **Aval rechazado (TH / Coord / VR / Rectoría)** | DB + Email | El aspirante (con etapa y motivo) |
+| **Documento rechazado** | DB + Email | El propietario del documento (con motivo) |
 
 ---
 
@@ -927,16 +1022,16 @@ Completar HV (estudios, idiomas, experiencias, producción, documentos)
 Postulación a Convocatoria
        │
        ▼
-Revisión Talento Humano ──► Aval TH
-       │
-       ▼
-Evaluación Coordinador ──► Aval Coordinador
-       │
-       ▼
-Revisión Vicerrectoría ──► Aval Vicerrectoría
-       │
-       ▼
-Revisión Rectoría ──► Aval Rectoría
+Revisión Talento Humano ──► Aval TH ──────────────────────────┐
+       │                                            Rechazar ──► Notificación al Aspirante
+       ▼                                                        (motivo + correo + DB)
+Evaluación Coordinador ──► Aval Coordinador ──────────────────┤
+       │                                            Rechazar ──┤
+       ▼                                                        │
+Revisión Vicerrectoría ──► Aval Vicerrectoría ────────────────┤
+       │                                            Rechazar ──┤
+       ▼                                                        │
+Revisión Rectoría ──► Aval Rectoría ──────────────────────────┘
        │
        ▼
 Contratación (TH) ──► Rol cambia a Docente
@@ -944,6 +1039,225 @@ Contratación (TH) ──► Rol cambia a Docente
        ▼
 Gestión Docente + Apoyo Profesoral + Evaluador Producción
 ```
+
+---
+
+## Flujo de Rechazo
+
+El sistema implementa un flujo completo de rechazo en tres niveles. En cada caso se envían notificaciones automáticas (correo + base de datos) al aspirante con el motivo y la instancia que rechazó.
+
+### 1 — Rechazo de postulación por Talento Humano
+
+**Endpoint:** `PUT /talentoHumano/actualizar-postulacion/{idPostulacion}`
+
+```json
+{
+  "estado_postulacion": "Rechazada",
+  "motivo_rechazo": "Falta de documentos obligatorios"
+}
+```
+
+- El campo `motivo_rechazo` es **obligatorio** cuando `estado_postulacion = "Rechazada"`.
+- El estado queda registrado en `postulacions.estado_postulacion` junto con `motivo_rechazo` y `rechazado_por` (rol del usuario que rechazó).
+- Se envía notificación al aspirante indicando el motivo y quién rechazó.
+
+---
+
+### 2 — Rechazo en la cadena de avales (perfil/hoja de vida)
+
+Cada rol cuenta con un endpoint dedicado de rechazo. Al rechazar se marcan las postulaciones activas del aspirante como `Rechazada` y se notifica al aspirante.
+
+| Endpoint | Rol | Prerequisito |
+|----------|-----|---------------|
+| `POST /talento-humano/rechazar-aval/{userId}` | Talento Humano | Ninguno |
+| `POST /coordinador/rechazar-aval/{userId}` | Coordinador | Requiere aval de TH |
+| `POST /vicerrectoria/rechazar-aval/{userId}` | Vicerrectoría | Requiere avales de TH y Coordinador |
+| `POST /rectoria/rechazar-aval/{userId}` | Rectoría | Requiere aval de Vicerrectoría |
+
+**Body (todos):**
+```json
+{ "motivo_rechazo": "El aspirante no cumple con el perfil requerido" }
+```
+
+---
+
+### 3 — Rechazo de aval por convocatoria (`convocatoria_avales`)
+
+**Endpoint:** `PUT /talentoHumano/avales/{id}`
+
+```json
+{
+  "estado": "rechazado",
+  "motivo_rechazo": "Documentación de soporte no válida"
+}
+```
+
+- El `motivo_rechazo` (o `comentario`) es obligatorio cuando `estado = "rechazado"`.
+- Solo el usuario con el rol que coincide con el campo `aval` del registro puede rechazar.
+- Se notifica al aspirante con el nombre de la etapa y el motivo.
+
+---
+
+### 4 — Rechazo de documentos
+
+**Endpoints disponibles por rol:**
+
+| Rol | Endpoint |
+|-----|----------|
+| Talento Humano | *(sin endpoint propio de documentos)* |
+| Coordinador | `PUT /coordinador/actualizar-documento/{id}` |
+| Vicerrectoría | `PUT /vicerrectoria/actualizar-documento/{id}` |
+| Rectoría | `PUT /rectoria/actualizar-documento/{id}` |
+| Apoyo Profesoral | `PUT /apoyoProfesoral/actualizar-documento/{id}` |
+
+**Body:**
+```json
+{
+  "estado": "rechazado",
+  "motivo_rechazo": "El documento está vencido o es ilegible"
+}
+```
+
+- El `motivo_rechazo` es **obligatorio** cuando `estado = "rechazado"`.
+- Se resuelve automáticamente el propietario del documento (via relación polimórfica) y se le envía notificación con motivo y rol que rechazó.
+- El campo `motivo_rechazo` queda persistido en la tabla `documentos` para consulta posterior.
+
+---
+
+### Motivos de rechazo predefinidos (sugeridos)
+
+El campo `motivo_rechazo` es texto libre. Se recomiendan valores estandarizados como:
+
+- `"Falta de documentos"` — documentos requeridos no cargados
+- `"Documento vencido o ilegible"` — archivo inválido
+- `"Perfil no cumple requisitos"` — experiencia/estudios insuficientes
+- `"No aprobó evaluación"` — clase de muestra o prueba psicotécnica no aprobada
+- `"Criterios institucionales no cumplidos"` — decisión institucional
+
+---
+
+## Errores Verificados y Corregidos
+
+Los siguientes errores fueron detectados mediante revisión del código fuente y corregidos directamente en los archivos correspondientes.
+
+---
+
+### BUG-001 — Ruta duplicada en `routes/aval.php` (Rectoría)
+
+**Archivo:** `routes/aval.php`  
+**Gravedad:** Media — la segunda definición de la ruta sobrescribe silenciosamente a la primera en Laravel, lo que puede provocar comportamientos inesperados ante futuras modificaciones.
+
+**Causa:** Se definió dos veces seguidas la misma ruta dentro del grupo `role:Rectoria`:
+```php
+// Antes (duplicado)
+Route::get('convocatorias', [ProcesoAprobacionController::class, 'listarConvocatoriasConAspirantes']);
+// Convocatorias con aspirantes
+Route::get('convocatorias', [ProcesoAprobacionController::class, 'listarConvocatoriasConAspirantes']);
+```
+
+**Corrección:** Se eliminó la línea duplicada. La ruta queda definida una sola vez:
+```php
+// Después (corregido)
+Route::get('convocatorias', [ProcesoAprobacionController::class, 'listarConvocatoriasConAspirantes']);
+```
+
+---
+
+### BUG-002 — Typo en el nombre de la URI de Apoyo Profesoral
+
+**Archivo:** `routes/apoyo_profesoral.php`  
+**Gravedad:** Alta — cualquier cliente que usara la URL documentada (`filtrar-docentes-tipo-experiencia`) recibiría un `404`.
+
+**Causa:** El nombre del segmento de ruta tenía una letra transpuesta: `experiecnia` en lugar de `experiencia`.
+```php
+// Antes (typo)
+Route::get('filtrar-docentes-tipo-experiecnia/{tipo}', [...]);
+```
+
+**Corrección:**
+```php
+// Después (corregido)
+Route::get('filtrar-docentes-tipo-experiencia/{tipo}', [...]);
+```
+
+**Nota:** Si existen clientes ya integrados con la URI incorrecta, deben actualizar su URL.
+
+---
+
+### BUG-003 — README documenta ruta inexistente `POST /auth/actualizar-contrasena/{id}`
+
+**Archivo:** `README.md` (documentación), `routes/auth.php` (código fuente)  
+**Gravedad:** Media — podría llevar a integraciones incorrectas del frontend.
+
+**Causa:** El README indicaba que la ruta recibía un `{id}` de usuario externo. La implementación real opera sobre el usuario **autenticado** en la sesión; no acepta ningún ID en la URL.
+```
+// Antes (incorrecto en README)
+POST /auth/actualizar-contrasena/{id}
+
+// Real (en routes/auth.php)
+Route::post('actualizar-contrasena', [AuthController::class, 'actualizarContrasena']);
+```
+
+**Corrección:** Se actualizó la tabla de endpoints en el README:
+```
+POST /auth/actualizar-contrasena   — Actualiza contraseña del usuario autenticado
+```
+
+---
+
+### BUG-004 — README documenta rutas de Administrador que no están implementadas
+
+**Archivo:** `README.md` (documentación), `routes/admin.php` (código fuente)  
+**Gravedad:** Baja — genera confusión pero no afecta el runtime.
+
+**Causa:** El README listaba `POST /admin/crear-rol` y `DELETE /admin/eliminar-rol` como endpoints disponibles. En `routes/admin.php` solo existe el comentario explícito: _"crearRol y eliminarRol están deshabilitados (métodos no implementados)"_. Los métodos no existen en `RoleController`.
+
+**Corrección:** Se eliminaron esas dos filas de la tabla de Roles en el README. Los endpoints activos son:
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| GET | `/admin/listar-roles` | Lista todos los roles |
+| POST | `/admin/asignar-rol` | Asigna rol a usuario |
+| POST | `/admin/remover-rol/{id}` | Remueve rol de usuario |
+| PUT | `/admin/actualizar-rol/{id}` | Actualiza nombre de rol |
+
+---
+
+---
+
+### MEJORA-001 — Validación de experiencia: suma total en lugar de por tipo
+
+**Archivo:** `app/Http/Controllers/TalentoHumano/PostulacionController.php`  
+**Método:** `verificarRequisitosExperienciaEspecifica`
+
+**Cambio:** Antes se verificaba cada tipo de experiencia de forma independiente (el aspirante debía cumplir X años por cada tipo listado). Ahora se suman **todos los años requeridos** y se comparan contra el **total de años de experiencia del aspirante** sin distinción de tipo.
+
+```php
+// Antes — por tipo
+foreach ($requisitosExperiencia as $tipo => $anosRequeridos) {
+    $anosUsuario = calcularAniosExperienciaPorTipo($tipo);
+    if ($anosUsuario < $anosRequeridos) throw new Exception(...);
+}
+
+// Ahora — suma total
+$totalAnosRequeridos = array_sum($requisitosExperiencia); // suma de todos los valores
+$totalAnosUsuario   = totalDias / 365.25;               // toda la experiencia
+if ($totalAnosUsuario < $totalAnosRequeridos) throw new Exception(...);
+```
+
+---
+
+### MEJORA-002 — Validación de idiomas: mínimos MCER y soporte array indexado
+
+**Archivo:** `app/Http/Controllers/TalentoHumano/PostulacionController.php`  
+**Método:** `verificarRequisitosIdiomas`
+
+**Cambio:** Se elimina el error 500 ante `requisitos_idiomas` en formato de array indexado y se implementa lógica de **niveles mínimos** para ambos formatos:
+
+- **Array indexado** `["A2", "B1"]`: el aspirante debe tener al menos un idioma registrado con nivel ≥ al requerido por cada entrada. Un C1 satisface un requisito A2.
+- **Objeto asociativo** `{"inglés": "B2"}`: se valida idioma específico con nivel ≥ al requerido (comportamiento previo, ya usaba `compararNivelesIdioma`).
+
+Adicionalmnete se corrigió un bug en `ConvocatoriaController` (create y update) donde un array indexado no se persistía por falso positivo de `empty()` sobre el índice `0`.
 
 ---
 

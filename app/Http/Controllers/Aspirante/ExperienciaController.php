@@ -139,11 +139,13 @@ class ExperienciaController
 
             return response()->json(['experiencia' => $experiencia], 200); // Se retorna la experiencia encontrada.
 
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['message' => 'Experiencia no encontrada.'], 404);
         } catch (\Exception $e) {
             return response()->json([ // En caso de error, se retorna un mensaje detallado.
                 'message' => 'Error al obtener la experiencia.',
                 'error' => $e->getMessage()
-            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
+            ], is_numeric($e->getCode()) && $e->getCode() >= 400 ? (int) $e->getCode() : 500);
         }
     }
 
@@ -218,6 +220,8 @@ class ExperienciaController
 
             return response()->json(['message' => 'Experiencia eliminada correctamente'], 200); // Retornar una respuesta JSON indicando que la experiencia fue eliminada correctamente.
 
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['message' => 'Experiencia no encontrada.'], 404);
         } catch (\Exception $e) {
             return response()->json([ // Manejo de errores: retornar una respuesta JSON con el mensaje de error y el código 500.
                 'message' => 'Error al eliminar la experiencia.',

@@ -13,6 +13,7 @@ Route::group([
     'prefix' => 'rectoria'
 ], function () {
     Route::post('aval-hoja-vida/{userId}', [AvalController::class, 'avalHojaVida']);
+    Route::post('rechazar-aval/{userId}', [AvalController::class, 'rechazarAval']);
     Route::get('usuarios/{userId}/avales', [AvalController::class, 'verAvales']);
     Route::get('usuarios', [AvalController::class, 'listarUsuarios']);
 
@@ -33,8 +34,6 @@ Route::group([
 
     // Convocatorias con aspirantes
     Route::get('convocatorias', [App\Http\Controllers\Coordinador\ProcesoAprobacionController::class, 'listarConvocatoriasConAspirantes']);
-    // Convocatorias con aspirantes
-    Route::get('convocatorias', [App\Http\Controllers\Coordinador\ProcesoAprobacionController::class, 'listarConvocatoriasConAspirantes']);
 
     // Agregado para la hoja de vida
 
@@ -51,6 +50,7 @@ Route::group([
     'prefix' => 'vicerrectoria'
 ], function () {
     Route::post('aval-hoja-vida/{userId}', [AvalController::class, 'avalHojaVida']);
+    Route::post('rechazar-aval/{userId}', [AvalController::class, 'rechazarAval']);
     Route::get('usuarios/{userId}/avales', [AvalController::class, 'verAvales']);
     Route::get('usuarios', [AvalController::class, 'listarUsuarios']);
 
@@ -83,6 +83,7 @@ Route::group([
     'prefix' => 'talento-humano'
 ], function () {
     Route::post('aval-hoja-vida/{userId}', [AvalController::class, 'avalHojaVida']);
+    Route::post('rechazar-aval/{userId}', [AvalController::class, 'rechazarAval']);
     Route::get('usuarios/{userId}/avales', [AvalController::class, 'verAvales']);
     Route::get('usuarios', [AvalController::class, 'listarUsuarios']); // <-- NUEVA RUTA
     Route::get('ver-documento/{id}', [RectoriaVerificacionDocumentosController::class, 'verDocumento']);
@@ -95,6 +96,7 @@ Route::group([
     'prefix' => 'coordinador'
 ], function () {
     Route::post('aval-hoja-vida/{userId}', [AvalController::class, 'avalHojaVida']);
+    Route::post('rechazar-aval/{userId}', [AvalController::class, 'rechazarAval']);
     Route::get('usuarios/{userId}/avales', [AvalController::class, 'verAvales']);
     Route::get('usuarios', [AvalController::class, 'listarUsuarios']);
 });

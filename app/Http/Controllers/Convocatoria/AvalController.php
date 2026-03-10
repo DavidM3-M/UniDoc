@@ -197,4 +197,93 @@ class AvalController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Rechazar la hoja de vida / perfil de un aspirante en la cadena de avales.
+     *
+     * Reglas de cadena (igual que para aprobar):
+     *  - Talento Humano: puede rechazar directamente.
+     *  - Coordinador: requiere que TH ya haya aprobado.
+     *  - Vicerrectoría: requiere que TH y Coordinador hayan aprobado.
+     *  - Rectoría: requiere que Vicerrectoría haya aprobado.
+     *
+     * Al rechazar se actualiza el estado de las postulaciones activas del aspirante
+     * a 'Rechazada' y se notifica al aspirante por correo y notificación en BD.
+     *
+     * @param Request $request
+     * @param int $userId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function rechazarAval(Request $request, $userId)
+    {
+        try {
+            $request->validate([
+                'motivo_rechazo' => 'required|string|max:1000',
+            ]);
+
+            $user = User::findOrFail($userId);
+            $role = $request->user()->getRoleNames()->first();
+
+            DB::transaction(function () use ($request, $user, $role) {
+                switch ($role) {
+                    case 'Talento Humano':
+                        // TH puede rechazar en cualquier momento
+                        break;
+
+                    case 'Coordinador':
+                        if (! $user->aval_talento_humano) {
+                            throw new \Exception('El aspirante aún no cuenta con el aval de Talento Humano.', 403);
+                        }
+                        break;
+
+                    case 'Vicerrectoria':
+                        if (! $user->aval_talento_humano || ! $user->aval_coordinador) {
+                            throw new \Exception('El aspirante no cuenta con el aval de Talento Humano o Coordinación.', 403);
+                        }
+                        break;
+
+                    case 'Rectoria':
+                        if (! $user->aval_vicerrectoria) {
+                            throw new \Exception('El aspirante aún no cuenta con el aval de Vicerrectoría.', 403);
+                        }
+                        break;
+
+                    default:
+                        throw new \Exception('Rol no autorizado para rechazar avales.', 403);
+                }
+
+                // Marcar todas las postulaciones activas del aspirante como rechazadas
+                $user->postulacionesUsuario()
+                    ->whereIn('estado_postulacion', ['Enviada', 'Faltan documentos', 'Aprobada'])
+                    ->update([
+                        'estado_postulacion' => 'Rechazada',
+                        'motivo_rechazo'     => $request->motivo_rechazo,
+                        'rechazado_por'      => $role,
+                    ]);
+            });
+
+            // Notificar al aspirante
+            try {
+                $user->refresh();
+                NotificacionController::avalRechazado($user, $request->motivo_rechazo, $role);
+            } catch (\Exception $notifEx) {
+                Log::error("Error al enviar notificación de rechazo de aval [{$role}] para usuario {$user->id}: " . $notifEx->getMessage());
+            }
+
+            return response()->json([
+                'message' => "Rechazo registrado exitosamente por {$role}.",
+            ], 200);
+
+        } catch (\Exception $e) {
+            $status = (int) $e->getCode();
+            if ($status < 400 || $status > 499) {
+                $status = 500;
+            }
+
+            return response()->json([
+                'message' => $e->getMessage() ?: 'Error al registrar el rechazo.',
+                'error'   => $e->getMessage(),
+            ], $status);
+        }
+    }
 }

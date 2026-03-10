@@ -16,6 +16,11 @@ return new class extends Migration
         Schema::create('contratacions', function (Blueprint $table) {
             $table->smallIncrements('id_contratacion');
             $table->unsignedBigInteger('user_id');
+
+            // 1. Agregamos la columna para la relación (debe ser unsignedSmallInteger 
+            // porque en convocatorias usaste smallIncrements)
+            $table->unsignedSmallInteger('id_convocatoria');
+
             $table->string('tipo_contrato');
             $table->string('area');
             $table->date('fecha_inicio');
@@ -23,11 +28,15 @@ return new class extends Migration
             $table->decimal('valor_contrato', 12, 0);
             $table->text('observaciones')->nullable();
             $table->timestamps();
-            
+
             // Relación con la tabla de usuarios
-            $table->foreign('user_id')
-                ->references('id')
-                ->on('users'); // Eliminar contratacion si se elimina el usuario
+            $table->foreign('user_id')->references('id')->on('users');
+
+            // 2. Definimos la relación con la tabla de convocatorias
+            $table->foreign('id_convocatoria')
+                ->references('id_convocatoria')
+                ->on('convocatorias')
+                ->onDelete('cascade'); // Si se borra la convocatoria, se borra el contrato (opcional)
         });
     }
 

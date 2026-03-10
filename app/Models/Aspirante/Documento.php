@@ -20,7 +20,7 @@ class Documento extends Model
         'estado',
         'documentable_id',
         'documentable_type',
-
+        'motivo_rechazo',
     ];
 
     // Definimos las relaciones

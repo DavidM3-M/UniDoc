@@ -33,7 +33,7 @@ Route::group([
     // Rutas para filtrar docentes por experiencia profesional
     Route::get('mostrar-todas-experiencia', [FiltrarDocentesController::class, 'obtenerTodasLasExperiencias']);
     Route::get('filtrar-docentes-experiencia-id/{id}', [FiltrarDocentesController::class, 'obtenerExperienciasPorDocente']);
-    Route::get('filtrar-docentes-tipo-experiecnia/{tipo}', [FiltrarDocentesController::class, 'filtrarPorTipoExperiencia']);
+    Route::get('filtrar-docentes-tipo-experiencia/{tipo}', [FiltrarDocentesController::class, 'filtrarPorTipoExperiencia']);
 
 
     // Rutas para generar certificados

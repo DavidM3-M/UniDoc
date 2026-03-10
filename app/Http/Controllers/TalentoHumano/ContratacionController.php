@@ -52,16 +52,19 @@ class ContratacionController
     public function crearContratacion(CrearContratacionRequest $request, $user_id)
     {
         try {
-            DB::transaction(function () use ($request, $user_id) { // Inicia una transacción para asegurar la atomicidad de las operaciones
-                $datosContratacion = $request->validated(); // Validar los datos de la solicitud
-                // Si se envía una convocatoria, verificar que los avales requeridos estén aprobados para este usuario
-                if (!empty($datosContratacion['convocatoria_id'])) {
-                    $conv = Convocatoria::find($datosContratacion['convocatoria_id']);
+            return DB::transaction(function () use ($request, $user_id) {
+                $datosContratacion = $request->validated();
+                $usuario = User::findOrFail($user_id);
+
+                // 1. Verificación de Avales (Se mantiene igual)
+                if (!empty($datosContratacion['id_convocatoria'])) {
+                    $conv = Convocatoria::find($datosContratacion['id_convocatoria']);
                     if ($conv && !empty($conv->avales_establecidos)) {
                         $faltantes = [];
                         foreach ($conv->avales_establecidos as $avalRequerido) {
-                            $aprobado = ConvocatoriaAval::where('convocatoria_id', $conv->id_convocatoria)
-                                ->where('user_id', $user_id)
+                            // Paso 1: buscar en la convocatoria específica
+                            $aprobado = ConvocatoriaAval::where('user_id', $user_id)
+                                ->where('convocatoria_id', $datosContratacion['id_convocatoria'])
                                 ->where('aval', $avalRequerido)
                                 ->where('estado', 'aprobado')
                                 ->exists();
@@ -72,40 +75,45 @@ class ContratacionController
                         }
                     }
                 }
-                $datosContratacion['user_id'] = $user_id; // Asignar el user_id a los datos de contratación
 
-                $existeContratacion = Contratacion::where('user_id', $user_id)->exists(); // Verificar si ya existe una contratación para el usuario
-                if ($existeContratacion) {
-                    throw new \Exception('El usuario ya tiene una contratación existente.', 409);
+                // 2. CAMBIO CLAVE: Validar que no se duplique la MISMA convocatoria para el MISMO usuario
+                $yaContratadoEnEstaConvocatoria = Contratacion::where('user_id', $user_id)
+                    ->where('id_convocatoria', $datosContratacion['id_convocatoria'])
+                    ->exists();
+
+                if ($yaContratadoEnEstaConvocatoria) {
+                    throw new \Exception('El usuario ya tiene un contrato activo para esta convocatoria específica.', 409);
                 }
 
-                $usuario = User::findOrFail($user_id); // Buscar el usuario por su ID
-                Contratacion::create($datosContratacion); // Crear la contratación en la base de datos
+                // 3. Crear el nuevo contrato (Ahora permite múltiples si el id_convocatoria es distinto)
+                $datosContratacion['user_id'] = $user_id;
+                Contratacion::create($datosContratacion);
 
-                $usuario->syncRoles(['Docente']); // Cambiar el rol del usuario a 'Docente'
+                // 4. Actualizar rol y documentos (Solo si no era docente ya)
+                if (!$usuario->hasRole('Docente')) {
+                    $usuario->syncRoles(['Docente']);
+                }
 
-                $this->aprobarDocumentosService->aprobarDocumentosDeUsuario($usuario); // Aprobar los documentos del usuario
+                // Esto asegura que sus documentos queden aprobados para su vida laboral
+                $this->aprobarDocumentosService->aprobarDocumentosDeUsuario($usuario);
 
-            });
-
-            // Notificar al usuario que ha sido contratado
-            try {
-                $usuario = User::find($user_id);
-                if ($usuario) {
+                // Notificación
+                try {
                     NotificacionController::nuevaContratacion($usuario);
+                } catch (\Exception $notifEx) {
+                    Log::error('Error al notificar nueva contratación: ' . $notifEx->getMessage());
                 }
-            } catch (\Exception $notifEx) {
-                Log::error('Error al notificar nueva contratación: ' . $notifEx->getMessage());
-            }
 
-            return response()->json([ // Respuesta exitosa
-                'message' => 'Contratación creada y rol actualizado a docente.',
-            ], 201);
-        } catch (\Exception $e) { // Manejo de excepciones
+                return response()->json([
+                    'message' => 'Contratación creada exitosamente. El usuario ahora posee un nuevo registro de contrato.',
+                ], 201);
+            });
+        } catch (\Exception $e) {
+            $codigo = (int) $e->getCode();
             return response()->json([
                 'message' => 'Ocurrió un error',
                 'error' => $e->getMessage()
-            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
+            ], ($codigo >= 400 && $codigo < 600) ? $codigo : 500);
         }
     }
 
@@ -159,27 +167,31 @@ class ContratacionController
     public function eliminarContratacion($id)
     {
         try {
-            DB::transaction(function () use ($id) { // Inicia una transacción para asegurar la atomicidad de las operaciones
-                $contratacion = Contratacion::findOrFail($id); // Buscar la contratación por su ID
-                $usuario = $contratacion->UsuarioContratacion; // Obtener el usuario relacionado con la contratación
+            DB::transaction(function () use ($id) {
+                $contratacion = Contratacion::findOrFail($id);
+                $user_id = $contratacion->user_id;
+                $usuario = User::find($user_id);
 
-                $contratacion->delete(); // Eliminar la contratación
+                $contratacion->delete();
 
-                if ($usuario) { // Verificar si el usuario existe
+                // Verificar si aún le quedan otros contratos
+                $otrosContratos = Contratacion::where('user_id', $user_id)->exists();
+
+                if (!$otrosContratos && $usuario) {
+                    // Solo si ya no tiene más contratos, vuelve a ser Aspirante
                     $usuario->syncRoles(['Aspirante']);
-
-                    $this->revertirDocumentosService->revertirDocumentosDeUsuario($usuario); // Revertir los documentos del usuario
+                    $this->revertirDocumentosService->revertirDocumentosDeUsuario($usuario);
                 }
             });
 
-            return response()->json([ // Respuesta exitosa
-                'message' => 'Contratación eliminada y rol cambiado a aspirante.'
+            return response()->json([
+                'message' => 'Contratación eliminada correctamente.'
             ], 200);
-        } catch (\Exception $e) { // Manejo de excepciones
+        } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al eliminar la contratación.',
                 'error' => $e->getMessage()
-            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
+            ], 500);
         }
     }
 

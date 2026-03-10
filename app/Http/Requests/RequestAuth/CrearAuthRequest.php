@@ -7,7 +7,7 @@ use App\Constants\ConstUsuario\Genero;
 use App\Constants\ConstUsuario\EstadoCivil;
 use App\Constants\ConstUsuario\TipoIdentificacion;
 use Illuminate\Validation\Rule;
-
+use Illuminate\Validation\Rules\Password;
 
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Contracts\Validation\Validator;
@@ -42,7 +42,7 @@ class CrearAuthRequest extends FormRequest
             'estado_civil'           => ['nullable','string', Rule::in(EstadoCivil::all())],//llamo a la constante estadocivil para obtener los tipos de estado civil
             'archivo'                => 'nullable|file|mimes:pdf|max:2048', // Validación del archivo
             'email'                  => 'required|string|email|max:100|unique:users',
-            'password'               => 'required|string|min:8',
+            'password'               => ['required', Password::min(8)->mixedCase()->numbers()],
         ];
     }
     protected function failedValidation(Validator $validator)

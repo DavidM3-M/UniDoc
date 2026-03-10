@@ -4,7 +4,6 @@ namespace App\Http\Requests\RequestTalentoHumano\RequestConvocatoria;
 
 use Illuminate\Foundation\Http\FormRequest;
 use App\Constants\ConstTalentoHumano\Aprobaciones;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 class CrearConvocatoriaRequest extends FormRequest
@@ -73,21 +72,14 @@ class CrearConvocatoriaRequest extends FormRequest
         foreach ($arrayFields as $f) {
             if ($this->has($f)) {
                 $val = $this->input($f);
-                Log::info("DEBUG prepareForValidation - $f recibido:", [
-                    'tipo' => gettype($val),
-                    'valor' => is_string($val) ? $val : (is_array($val) ? json_encode($val) : $val),
-                    'es_string' => is_string($val),
-                    'es_array' => is_array($val),
-                ]);
                 
                 // Si es string JSON, intentar deserializar
                 if (is_string($val) && ($decoded = json_decode($val, true)) !== null) {
-                    Log::info("DEBUG prepareForValidation - $f deserializado como JSON:", ['resultado' => $decoded]);
                     $this->merge([$f => $decoded]);
                 }
                 // Si ya es array, dejarlo como está
                 elseif (is_array($val)) {
-                    Log::info("DEBUG prepareForValidation - $f ya es array, no requiere deserialización");
+                    // ya es array, no requiere deserialización
                 }
             }
         }

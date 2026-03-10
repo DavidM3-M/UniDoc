@@ -329,6 +329,99 @@ class NotificacionController extends Controller
         }
     }
 
+    /**
+     * Notifica al postulante que su postulación ha sido rechazada, indicando el motivo y quién la rechazó.
+     *
+     * @param \App\Models\Usuario\User $usuario
+     * @param string|null $motivo    Motivo del rechazo (falta de documentos, perfil no cumple requisitos, etc.).
+     * @param string|null $rechazadoPor  Rol o nombre de quien rechazó (Talento Humano, Coordinador, Vicerrectoría…).
+     */
+    public static function postulacionRechazada(User $usuario, ?string $motivo, ?string $rechazadoPor = null): void
+    {
+        $porQuien = $rechazadoPor ? " por {$rechazadoPor}" : '';
+        $asunto   = 'Tu postulación ha sido rechazada – UniDoc';
+        $mensaje  = "Tu postulación ha sido rechazada{$porQuien}. "
+                  . 'Ingresa a la plataforma para más información.';
+
+        $detalles = [];
+        if (!empty($motivo)) {
+            $detalles['Motivo del rechazo'] = $motivo;
+        }
+        if (!empty($rechazadoPor)) {
+            $detalles['Rechazado por'] = $rechazadoPor;
+        }
+
+        try {
+            Mail::to($usuario->email)->send(
+                new NotificacionMail($asunto, $mensaje, $usuario->primer_nombre, $detalles)
+            );
+            $usuario->notify(new NotificacionGeneral($mensaje));
+        } catch (\Exception $e) {
+            Log::error("Error al notificar rechazo de postulación a {$usuario->email}: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Notifica al aspirante que su hoja de vida / perfil ha sido rechazado en la cadena de avales,
+     * indicando la etapa y el motivo del rechazo.
+     *
+     * @param \App\Models\Usuario\User $aspirante
+     * @param string|null $motivo  Motivo del rechazo.
+     * @param string      $rol     Rol que rechazó (Talento Humano, Coordinador, Vicerrectoría, Rectoría).
+     */
+    public static function avalRechazado(User $aspirante, ?string $motivo, string $rol): void
+    {
+        $asunto  = "Tu hoja de vida fue rechazada en la etapa de {$rol} – UniDoc";
+        $mensaje = "Tu hoja de vida ha sido revisada por {$rol} y no ha sido aprobada en esta etapa. "
+                 . 'Ingresa a la plataforma para conocer el detalle.';
+
+        $detalles = ['Etapa' => $rol];
+        if (!empty($motivo)) {
+            $detalles['Motivo del rechazo'] = $motivo;
+        }
+
+        try {
+            Mail::to($aspirante->email)->send(
+                new NotificacionMail($asunto, $mensaje, $aspirante->primer_nombre, $detalles)
+            );
+            $aspirante->notify(new NotificacionGeneral($mensaje));
+        } catch (\Exception $e) {
+            Log::error("Error al notificar rechazo de aval [{$rol}] a {$aspirante->email}: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Notifica al aspirante/docente que uno de sus documentos ha sido rechazado.
+     *
+     * @param \App\Models\Usuario\User $usuario
+     * @param string|null $motivo  Motivo del rechazo del documento.
+     * @param string|null $rol     Rol que rechazó el documento.
+     */
+    public static function documentoRechazado(User $usuario, ?string $motivo, ?string $rol = null): void
+    {
+        $porQuien = $rol ? " por {$rol}" : '';
+        $asunto   = 'Un documento ha sido rechazado – UniDoc';
+        $mensaje  = "Uno de tus documentos cargados en UniDoc ha sido rechazado{$porQuien}. "
+                  . 'Por favor, revisa el motivo e ingresa un nuevo documento válido.';
+
+        $detalles = [];
+        if (!empty($motivo)) {
+            $detalles['Motivo del rechazo'] = $motivo;
+        }
+        if (!empty($rol)) {
+            $detalles['Rechazado por'] = $rol;
+        }
+
+        try {
+            Mail::to($usuario->email)->send(
+                new NotificacionMail($asunto, $mensaje, $usuario->primer_nombre, $detalles)
+            );
+            $usuario->notify(new NotificacionGeneral($mensaje));
+        } catch (\Exception $e) {
+            Log::error("Error al notificar rechazo de documento a {$usuario->email}: " . $e->getMessage());
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Métodos de instancia: endpoints REST para consultar y gestionar notificaciones
     // -------------------------------------------------------------------------
