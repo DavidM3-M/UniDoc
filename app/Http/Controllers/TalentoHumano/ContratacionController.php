@@ -60,14 +60,27 @@ class ContratacionController
                 if (!empty($datosContratacion['id_convocatoria'])) {
                     $conv = Convocatoria::find($datosContratacion['id_convocatoria']);
                     if ($conv && !empty($conv->avales_establecidos)) {
+
+                        // Determinar si es primer o segundo contrato
+                        $numeroContrato = Contratacion::where('user_id', $user_id)->count() + 1;
+                        $sufijo = $numeroContrato === 1 ? '' : '_2';
+
                         $faltantes = [];
                         foreach ($conv->avales_establecidos as $avalRequerido) {
-                            // Paso 1: buscar en la convocatoria específica
-                            $aprobado = ConvocatoriaAval::where('user_id', $user_id)
-                                ->where('convocatoria_id', $datosContratacion['id_convocatoria'])
-                                ->where('aval', $avalRequerido)
-                                ->where('estado', 'aprobado')
+                            $columna = match (strtolower(trim($avalRequerido))) {
+                                'talento humano', 'talento_humano' => 'aval_talento_humano' . $sufijo,
+                                'coordinador', 'coordinación', 'coordinacion' => 'aval_coordinador' . $sufijo,
+                                'vicerrectoría', 'vicerrectoria' => 'aval_vicerrectoria' . $sufijo,
+                                'rectoría', 'rectoria' => 'aval_rectoria' . $sufijo,
+                                default => null,
+                            };
+
+                            if (!$columna) continue;
+
+                            $aprobado = User::where('id', $user_id)
+                                ->where($columna, true)
                                 ->exists();
+
                             if (!$aprobado) $faltantes[] = $avalRequerido;
                         }
                         if (!empty($faltantes)) {
@@ -75,8 +88,26 @@ class ContratacionController
                         }
                     }
                 }
+                // if (!empty($datosContratacion['id_convocatoria'])) {
+                //     $conv = Convocatoria::find($datosContratacion['id_convocatoria']);
+                //     if ($conv && !empty($conv->avales_establecidos)) {
+                //         $faltantes = [];
+                //         foreach ($conv->avales_establecidos as $avalRequerido) {
+                //             // Paso 1: buscar en la convocatoria específica
+                //             $aprobado = ConvocatoriaAval::where('user_id', $user_id)
+                //                 ->where('convocatoria_id', $datosContratacion['id_convocatoria'])
+                //                 ->where('aval', $avalRequerido)
+                //                 ->where('estado', 'aprobado')
+                //                 ->exists();
+                //             if (!$aprobado) $faltantes[] = $avalRequerido;
+                //         }
+                //         if (!empty($faltantes)) {
+                //             throw new \Exception('Faltan avales necesarios: ' . implode(', ', $faltantes), 403);
+                //         }
+                //     }
+                // }
 
-                // 2. CAMBIO CLAVE: Validar que no se duplique la MISMA convocatoria para el MISMO usuario
+                // 2. Validar que no se duplique la MISMA convocatoria para el MISMO usuario
                 $yaContratadoEnEstaConvocatoria = Contratacion::where('user_id', $user_id)
                     ->where('id_convocatoria', $datosContratacion['id_convocatoria'])
                     ->exists();
@@ -85,11 +116,17 @@ class ContratacionController
                     throw new \Exception('El usuario ya tiene un contrato activo para esta convocatoria específica.', 409);
                 }
 
-                // 3. Crear el nuevo contrato (Ahora permite múltiples si el id_convocatoria es distinto)
+                // 3. Validar máximo 2 contratos (antes de crear)
+                $totalContratosActual = Contratacion::where('user_id', $user_id)->count();
+                if ($totalContratosActual >= 2) {
+                    throw new \Exception('El usuario ya tiene el máximo de 2 contratos permitidos.', 409);
+                }
+
+                // 4. Crear el nuevo contrato (permite 1º o 2º según corresponda)
                 $datosContratacion['user_id'] = $user_id;
                 Contratacion::create($datosContratacion);
 
-                // 4. Actualizar rol y documentos (Solo si no era docente ya)
+                // 5. Actualizar rol y documentos (solo si aún no era docente)
                 if (!$usuario->hasRole('Docente')) {
                     $usuario->syncRoles(['Docente']);
                 }
