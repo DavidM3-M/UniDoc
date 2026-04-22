@@ -152,11 +152,20 @@ class PostulacionController
     public function obtenerPostulaciones()
     {
         try {
-            $postulaciones = Postulacion::with('usuarioPostulacion', 'convocatoriaPostulacion') // Obtener todas las postulaciones
-                ->orderBy('created_at', 'desc') // Ordenar por fecha de creación
+            $postulaciones = Postulacion::with('usuarioPostulacion', 'convocatoriaPostulacion')
+                ->orderBy('created_at', 'desc')
                 ->get();
 
-            return response()->json(['postulaciones' => $postulaciones], 200); // Retornar las postulaciones en formato JSON
+            // Agregar estado de aval TH por convocatoria (desde convocatoria_avales, no del flag global del usuario)
+            $postulaciones->each(function ($p) {
+                $p->aval_th_aprobado = ConvocatoriaAval::where('convocatoria_id', $p->convocatoria_id)
+                    ->where('user_id', $p->user_id)
+                    ->where('aval', 'talento_humano')
+                    ->where('estado', 'aprobado')
+                    ->exists();
+            });
+
+            return response()->json(['postulaciones' => $postulaciones], 200);
 
         } catch (\Exception $e) {
             return response()->json([ // Manejar excepciones

@@ -52,8 +52,9 @@ RUN { \
     echo 'opcache.fast_shutdown=1'; \
 } > /usr/local/etc/php/conf.d/opcache.ini
 
-# ─── Apache: habilitar mod_rewrite ───────────────────────────────────────
-RUN a2enmod rewrite
+# ─── Apache: habilitar mod_rewrite y seguir symlinks ─────────────────────
+RUN a2enmod rewrite \
+    && sed -i 's/Options -Indexes$/Options -Indexes +FollowSymLinks/' /etc/apache2/conf-enabled/docker-php.conf 2>/dev/null || true
 
 # ─── Composer ────────────────────────────────────────────────────────────
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
@@ -82,7 +83,9 @@ RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
         /etc/apache2/sites-available/*.conf \
     && sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' \
         /etc/apache2/apache2.conf \
-        /etc/apache2/conf-available/*.conf
+        /etc/apache2/conf-available/*.conf \
+    && printf '\n<Directory /var/www/html/public>\n    AllowOverride All\n    Require all granted\n</Directory>\n' \
+        >> /etc/apache2/sites-available/000-default.conf
 
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 # Eliminar CRLF (Windows) para que el script funcione en Linux

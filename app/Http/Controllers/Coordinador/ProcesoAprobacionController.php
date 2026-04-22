@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Coordinador\CoordinadorEvaluacion;
 use App\Models\Coordinador\CoordinadorPlantilla;
 use App\Models\TalentoHumano\Convocatoria;
+use App\Models\TalentoHumano\ConvocatoriaAval;
 use App\Models\TalentoHumano\Postulacion;
 use App\Models\Usuario\User;
 use Illuminate\Http\Request;
@@ -380,6 +381,19 @@ class ProcesoAprobacionController extends Controller
                 }])
                 ->orderBy('created_at', 'desc')
                 ->get();
+
+            // Agregar aval_coord_aprobado por convocatoria (desde convocatoria_avales, no del flag global)
+            $aprobadosSet = ConvocatoriaAval::where('aval', 'coordinador')
+                ->where('estado', 'aprobado')
+                ->get(['convocatoria_id', 'user_id'])
+                ->mapWithKeys(fn($a) => ["{$a->convocatoria_id}_{$a->user_id}" => true])
+                ->toArray();
+
+            $convocatorias->each(function ($conv) use ($aprobadosSet) {
+                $conv->postulacionesConvocatoria->each(function ($p) use ($aprobadosSet) {
+                    $p->aval_coord_aprobado = isset($aprobadosSet["{$p->convocatoria_id}_{$p->user_id}"]);
+                });
+            });
 
             return response()->json([
                 'data' => $convocatorias,

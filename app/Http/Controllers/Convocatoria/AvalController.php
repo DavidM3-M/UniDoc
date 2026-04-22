@@ -40,9 +40,10 @@ class AvalController extends Controller
             if ($convId) {
                 // Filtrar por avales registrados en convocatoria_avales para esta convocatoria
                 $prerequisito = match ($role) {
-                    'Vicerrectoria', 'Coordinador' => 'talento_humano',
-                    'Rectoria'                     => 'vicerrectoria',
-                    default                        => null,
+                    'Vicerrectoria' => 'coordinador',
+                    'Coordinador'   => 'talento_humano',
+                    'Rectoria'      => 'vicerrectoria',
+                    default         => null,
                 };
 
                 if ($prerequisito) {
@@ -51,17 +52,63 @@ class AvalController extends Controller
                         ->where('estado', 'aprobado')
                         ->pluck('user_id');
 
-                    $usuarios = User::role('Aspirante')->whereIn('id', $userIds)->get();
+                    $usuarios = User::role(['Aspirante', 'Docente'])->whereIn('id', $userIds)->get();
                 } else {
-                    $usuarios = User::role('Aspirante')->get();
+                    $usuarios = User::role(['Aspirante', 'Docente'])->get();
+                }
+
+                // Anotar aval del rol actual por convocatoria (desde convocatoria_avales, no del flag global)
+                $propioAval = match ($role) {
+                    'Vicerrectoria' => 'vicerrectoria',
+                    'Coordinador'   => 'coordinador',
+                    'Rectoria'      => 'rectoria',
+                    default         => null,
+                };
+
+                if ($propioAval) {
+                    $aprobadosSet = ConvocatoriaAval::where('convocatoria_id', $convId)
+                        ->where('aval', $propioAval)
+                        ->where('estado', 'aprobado')
+                        ->pluck('user_id')
+                        ->flip()
+                        ->toArray();
+
+                    $usuarios = $usuarios->map(function ($u) use ($aprobadosSet, $propioAval) {
+                        $arr = $u->toArray();
+                        $arr["aval_{$propioAval}"] = isset($aprobadosSet[$u->id]);
+                        return $arr;
+                    });
                 }
             } else {
                 // Fallback sin convocatoria: usa flags globales (compatibilidad)
                 $usuarios = match ($role) {
-                    'Vicerrectoria', 'Coordinador' => User::role('Aspirante')->where('aval_talento_humano', true)->get(),
-                    'Rectoria'                     => User::role('Aspirante')->where('aval_vicerrectoria', true)->get(),
-                    default                        => User::role('Aspirante')->get(),
+                    'Vicerrectoria' => User::role(['Aspirante', 'Docente'])->where('aval_coordinador', true)->get(),
+                    'Coordinador'   => User::role(['Aspirante', 'Docente'])->where('aval_talento_humano', true)->get(),
+                    'Rectoria'      => User::role(['Aspirante', 'Docente'])->where('aval_vicerrectoria', true)->get(),
+                    default         => User::role(['Aspirante', 'Docente'])->get(),
                 };
+
+                // Sobreescribir el flag de "propio aval" usando convocatoria_avales (todos los registros aprobados)
+                $propioAval = match ($role) {
+                    'Vicerrectoria' => 'vicerrectoria',
+                    'Coordinador'   => 'coordinador',
+                    'Rectoria'      => 'rectoria',
+                    default         => null,
+                };
+
+                if ($propioAval) {
+                    $aprobadosSet = ConvocatoriaAval::where('aval', $propioAval)
+                        ->where('estado', 'aprobado')
+                        ->pluck('user_id')
+                        ->flip()
+                        ->toArray();
+
+                    $usuarios = $usuarios->map(function ($u) use ($aprobadosSet, $propioAval) {
+                        $arr = $u->toArray();
+                        $arr["aval_{$propioAval}"] = isset($aprobadosSet[$u->id]);
+                        return $arr;
+                    });
+                }
             }
 
             return response()->json(['data' => $usuarios]);
