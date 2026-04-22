@@ -6,150 +6,165 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\TalentoHumano\NotificacionController;
 use Illuminate\Http\Request;
 use App\Models\Usuario\User;
+use App\Models\TalentoHumano\ConvocatoriaAval;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 
 class AvalController extends Controller
 {
-    /**
-     * Registrar aval de hoja de vida según el rol del usuario autenticado.
-     *
-     * @param Request $request
-     * @param int $userId
-     * @return \Illuminate\Http\JsonResponse
-     */
+    /** Mapea rol → nombre de aval almacenado en convocatoria_avales */
+    private const ROLE_AVAL = [
+        'Talento Humano' => 'talento_humano',
+        'Coordinador'    => 'coordinador',
+        'Vicerrectoria'  => 'vicerrectoria',
+        'Rectoria'       => 'rectoria',
+    ];
+
+    /** Devuelve true si el aspirante tiene el aval aprobado para la convocatoria dada. */
+    private function tieneAval(int $userId, int $convocatoriaId, string $avalNombre): bool
+    {
+        return ConvocatoriaAval::where('convocatoria_id', $convocatoriaId)
+            ->where('user_id', $userId)
+            ->where('aval', $avalNombre)
+            ->where('estado', 'aprobado')
+            ->exists();
+    }
+
     public function listarUsuarios(Request $request)
     {
         try {
-            $role = $request->user()?->getRoleNames()->first();
+            $role       = $request->user()?->getRoleNames()->first();
+            $convId     = $request->query('convocatoria_id');
 
-            if ($role === 'Vicerrectoria') {
-                $usuarios = User::role('Aspirante')
-                    ->where('aval_talento_humano', true)
-                    ->get();
-            } elseif ($role === 'Coordinador') {
-                $usuarios = User::role('Aspirante')
-                    ->where('aval_talento_humano', true)
-                    ->get();
-            } elseif ($role === 'Rectoria') {
-                $usuarios = User::role('Aspirante')
-                    ->where('aval_vicerrectoria', true)
-                    ->get();
+            if ($convId) {
+                // Filtrar por avales registrados en convocatoria_avales para esta convocatoria
+                $prerequisito = match ($role) {
+                    'Vicerrectoria', 'Coordinador' => 'talento_humano',
+                    'Rectoria'                     => 'vicerrectoria',
+                    default                        => null,
+                };
+
+                if ($prerequisito) {
+                    $userIds = ConvocatoriaAval::where('convocatoria_id', $convId)
+                        ->where('aval', $prerequisito)
+                        ->where('estado', 'aprobado')
+                        ->pluck('user_id');
+
+                    $usuarios = User::role('Aspirante')->whereIn('id', $userIds)->get();
+                } else {
+                    $usuarios = User::role('Aspirante')->get();
+                }
             } else {
-                $usuarios = User::all();
+                // Fallback sin convocatoria: usa flags globales (compatibilidad)
+                $usuarios = match ($role) {
+                    'Vicerrectoria', 'Coordinador' => User::role('Aspirante')->where('aval_talento_humano', true)->get(),
+                    'Rectoria'                     => User::role('Aspirante')->where('aval_vicerrectoria', true)->get(),
+                    default                        => User::role('Aspirante')->get(),
+                };
             }
 
-            return response()->json([
-                'data' => $usuarios
-            ]);
+            return response()->json(['data' => $usuarios]);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Error al obtener usuarios.',
-                'error' => $e->getMessage(),
-            ], 500);
+            return response()->json(['message' => 'Error al obtener usuarios.', 'error' => $e->getMessage()], 500);
         }
     }
+
     public function avalHojaVida(Request $request, $userId)
     {
         try {
+            $request->validate([
+                'convocatoria_id' => 'required|integer',
+            ]);
+
+            $convocatoriaId = (int) $request->convocatoria_id;
             $user = User::findOrFail($userId);
             $role = $request->user()->getRoleNames()->first();
+            $avalNombre = self::ROLE_AVAL[$role] ?? null;
 
-            DB::transaction(function () use ($request, $user, $role) {
+            if (! $avalNombre) {
+                return response()->json(['message' => 'Rol no autorizado'], 403);
+            }
+
+            DB::transaction(function () use ($request, $user, $role, $convocatoriaId, $avalNombre) {
+                // Validar prerequisitos usando convocatoria_avales
                 switch ($role) {
                     case 'Rectoria':
-                        if (! $user->aval_vicerrectoria) {
-                            throw new \Exception('Usuario no aprobado por Vicerrectoría.', 403);
+                        if (! $this->tieneAval($user->id, $convocatoriaId, 'vicerrectoria')) {
+                            throw new \Exception('El aspirante no cuenta con el aval de Vicerrectoría para esta convocatoria.', 403);
                         }
-
-                        if ($user->aval_rectoria) {
-                            throw new \Exception('El aval de Rectoría ya fue registrado.', 409);
-                        }
-                        $user->update([
-                            'aval_rectoria' => true,
-                            'aval_rectoria_by' => $request->user()->id,
-                            'aval_rectoria_at' => now(),
-                        ]);
                         break;
-
                     case 'Coordinador':
-                        if (! $user->aval_talento_humano) {
-                            throw new \Exception('Usuario no aprobado por Talento Humano.', 403);
+                        if (! $this->tieneAval($user->id, $convocatoriaId, 'talento_humano')) {
+                            throw new \Exception('El aspirante no cuenta con el aval de Talento Humano para esta convocatoria.', 403);
                         }
-
-                        if ($user->aval_coordinador) {
-                            throw new \Exception('El aval de Coordinación ya fue registrado.', 409);
-                        }
-
-                        $user->update([
-                            'aval_coordinador' => true,
-                            'aval_coordinador_by' => $request->user()->id,
-                            'aval_coordinador_at' => now(),
-                        ]);
                         break;
-
                     case 'Vicerrectoria':
-                        if (! $user->aval_talento_humano || ! $user->aval_coordinador) {
-                            throw new \Exception('Usuario no aprobado por Talento Humano o Coordinador.', 403);
+                        if (! $this->tieneAval($user->id, $convocatoriaId, 'talento_humano')
+                            || ! $this->tieneAval($user->id, $convocatoriaId, 'coordinador')) {
+                            throw new \Exception('El aspirante no cuenta con el aval de Talento Humano o Coordinación para esta convocatoria.', 403);
                         }
-
-                        if ($user->aval_vicerrectoria) {
-                            throw new \Exception('El aval de Vicerrectoría ya fue registrado.', 409);
-                        }
-                        $user->update([
-                            'aval_vicerrectoria' => true,
-                            'aval_vicerrectoria_by' => $request->user()->id,
-                            'aval_vicerrectoria_at' => now(),
-                        ]);
                         break;
-
                     case 'Talento Humano':
-                        if ($user->aval_talento_humano) {
-                            throw new \Exception('El aval de Talento Humano ya fue registrado.', 409);
-                        }
-                        $user->update([
-                            'aval_talento_humano' => true,
-                            'aval_talento_humano_by' => $request->user()->id,
-                            'aval_talento_humano_at' => now(),
-                        ]);
+                        // Sin prerequisito
                         break;
+                }
 
-                    default:
-                        throw new \Exception('Rol no autorizado', 403);
+                // Verificar que no exista ya
+                if ($this->tieneAval($user->id, $convocatoriaId, $avalNombre)) {
+                    throw new \Exception("El aval de {$role} ya fue registrado para esta convocatoria.", 409);
+                }
+
+                // Registrar en convocatoria_avales
+                ConvocatoriaAval::updateOrCreate(
+                    [
+                        'convocatoria_id' => $convocatoriaId,
+                        'user_id'         => $user->id,
+                        'aval'            => $avalNombre,
+                    ],
+                    [
+                        'estado'           => 'aprobado',
+                        'aprobador_id'     => $request->user()->id,
+                        'fecha_aprobacion' => now(),
+                    ]
+                );
+
+                // También actualizar flags globales para compatibilidad con listarUsuarios fallback
+                $flagUpdate = match ($role) {
+                    'Talento Humano' => ['aval_talento_humano' => true, 'aval_talento_humano_by' => $request->user()->id, 'aval_talento_humano_at' => now()],
+                    'Coordinador'    => ['aval_coordinador' => true, 'aval_coordinador_by' => $request->user()->id, 'aval_coordinador_at' => now()],
+                    'Vicerrectoria'  => ['aval_vicerrectoria' => true, 'aval_vicerrectoria_by' => $request->user()->id, 'aval_vicerrectoria_at' => now()],
+                    'Rectoria'       => ['aval_rectoria' => true, 'aval_rectoria_by' => $request->user()->id, 'aval_rectoria_at' => now()],
+                    default          => [],
+                };
+                if ($flagUpdate) {
+                    $user->update($flagUpdate);
                 }
             });
 
-            // Notificaciones por correo según el rol que acaba de otorgar el aval
+            // Notificaciones por correo
             try {
                 $user->refresh();
                 switch ($role) {
                     case 'Talento Humano':
-                        // Notificar a los Coordinadores
                         $coordinadores = User::role('Coordinador')->get();
                         if ($coordinadores->isNotEmpty()) {
                             NotificacionController::listoParaCoordinador($coordinadores, $user);
                         }
                         break;
-
                     case 'Coordinador':
-                        // Notificar a Vicerrectoría
                         $vicerrectores = User::role('Vicerrectoria')->get();
                         if ($vicerrectores->isNotEmpty()) {
                             NotificacionController::listoParaVicerrectoria($vicerrectores, $user);
                         }
                         break;
-
                     case 'Vicerrectoria':
-                        // Notificar a Rectoría
                         $rectores = User::role('Rectoria')->get();
                         if ($rectores->isNotEmpty()) {
                             NotificacionController::listoParaRectoria($rectores, $user);
                         }
                         break;
-
                     case 'Rectoria':
-                        // Notificar al aspirante que el proceso está completo
                         NotificacionController::avalFinalCompletado($user);
                         break;
                 }
@@ -157,112 +172,128 @@ class AvalController extends Controller
                 Log::error("Error al enviar notificación de aval [{$role}] para usuario {$user->id}: " . $notifEx->getMessage());
             }
 
-            return response()->json([
-                'message' => "Aval registrado exitosamente por {$role}",
-            ], 201);
+            return response()->json(['message' => "Aval registrado exitosamente por {$role}"], 201);
 
         } catch (\Exception $e) {
             $status = (int) $e->getCode();
             if ($status < 400 || $status > 499) {
                 $status = 500;
             }
-
-            return response()->json([
-                'message' => $e->getMessage() ?: 'Error al registrar aval.',
-                'error' => $e->getMessage(),
-            ], $status);
+            return response()->json(['message' => $e->getMessage() ?: 'Error al registrar aval.', 'error' => $e->getMessage()], $status);
         }
     }
 
     /**
      * Ver avales de un usuario.
+     * Si se pasa convocatoria_id, retorna los avales específicos de esa convocatoria.
      */
-    public function verAvales($userId)
+    public function verAvales(Request $request, $userId)
     {
         try {
             $user = User::findOrFail($userId);
+            $convId = $request->query('convocatoria_id');
 
+            if ($convId) {
+                $avales = ConvocatoriaAval::where('convocatoria_id', $convId)
+                    ->where('user_id', $user->id)
+                    ->get()
+                    ->keyBy('aval');
+
+                $getEstado = fn(string $aval) => isset($avales[$aval]) && $avales[$aval]->estado === 'aprobado';
+
+                return response()->json([
+                    'data' => [
+                        'aval_talento_humano' => $getEstado('talento_humano'),
+                        'aval_coordinador'    => $getEstado('coordinador'),
+                        'aval_vicerrectoria'  => $getEstado('vicerrectoria'),
+                        'aval_rectoria'       => $getEstado('rectoria'),
+                    ]
+                ]);
+            }
+
+            // Fallback sin convocatoria: retorna flags globales (compatibilidad)
             return response()->json([
                 'data' => [
-                    'aval_rectoria' => $user->aval_rectoria,
-                    'aval_vicerrectoria' => $user->aval_vicerrectoria,
-                    'aval_coordinador' => $user->aval_coordinador,
+                    'aval_rectoria'       => $user->aval_rectoria,
+                    'aval_vicerrectoria'  => $user->aval_vicerrectoria,
+                    'aval_coordinador'    => $user->aval_coordinador,
                     'aval_talento_humano' => $user->aval_talento_humano,
                 ]
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Error al obtener avales.',
-                'error' => $e->getMessage(),
-            ], 500);
+            return response()->json(['message' => 'Error al obtener avales.', 'error' => $e->getMessage()], 500);
         }
     }
 
     /**
-     * Rechazar la hoja de vida / perfil de un aspirante en la cadena de avales.
-     *
-     * Reglas de cadena (igual que para aprobar):
-     *  - Talento Humano: puede rechazar directamente.
-     *  - Coordinador: requiere que TH ya haya aprobado.
-     *  - Vicerrectoría: requiere que TH y Coordinador hayan aprobado.
-     *  - Rectoría: requiere que Vicerrectoría haya aprobado.
-     *
-     * Al rechazar se actualiza el estado de las postulaciones activas del aspirante
-     * a 'Rechazada' y se notifica al aspirante por correo y notificación en BD.
-     *
-     * @param Request $request
-     * @param int $userId
-     * @return \Illuminate\Http\JsonResponse
+     * Rechazar aval de un aspirante en la cadena, acotado a una convocatoria.
      */
     public function rechazarAval(Request $request, $userId)
     {
         try {
             $request->validate([
-                'motivo_rechazo' => 'required|string|max:1000',
+                'motivo_rechazo'  => 'required|string|max:1000',
+                'convocatoria_id' => 'nullable|integer',
             ]);
 
-            $user = User::findOrFail($userId);
-            $role = $request->user()->getRoleNames()->first();
+            $user           = User::findOrFail($userId);
+            $role           = $request->user()->getRoleNames()->first();
+            $avalNombre     = self::ROLE_AVAL[$role] ?? null;
+            $convocatoriaId = $request->convocatoria_id ? (int) $request->convocatoria_id : null;
 
-            DB::transaction(function () use ($request, $user, $role) {
-                switch ($role) {
-                    case 'Talento Humano':
-                        // TH puede rechazar en cualquier momento
-                        break;
+            if (! $avalNombre) {
+                return response()->json(['message' => 'Rol no autorizado para rechazar avales.'], 403);
+            }
 
-                    case 'Coordinador':
-                        if (! $user->aval_talento_humano) {
-                            throw new \Exception('El aspirante aún no cuenta con el aval de Talento Humano.', 403);
-                        }
-                        break;
+            DB::transaction(function () use ($request, $user, $role, $avalNombre, $convocatoriaId) {
+                // Validar prerequisitos (usando convocatoria_avales si hay convocatoria_id)
+                if ($convocatoriaId) {
+                    switch ($role) {
+                        case 'Coordinador':
+                            if (! $this->tieneAval($user->id, $convocatoriaId, 'talento_humano')) {
+                                throw new \Exception('El aspirante no cuenta con el aval de Talento Humano para esta convocatoria.', 403);
+                            }
+                            break;
+                        case 'Vicerrectoria':
+                            if (! $this->tieneAval($user->id, $convocatoriaId, 'talento_humano')
+                                || ! $this->tieneAval($user->id, $convocatoriaId, 'coordinador')) {
+                                throw new \Exception('El aspirante no cuenta con los avales previos para esta convocatoria.', 403);
+                            }
+                            break;
+                        case 'Rectoria':
+                            if (! $this->tieneAval($user->id, $convocatoriaId, 'vicerrectoria')) {
+                                throw new \Exception('El aspirante no cuenta con el aval de Vicerrectoría para esta convocatoria.', 403);
+                            }
+                            break;
+                    }
 
-                    case 'Vicerrectoria':
-                        if (! $user->aval_talento_humano || ! $user->aval_coordinador) {
-                            throw new \Exception('El aspirante no cuenta con el aval de Talento Humano o Coordinación.', 403);
-                        }
-                        break;
+                    // Marcar el aval como rechazado en convocatoria_avales
+                    ConvocatoriaAval::updateOrCreate(
+                        ['convocatoria_id' => $convocatoriaId, 'user_id' => $user->id, 'aval' => $avalNombre],
+                        ['estado' => 'rechazado', 'aprobador_id' => $request->user()->id, 'comentario' => $request->motivo_rechazo, 'fecha_aprobacion' => now()]
+                    );
 
-                    case 'Rectoria':
-                        if (! $user->aval_vicerrectoria) {
-                            throw new \Exception('El aspirante aún no cuenta con el aval de Vicerrectoría.', 403);
-                        }
-                        break;
-
-                    default:
-                        throw new \Exception('Rol no autorizado para rechazar avales.', 403);
+                    // Marcar la postulación de ESA convocatoria como rechazada
+                    $user->postulacionesUsuario()
+                        ->where('convocatoria_id', $convocatoriaId)
+                        ->whereIn('estado_postulacion', ['Enviada', 'Faltan documentos', 'Aprobada', 'Aceptada'])
+                        ->update([
+                            'estado_postulacion' => 'Rechazada',
+                            'motivo_rechazo'     => $request->motivo_rechazo,
+                            'rechazado_por'      => $role,
+                        ]);
+                } else {
+                    // Sin convocatoria_id: rechaza todas las postulaciones activas (comportamiento original)
+                    $user->postulacionesUsuario()
+                        ->whereIn('estado_postulacion', ['Enviada', 'Faltan documentos', 'Aprobada', 'Aceptada'])
+                        ->update([
+                            'estado_postulacion' => 'Rechazada',
+                            'motivo_rechazo'     => $request->motivo_rechazo,
+                            'rechazado_por'      => $role,
+                        ]);
                 }
-
-                // Marcar todas las postulaciones activas del aspirante como rechazadas
-                $user->postulacionesUsuario()
-                    ->whereIn('estado_postulacion', ['Enviada', 'Faltan documentos', 'Aprobada'])
-                    ->update([
-                        'estado_postulacion' => 'Rechazada',
-                        'motivo_rechazo'     => $request->motivo_rechazo,
-                        'rechazado_por'      => $role,
-                    ]);
             });
 
-            // Notificar al aspirante
             try {
                 $user->refresh();
                 NotificacionController::avalRechazado($user, $request->motivo_rechazo, $role);
@@ -270,20 +301,14 @@ class AvalController extends Controller
                 Log::error("Error al enviar notificación de rechazo de aval [{$role}] para usuario {$user->id}: " . $notifEx->getMessage());
             }
 
-            return response()->json([
-                'message' => "Rechazo registrado exitosamente por {$role}.",
-            ], 200);
+            return response()->json(['message' => "Rechazo registrado exitosamente por {$role}."], 200);
 
         } catch (\Exception $e) {
             $status = (int) $e->getCode();
             if ($status < 400 || $status > 499) {
                 $status = 500;
             }
-
-            return response()->json([
-                'message' => $e->getMessage() ?: 'Error al registrar el rechazo.',
-                'error'   => $e->getMessage(),
-            ], $status);
+            return response()->json(['message' => $e->getMessage() ?: 'Error al registrar el rechazo.', 'error' => $e->getMessage()], $status);
         }
     }
 }
