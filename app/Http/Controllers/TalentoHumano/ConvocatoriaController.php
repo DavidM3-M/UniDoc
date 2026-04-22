@@ -99,7 +99,7 @@ class ConvocatoriaController
                     NotificacionController::nuevaConvocatoria($aspirantes, $convocatoria);
                 }
             } catch (\Throwable $notifEx) {
-                Log::error('Error al notificar nueva convocatoria a aspirantes: ' . $notifEx->getMessage());
+                try { Log::error('Error al notificar nueva convocatoria a aspirantes: ' . $notifEx->getMessage()); } catch (\Throwable) {}
             }
 
             // Notificar también a los docentes ya contratados
@@ -109,7 +109,7 @@ class ConvocatoriaController
                     NotificacionController::nuevaConvocatoriaDocente($docentes, $convocatoria);
                 }
             } catch (\Throwable $notifEx) {
-                Log::error('Error al notificar nueva convocatoria a docentes: ' . $notifEx->getMessage());
+                try { Log::error('Error al notificar nueva convocatoria a docentes: ' . $notifEx->getMessage()); } catch (\Throwable) {}
             }
 
             return response()->json([ // Retornamos una respuesta JSON

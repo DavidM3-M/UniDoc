@@ -157,11 +157,25 @@ class PostulacionController
     public function obtenerPostulaciones()
     {
         try {
+<<<<<<< HEAD
             $postulaciones = Postulacion::with(['usuarioPostulacion', 'convocatoriaPostulacion'])
                 ->where('estado_postulacion', EstadoPostulacion::ENVIADA)
+=======
+            $postulaciones = Postulacion::with('usuarioPostulacion', 'convocatoriaPostulacion')
+                ->orderBy('created_at', 'desc')
+>>>>>>> 95d2f50479d8cb3b3a68b6f3a3efbc25b4c5cdb0
                 ->get();
 
-            return response()->json(['postulaciones' => $postulaciones], 200); // Retornar las postulaciones en formato JSON
+            // Agregar estado de aval TH por convocatoria (desde convocatoria_avales, no del flag global del usuario)
+            $postulaciones->each(function ($p) {
+                $p->aval_th_aprobado = ConvocatoriaAval::where('convocatoria_id', $p->convocatoria_id)
+                    ->where('user_id', $p->user_id)
+                    ->where('aval', 'talento_humano')
+                    ->where('estado', 'aprobado')
+                    ->exists();
+            });
+
+            return response()->json(['postulaciones' => $postulaciones], 200);
 
         } catch (\Exception $e) {
             return response()->json([ // Manejar excepciones
@@ -457,7 +471,18 @@ class PostulacionController
             $experienciaTotalHoras = $this->calcularExperienciaUsuario($user, $esAdministrativo);
 
             if ($experienciaTotalHoras < $experienciaRequerida->horas_minimas) {
-                throw new \Exception("No cumples con la experiencia requerida. Se requieren {$experienciaRequerida->horas_minimas} horas y tienes {$experienciaTotalHoras} horas.", 403);
+                $anosRequeridos = $experienciaRequerida->anos_equivalentes
+                    ? number_format($experienciaRequerida->anos_equivalentes, 1)
+                    : null;
+                $totalDiasUsuario = $this->calcularTotalDiasExperiencia($user->experienciasUsuario, null);
+                $anosUsuario = number_format($totalDiasUsuario / 365.25, 1);
+                $anosReqStr = $anosRequeridos ? " ({$anosRequeridos} años equivalentes)" : '';
+                throw new \Exception(
+                    "No cumples con la experiencia requerida. "
+                    . "Se requieren {$experienciaRequerida->horas_minimas} horas{$anosReqStr} "
+                    . "y tienes {$experienciaTotalHoras} horas ({$anosUsuario} años).",
+                    403
+                );
             }
         }
 
@@ -493,7 +518,36 @@ class PostulacionController
             }
 
             if (!$cumpleFecha) {
-                throw new \Exception("No cumples con la experiencia requerida hasta la fecha {$fechaReq->toDateString()}.", 403);
+                // Calcular años totales que tiene el usuario
+                $totalDiasUsuario = $this->calcularTotalDiasExperiencia($user->experienciasUsuario, null);
+                $anosUsuario = number_format($totalDiasUsuario / 365.25, 1);
+
+                // Encontrar la fecha de finalización más reciente para orientar al usuario
+                $fechaMasReciente = null;
+                foreach ($user->experienciasUsuario as $exp) {
+                    if (!empty($exp->fecha_finalizacion)) {
+                        try {
+                            $fechaFin = \Carbon\Carbon::parse($exp->fecha_finalizacion);
+                            if ($fechaMasReciente === null || $fechaFin->greaterThan($fechaMasReciente)) {
+                                $fechaMasReciente = $fechaFin;
+                            }
+                        } catch (\Exception $e) {
+                            continue;
+                        }
+                    }
+                }
+
+                $detalleExp = $fechaMasReciente
+                    ? " Tu experiencia más reciente finalizó el {$fechaMasReciente->toDateString()}."
+                    : ' No tienes experiencias registradas.';
+
+                throw new \Exception(
+                    "No cumples con la experiencia requerida. "
+                    . "Se requiere haber tenido experiencia vigente hasta el {$fechaReq->toDateString()} "
+                    . "y cuentas con {$anosUsuario} años de experiencia acumulada."
+                    . $detalleExp,
+                    403
+                );
             }
         }
 
@@ -700,7 +754,11 @@ class PostulacionController
         if ($totalAnosUsuario < $totalAnosRequeridos) {
             throw new \Exception(
                 "No cumples con los años de experiencia requeridos. " .
+<<<<<<< HEAD
                     "Se requieren {$totalAnosRequeridos} años en total y tienes {$totalAnosUsuario} años.",
+=======
+                "Se requieren {$totalAnosRequeridos} años en total y tienes {$totalAnosUsuario} años.",
+>>>>>>> 95d2f50479d8cb3b3a68b6f3a3efbc25b4c5cdb0
                 403
             );
         }
