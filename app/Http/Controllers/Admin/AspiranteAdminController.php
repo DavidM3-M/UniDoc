@@ -216,15 +216,19 @@ class AspiranteAdminController extends Controller
                     'municipioUsuarios.departamentoMunicipio',
                     'fotoPerfilUsuario.documentosFotoPerfil',
                     'informacionContactoUsuario',
-                    'epsUsuario',
-                    'rutUsuario',
+                    'epsUsuario.documentosEps',
+                    'rutUsuario.documentosRut',
                     'idiomasUsuario',
                     'experienciasUsuario',
                     'estudiosUsuario',
                     'produccionAcademicaUsuario',
                     'aptitudesUsuario',
                     'postulacionesUsuario.convocatoriaPostulacion',
-                    'documentosUser'
+                    'documentosUser',
+                    'arlUsuario.documentosArl',
+                    'certificacionesBancariasUsuario.documentosCertificacionBancaria',
+                    'pensionUsuario.documentosPension',
+                    'antecedentesJudicialesUsuario.documentosAntecedentesJudiciales',
                 ])
                 ->findOrFail($id);
 
@@ -274,8 +278,28 @@ class AspiranteAdminController extends Controller
                 'barrio' => $aspirante->informacionContactoUsuario->barrio ?? null,
                 'correo_alterno' => $aspirante->informacionContactoUsuario->correo_alterno ?? null,
                 ] : null,
-                'eps' => $aspirante->epsUsuario,
-                'rut' => $aspirante->rutUsuario,
+                'eps' => $aspirante->epsUsuario ? [
+                    'nombre_eps' => $aspirante->epsUsuario->nombre_eps,
+                    'tipo_afiliacion' => $aspirante->epsUsuario->tipo_afiliacion,
+                    'estado_afiliacion' => $aspirante->epsUsuario->estado_afiliacion,
+                    'tipo_afiliado' => $aspirante->epsUsuario->tipo_afiliado,
+                    'numero_afiliado' => $aspirante->epsUsuario->numero_afiliado,
+                    'documentosEps' => $aspirante->epsUsuario->documentosEps->map(fn($doc) => [
+                        'id_documento' => $doc->id,
+                        'archivo' => $doc->archivo,
+                        'archivo_url' => asset('storage/' . $doc->archivo),
+                    ])->values(),
+                ] : null,
+                'rut' => $aspirante->rutUsuario ? [
+                    'numero_rut' => $aspirante->rutUsuario->numero_rut,
+                    'razon_social' => $aspirante->rutUsuario->razon_social,
+                    'tipo_persona' => $aspirante->rutUsuario->tipo_persona,
+                    'documentosRut' => $aspirante->rutUsuario->documentosRut->map(fn($doc) => [
+                        'id_documento' => $doc->id,
+                        'archivo' => $doc->archivo,
+                        'archivo_url' => asset('storage/' . $doc->archivo),
+                    ])->values(),
+                ] : null,
                 'idiomas' => $aspirante->idiomasUsuario,
                 'experiencias' => $aspirante->experienciasUsuario,
                 'estudios' => $aspirante->estudiosUsuario,
@@ -283,6 +307,48 @@ class AspiranteAdminController extends Controller
                 'aptitudes' => $aspirante->aptitudesUsuario,
                 'postulaciones' => $aspirante->postulacionesUsuario,
                 'documentos' => $documentos,
+                'arl' => $aspirante->arlUsuario ? [
+                    'nombre_arl' => $aspirante->arlUsuario->nombre_arl,
+                    'fecha_afiliacion' => $aspirante->arlUsuario->fecha_afiliacion,
+                    'fecha_retiro' => $aspirante->arlUsuario->fecha_retiro,
+                    'estado_afiliacion' => $aspirante->arlUsuario->estado_afiliacion,
+                    'clase_riesgo' => $aspirante->arlUsuario->clase_riesgo,
+                    'documentosArl' => $aspirante->arlUsuario->documentosArl->map(fn($doc) => [
+                        'id_documento' => $doc->id,
+                        'archivo' => $doc->archivo,
+                        'archivo_url' => asset('storage/' . $doc->archivo),
+                    ])->values(),
+                ] : null,
+                'certificacion_bancaria' => $aspirante->certificacionesBancariasUsuario ? [
+                    'nombre_banco' => $aspirante->certificacionesBancariasUsuario->nombre_banco,
+                    'tipo_cuenta' => $aspirante->certificacionesBancariasUsuario->tipo_cuenta,
+                    'numero_cuenta' => $aspirante->certificacionesBancariasUsuario->numero_cuenta,
+                    'fecha_emision' => $aspirante->certificacionesBancariasUsuario->fecha_emision,
+                    'documentosCertificacionBancaria' => $aspirante->certificacionesBancariasUsuario->documentosCertificacionBancaria->map(fn($doc) => [
+                        'id_documento' => $doc->id,
+                        'archivo' => $doc->archivo,
+                        'archivo_url' => asset('storage/' . $doc->archivo),
+                    ])->values(),
+                ] : null,
+                'pension' => $aspirante->pensionUsuario ? [
+                    'regimen_pensional' => $aspirante->pensionUsuario->regimen_pensional,
+                    'entidad_pensional' => $aspirante->pensionUsuario->entidad_pensional,
+                    'nit_entidad' => $aspirante->pensionUsuario->nit_entidad,
+                    'documentosPension' => $aspirante->pensionUsuario->documentosPension->map(fn($doc) => [
+                        'id_documento' => $doc->id,
+                        'archivo' => $doc->archivo,
+                        'archivo_url' => asset('storage/' . $doc->archivo),
+                    ])->values(),
+                ] : null,
+                'antecedente_judicial' => $aspirante->antecedentesJudicialesUsuario ? [
+                    'fecha_validacion' => $aspirante->antecedentesJudicialesUsuario->fecha_validacion,
+                    'estado_antecedentes' => $aspirante->antecedentesJudicialesUsuario->estado_antecedentes,
+                    'documentosAntecedentesJudiciales' => $aspirante->antecedentesJudicialesUsuario->documentosAntecedentesJudiciales->map(fn($doc) => [
+                        'id_documento' => $doc->id,
+                        'archivo' => $doc->archivo,
+                        'archivo_url' => asset('storage/' . $doc->archivo),
+                    ])->values(),
+                ] : null,
                 'avales' => [
                     'talentoHumano' => [
                         'estado' => $aspirante->aval_talento_humano,
