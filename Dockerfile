@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y \
     libmagickwand-dev \
     imagemagick \
     ghostscript \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Permitir que ImageMagick procese PDFs (necesario para spatie/pdf-to-image)

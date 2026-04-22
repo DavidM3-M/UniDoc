@@ -79,6 +79,7 @@ class User extends Authenticatable implements JWTSubject
         'aval_talento_humano',
         'aval_talento_humano_by',
         'aval_talento_humano_at',
+        'google_id',
 
     ];
 

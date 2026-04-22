@@ -284,15 +284,25 @@ class AspiranteAdminController extends Controller
                 'postulaciones' => $aspirante->postulacionesUsuario,
                 'documentos' => $documentos,
                 'avales' => [
-                    'rectoria' => [
-                        'estado' => $aspirante->aval_rectoria,
-                        'aprobado_por' => $aspirante->aval_rectoria_by,
-                        'fecha' => $aspirante->aval_rectoria_at,
+                    'talentoHumano' => [
+                        'estado' => $aspirante->aval_talento_humano,
+                        'aprobado_por' => $aspirante->aval_talento_humano_by ?? null,
+                        'fecha' => $aspirante->aval_talento_humano_at ?? null,
+                    ],
+                    'coordinador' => [
+                        'estado' => $aspirante->aval_coordinador,
+                        'aprobado_por' => $aspirante->aval_coordinador_by ?? null,
+                        'fecha' => $aspirante->aval_coordinador_at ?? null,
                     ],
                     'vicerrectoria' => [
                         'estado' => $aspirante->aval_vicerrectoria,
-                        'aprobado_por' => $aspirante->aval_vicerrectoria_by,
-                        'fecha' => $aspirante->aval_vicerrectoria_at,
+                        'aprobado_por' => $aspirante->aval_vicerrectoria_by ?? null,
+                        'fecha' => $aspirante->aval_vicerrectoria_at ?? null,
+                    ],
+                    'rectoria' => [
+                        'estado' => $aspirante->aval_rectoria,
+                        'aprobado_por' => $aspirante->aval_rectoria_by ?? null,
+                        'fecha' => $aspirante->aval_rectoria_at ?? null,
                     ],
                 ],
             ];

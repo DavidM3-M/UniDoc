@@ -453,7 +453,18 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
             $experienciaTotalHoras = $this->calcularExperienciaUsuario($user, $esAdministrativo);
 
             if ($experienciaTotalHoras < $experienciaRequerida->horas_minimas) {
-                throw new \Exception("No cumples con la experiencia requerida. Se requieren {$experienciaRequerida->horas_minimas} horas y tienes {$experienciaTotalHoras} horas.", 403);
+                $anosRequeridos = $experienciaRequerida->anos_equivalentes
+                    ? number_format($experienciaRequerida->anos_equivalentes, 1)
+                    : null;
+                $totalDiasUsuario = $this->calcularTotalDiasExperiencia($user->experienciasUsuario, null);
+                $anosUsuario = number_format($totalDiasUsuario / 365.25, 1);
+                $anosReqStr = $anosRequeridos ? " ({$anosRequeridos} años equivalentes)" : '';
+                throw new \Exception(
+                    "No cumples con la experiencia requerida. "
+                    . "Se requieren {$experienciaRequerida->horas_minimas} horas{$anosReqStr} "
+                    . "y tienes {$experienciaTotalHoras} horas ({$anosUsuario} años).",
+                    403
+                );
             }
         }
 
@@ -489,7 +500,36 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
             }
 
             if (!$cumpleFecha) {
-                throw new \Exception("No cumples con la experiencia requerida hasta la fecha {$fechaReq->toDateString()}.", 403);
+                // Calcular años totales que tiene el usuario
+                $totalDiasUsuario = $this->calcularTotalDiasExperiencia($user->experienciasUsuario, null);
+                $anosUsuario = number_format($totalDiasUsuario / 365.25, 1);
+
+                // Encontrar la fecha de finalización más reciente para orientar al usuario
+                $fechaMasReciente = null;
+                foreach ($user->experienciasUsuario as $exp) {
+                    if (!empty($exp->fecha_finalizacion)) {
+                        try {
+                            $fechaFin = \Carbon\Carbon::parse($exp->fecha_finalizacion);
+                            if ($fechaMasReciente === null || $fechaFin->greaterThan($fechaMasReciente)) {
+                                $fechaMasReciente = $fechaFin;
+                            }
+                        } catch (\Exception $e) {
+                            continue;
+                        }
+                    }
+                }
+
+                $detalleExp = $fechaMasReciente
+                    ? " Tu experiencia más reciente finalizó el {$fechaMasReciente->toDateString()}."
+                    : ' No tienes experiencias registradas.';
+
+                throw new \Exception(
+                    "No cumples con la experiencia requerida. "
+                    . "Se requiere haber tenido experiencia vigente hasta el {$fechaReq->toDateString()} "
+                    . "y cuentas con {$anosUsuario} años de experiencia acumulada."
+                    . $detalleExp,
+                    403
+                );
             }
         }
 

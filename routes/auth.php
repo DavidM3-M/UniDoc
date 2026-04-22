@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 // Importa el controlador de autenticación
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Auth\GoogleAuthController;
 // Define un grupo de rutas con configuraciones específicas para autenticación
 Route::group([
     // Aplica el middleware 'api' para proteger las rutas
@@ -22,6 +23,10 @@ Route::group([
     // ruta para restablecer la contraseña cuando se te olvido
     Route::post('restablecer-contrasena-token', [AuthController::class, 'actualizarContrasenaConToken'])
         ->middleware('throttle:5,1');
+
+    // Google OAuth (fuera del grupo auth:api — son rutas públicas)
+    Route::get('google/redirect', [GoogleAuthController::class, 'redirect']);
+    Route::get('google/callback', [GoogleAuthController::class, 'callback']);
 
     // Define un subgrupo de rutas protegidas por el middleware 'auth:api'
     Route::group(['middleware' => 'auth:api'], function () {

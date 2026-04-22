@@ -584,6 +584,10 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | `salario` | number | Sí | Salario pactado |
 | `observaciones` | string | No | Observaciones adicionales |
 
+> **Prerrequisito:** Todos los avales definidos en `avales_establecidos` de la convocatoria deben estar en estado `aprobado` dentro de la tabla `convocatoria_avales`.
+>
+> **Error `409`:** Si el usuario ya tiene una contratación existente para la misma convocatoria (`user_id + convocatoria_id` únicos), el sistema responde `{ "message": "El usuario ya tiene una contratación para esta convocatoria" }`. Para contratos en **distintas** convocatorias un mismo usuario puede tener múltiples registros de contratación.
+
 **Respuesta `201`:**
 ```json
 {
@@ -599,7 +603,7 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 }
 ```
 
-#### Avales
+#### Avales (ConvocatoriaAvalController)
 
 | Método | URI | Descripción |
 |--------|-----|-------------|
@@ -607,6 +611,8 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | POST | `/talentoHumano/avales` | Crea / actualiza aval |
 | PUT | `/talentoHumano/avales/{id}` | Aprueba o rechaza aval |
 | POST | `/talento-humano/rechazar-aval/{userId}` | Rechaza perfil del aspirante (cadena de avales) |
+| POST | `/talento-humano/aval-hoja-vida/{userId}` | Otorga aval de Talento Humano |
+| GET | `/talento-humano/usuarios/{userId}/avales` | Avales de un usuario (nuevo o legado según `?convocatoria_id`) |
 
 **Campos `PUT /talentoHumano/avales/{id}` (JSON):**
 
@@ -615,11 +621,41 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | `estado` | string | Sí | `pending`, `aprobado`, `rechazado` |
 | `motivo_rechazo` | string | **Sí si `rechazado`** | Motivo del rechazo |
 
+**Campos `POST /talento-humano/aval-hoja-vida/{userId}` (JSON):**
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `convocatoria_id` | integer | No | Asocia el aval a una convocatoria específica (nuevo flujo). Si se omite, aplica aval global del usuario (flujo legado). |
+| `observaciones` | string | No | Comentarios del revisor |
+
+> Los mismos campos aplican a `POST /coordinador/aval-hoja-vida/{userId}`, `POST /vicerrectoria/aval-hoja-vida/{userId}` y `POST /rectoria/aval-hoja-vida/{userId}`.
+
+**Respuesta `GET /talento-humano/usuarios/{userId}/avales` — Nuevo flujo (`?convocatoria_id={id}`):**
+```json
+[
+  { "id": 1, "aval": "Talento Humano", "estado": "aprobado", "observaciones": "Verificado", "aprobado_por": "Juan" },
+  { "id": 2, "aval": "Coordinador",    "estado": "pendiente", "observaciones": null, "aprobado_por": null }
+]
+```
+
+**Respuesta `GET /talento-humano/usuarios/{userId}/avales` — Flujo legado (sin `?convocatoria_id`):**
+```json
+{
+  "talentoHumano":  { "estado": true,  "aprobado_por": "Nombre", "fecha": "2026-01-01" },
+  "coordinador":    { "estado": false, "aprobado_por": null, "fecha": null },
+  "vicerrectoria":  { "estado": false, "aprobado_por": null, "fecha": null },
+  "rectoria":       { "estado": false, "aprobado_por": null, "fecha": null }
+}
+```
+
 **Campos `POST /talento-humano/rechazar-aval/{userId}` (JSON):**
 
 | Campo | Tipo | Requerido | Descripción |
 |-------|------|-----------|-------------|
 | `motivo_rechazo` | string | Sí | Razón del rechazo. Se notifica al aspirante y se marcan sus postulaciones activas como `Rechazada` |
+| `convocatoria_id` | integer | No | Si se envía, el rechazo aplica solo al aval de esa convocatoria (nuevo flujo); si se omite, aplica al aval global del usuario (flujo legado) |
+
+> **Nota:** Lo mismo aplica a `POST /coordinador/rechazar-aval/{userId}`, `POST /vicerrectoria/rechazar-aval/{userId}` y `POST /rectoria/rechazar-aval/{userId}`.
 
 ---
 
@@ -678,6 +714,15 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 ### Coordinador
 
 **Prefijo:** `/coordinador` | **Middleware:** `auth:api`, `role:Coordinador`
+
+#### Avales
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| POST | `/coordinador/aval-hoja-vida/{userId}` | Otorga aval del Coordinador (requiere aval previo de TH) |
+| POST | `/coordinador/rechazar-aval/{userId}` | Rechaza perfil del aspirante |
+| GET | `/coordinador/usuarios/{userId}/avales` | Avales de un usuario |
+| GET | `/coordinador/usuarios` | Usuarios aprobados por Talento Humano |
 
 #### Evaluaciones
 
@@ -1010,6 +1055,33 @@ Authorization: Bearer {{token}}
 
 ---
 
+## Sistema de Avales por Convocatoria
+
+El sistema soporta dos flujos de avales en paralelo:
+
+### Flujo nuevo (por convocatoria)
+
+Cuando se envía `convocatoria_id` en el body de `aval-hoja-vida` o `rechazar-aval`, o como query param en `usuarios/{userId}/avales`, el sistema opera sobre la tabla `convocatoria_avales`. Cada registro vincula `(user_id, convocatoria_id, aval, estado)` y permite múltiples convocatorias por usuario con estados independientes.
+
+**Cadena de aprobación (`ORDEN_AVALES`):** `Talento Humano → Coordinador → Decanato → Vicerrectoria → Rectoria`
+
+Cada instancia solo puede otorgar su aval cuando todos los avales anteriores en la cadena ya están en estado `aprobado`. La cadena específica para cada convocatoria se define mediante el campo `avales_establecidos` (array) al crear o actualizar la convocatoria.
+
+**Ejemplo de `avales_establecidos`:**
+```json
+["Talento Humano", "Coordinador", "Vicerrectoria", "Rectoria"]
+```
+
+### Flujo legado (global de usuario)
+
+Cuando **no** se envía `convocatoria_id`, el sistema actualiza columnas booleanas directamente en la tabla `users` (`aval_talento_humano`, `aval_coordinador`, `aval_vicerrectoria`, `aval_rectoria`). Este flujo se mantiene por compatibilidad hacia atrás.
+
+### Contrataciones dobles (blindaje)
+
+El par `(user_id, convocatoria_id)` es único en la tabla `contrataciones`. Intentar crear una segunda contratación para la misma convocatoria retorna `409 Conflict`. Sin embargo, el mismo usuario puede tener contratos en distintas convocatorias sin restricción.
+
+---
+
 ## Flujo de Trabajo del Sistema
 
 ```
@@ -1076,8 +1148,13 @@ Cada rol cuenta con un endpoint dedicado de rechazo. Al rechazar se marcan las p
 
 **Body (todos):**
 ```json
-{ "motivo_rechazo": "El aspirante no cumple con el perfil requerido" }
+{
+  "motivo_rechazo": "El aspirante no cumple con el perfil requerido",
+  "convocatoria_id": 3
+}
 ```
+
+> `convocatoria_id` es **opcional**. Si se envía, aplica el rechazo solo al aval de esa convocatoria (nuevo flujo); si se omite, actúa sobre el aval global del usuario (flujo legado).
 
 ---
 
