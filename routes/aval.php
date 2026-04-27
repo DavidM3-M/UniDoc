@@ -13,10 +13,7 @@ Route::group([
     'prefix' => 'rectoria'
 ], function () {
     Route::post('aval-hoja-vida/{userId}', [AvalController::class, 'avalHojaVida']);
-<<<<<<< HEAD
-    Route::post('aval-hoja-vida/{userId}/2', [AvalController::class, 'avalHojaVida2']);
-=======
->>>>>>> 95d2f50479d8cb3b3a68b6f3a3efbc25b4c5cdb0
+
     Route::post('rechazar-aval/{userId}', [AvalController::class, 'rechazarAval']);
     Route::get('usuarios/{userId}/avales', [AvalController::class, 'verAvales']);
     Route::get('usuarios', [AvalController::class, 'listarUsuarios']);
@@ -54,10 +51,7 @@ Route::group([
     'prefix' => 'vicerrectoria'
 ], function () {
     Route::post('aval-hoja-vida/{userId}', [AvalController::class, 'avalHojaVida']);
-<<<<<<< HEAD
-    Route::post('aval-hoja-vida/{userId}/2', [AvalController::class, 'avalHojaVida2']);
-=======
->>>>>>> 95d2f50479d8cb3b3a68b6f3a3efbc25b4c5cdb0
+
     Route::post('rechazar-aval/{userId}', [AvalController::class, 'rechazarAval']);
     Route::get('usuarios/{userId}/avales', [AvalController::class, 'verAvales']);
     Route::get('usuarios', [AvalController::class, 'listarUsuarios']);
@@ -91,10 +85,7 @@ Route::group([
     'prefix' => 'talento-humano'
 ], function () {
     Route::post('aval-hoja-vida/{userId}', [AvalController::class, 'avalHojaVida']);
-<<<<<<< HEAD
-    Route::post('aval-hoja-vida/{userId}/2', [AvalController::class, 'avalHojaVida2']);
-=======
->>>>>>> 95d2f50479d8cb3b3a68b6f3a3efbc25b4c5cdb0
+
     Route::post('rechazar-aval/{userId}', [AvalController::class, 'rechazarAval']);
     Route::get('usuarios/{userId}/avales', [AvalController::class, 'verAvales']);
     Route::get('usuarios', [AvalController::class, 'listarUsuarios']); // <-- NUEVA RUTA
@@ -108,10 +99,6 @@ Route::group([
     'prefix' => 'coordinador'
 ], function () {
     Route::post('aval-hoja-vida/{userId}', [AvalController::class, 'avalHojaVida']);
-<<<<<<< HEAD
-    Route::post('aval-hoja-vida/{userId}/2', [AvalController::class, 'avalHojaVida2']);
-=======
->>>>>>> 95d2f50479d8cb3b3a68b6f3a3efbc25b4c5cdb0
     Route::post('rechazar-aval/{userId}', [AvalController::class, 'rechazarAval']);
     Route::get('usuarios/{userId}/avales', [AvalController::class, 'verAvales']);
     Route::get('usuarios', [AvalController::class, 'listarUsuarios']);

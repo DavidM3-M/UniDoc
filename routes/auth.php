@@ -23,17 +23,15 @@ Route::group([
     // ruta para restablecer la contraseña cuando se te olvido
     Route::post('restablecer-contrasena-token', [AuthController::class, 'actualizarContrasenaConToken'])
         ->middleware('throttle:5,1');
-<<<<<<< HEAD
-=======
+
 
     // Google OAuth (fuera del grupo auth:api — son rutas públicas)
     Route::get('google/redirect', [GoogleAuthController::class, 'redirect']);
     Route::get('google/callback', [GoogleAuthController::class, 'callback']);
->>>>>>> 95d2f50479d8cb3b3a68b6f3a3efbc25b4c5cdb0
 
     // Define un subgrupo de rutas protegidas por el middleware 'auth:api'
     Route::group(['middleware' => 'auth:api'], function () {
-        
+
         // Ruta para cerrar sesión
         Route::post('cerrar-sesion', [AuthController::class, 'cerrarSesion']);
         // Ruta para obtener los datos del usuario autenticado
@@ -42,6 +40,5 @@ Route::group([
         Route::post('actualizar-contrasena', [AuthController::class, 'actualizarContrasena']);
         // Ruta para actualizar los datos del usuario autenticado
         Route::post('actualizar-usuario', [AuthController::class, 'actualizarUsuario']);
-        
     });
 });

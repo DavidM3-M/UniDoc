@@ -157,13 +157,9 @@ class PostulacionController
     public function obtenerPostulaciones()
     {
         try {
-<<<<<<< HEAD
-            $postulaciones = Postulacion::with(['usuarioPostulacion', 'convocatoriaPostulacion'])
-                ->where('estado_postulacion', EstadoPostulacion::ENVIADA)
-=======
+
             $postulaciones = Postulacion::with('usuarioPostulacion', 'convocatoriaPostulacion')
                 ->orderBy('created_at', 'desc')
->>>>>>> 95d2f50479d8cb3b3a68b6f3a3efbc25b4c5cdb0
                 ->get();
 
             // Agregar estado de aval TH por convocatoria (desde convocatoria_avales, no del flag global del usuario)
@@ -754,11 +750,8 @@ class PostulacionController
         if ($totalAnosUsuario < $totalAnosRequeridos) {
             throw new \Exception(
                 "No cumples con los años de experiencia requeridos. " .
-<<<<<<< HEAD
-                    "Se requieren {$totalAnosRequeridos} años en total y tienes {$totalAnosUsuario} años.",
-=======
+
                 "Se requieren {$totalAnosRequeridos} años en total y tienes {$totalAnosUsuario} años.",
->>>>>>> 95d2f50479d8cb3b3a68b6f3a3efbc25b4c5cdb0
                 403
             );
         }
