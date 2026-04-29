@@ -2255,6 +2255,59 @@
                                                                    }
                                                    }
                                                ]
+                                  },
+                                  {
+                                      "name":  "Puntaje de Aptitud",
+                                      "description":  "Endpoints del sistema de puntuaciÃ³n de aspirantes.",
+                                      "item":  [
+                                                   {
+                                                       "name":  "Mi puntaje (Aspirante)",
+                                                       "request":  {
+                                                                       "method":  "GET",
+                                                                       "header":  [
+                                                                                      {
+                                                                                          "key":  "Authorization",
+                                                                                          "value":  "Bearer {{token}}"
+                                                                                      }
+                                                                                  ],
+                                                                       "url":  {
+                                                                                   "raw":  "{{base_url}}/aspirante/mi-puntaje",
+                                                                                   "host":  [
+                                                                                                "{{base_url}}"
+                                                                                            ],
+                                                                                   "path":  [
+                                                                                                "aspirante",
+                                                                                                "mi-puntaje"
+                                                                                            ]
+                                                                               },
+                                                                       "description":  "Calcula y retorna el puntaje de aptitud del aspirante autenticado.\n\n**Middleware:** `auth:api`, `role:Aspirante`\n\n**Respuesta 200:**\n```json\n{\n  \"total\": 155,\n  \"estudios\": 80,\n  \"idiomas\": 25,\n  \"experiencia\": 50,\n  \"desglose\": {\n    \"estudios\": [{\"titulo\": \"Maestr\\u00eda en Educaci\\u00f3n\", \"puntaje\": 80}],\n    \"idiomas\": [{\"idioma\": \"Ingl\\u00e9s\", \"nivel\": \"B2\", \"puntaje\": 25}],\n    \"experiencia\": [{\"tipo\": \"Docencia Universitaria\", \"anios\": 5, \"puntaje\": 50}]\n  }\n}\n```\n\n**Errores posibles:**\n- `401` â€" Token invÃ¡lido\n- `403` â€" Sin rol Aspirante"
+                                                                   }
+                                                   },
+                                                   {
+                                                       "name":  "Puntaje de aspirante por ID (TH / Coordinador / VicerrectorÃ­a / RectorÃ­a)",
+                                                       "request":  {
+                                                                       "method":  "GET",
+                                                                       "header":  [
+                                                                                      {
+                                                                                          "key":  "Authorization",
+                                                                                          "value":  "Bearer {{token}}"
+                                                                                      }
+                                                                                  ],
+                                                                       "url":  {
+                                                                                   "raw":  "{{base_url}}/aspirante/1/puntaje",
+                                                                                   "host":  [
+                                                                                                "{{base_url}}"
+                                                                                            ],
+                                                                                   "path":  [
+                                                                                                "aspirante",
+                                                                                                "1",
+                                                                                                "puntaje"
+                                                                                            ]
+                                                                               },
+                                                                       "description":  "Calcula y retorna el puntaje de aptitud de un aspirante especÃ­fico. Accesible por los roles de panel.\n\n**Middleware:** `auth:api`, `role:Talento Humano|Coordinador|Vicerrectoria|Rectoria`\n\n**ParÃ¡metro de ruta:** `userId` â€" ID del usuario aspirante\n\n**Respuesta 200:**\n```json\n{\n  \"total\": 155,\n  \"estudios\": 80,\n  \"idiomas\": 25,\n  \"experiencia\": 50,\n  \"desglose\": { \"...\" }\n}\n```\n\n**Errores posibles:**\n- `401` â€" Token invÃ¡lido\n- `403` â€" Sin rol de panel\n- `404` â€" Usuario no encontrado"
+                                                                   }
+                                                   }
+                                               ]
                                   }
                               ]
                  },

@@ -483,6 +483,29 @@ La API usa **JWT (JSON Web Token)**. Pasos:
 | GET | `/aspirante/obtener-normativas` | Lista normativas vigentes |
 | GET | `/aspirante/obtener-normativa/{id}` | Detalle de normativa |
 
+#### Puntaje de Aptitud
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| GET | `/aspirante/mi-puntaje` | Calcula y retorna el puntaje de aptitud del aspirante autenticado |
+
+**Respuesta 200:**
+```json
+{
+  "total": 155,
+  "estudios": 80,
+  "idiomas": 25,
+  "experiencia": 50,
+  "desglose": {
+    "estudios": [{ "titulo": "Maestría en Educación", "puntaje": 80 }],
+    "idiomas": [{ "idioma": "Inglés", "nivel": "B2", "puntaje": 25 }],
+    "experiencia": [{ "tipo": "Docencia Universitaria", "anios": 5, "puntaje": 50 }]
+  }
+}
+```
+
+> El puntaje también es accesible para los roles de panel (Talento Humano, Coordinador, Vicerrectoría, Rectoría) vía `GET /aspirante/{userId}/puntaje`.
+
 ---
 
 ### Docente
@@ -708,6 +731,12 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | GET | `/admin/aspirantes/{id}` | Detalle de aspirante |
 | GET | `/admin/aspirantes/{id}/hoja-vida-pdf` | HV del aspirante en PDF |
 | POST | `/admin/aspirantes/{id}/dar-aval` | Otorga aval al aspirante |
+
+#### Puntaje de Aptitud (compartido: TH, Coordinador, Vicerrectoría, Rectoría)
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| GET | `/aspirante/{userId}/puntaje` | Calcula y retorna el puntaje de aptitud de un aspirante específico |
 
 ---
 

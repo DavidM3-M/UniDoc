@@ -17,17 +17,19 @@ use App\Services\GeneradorHojaDeVidaPDFService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use App\Http\Controllers\TalentoHumano\NotificacionController;
+use App\Services\PuntajeAspiranteService;
 
 class PostulacionController
 {
     protected $generadorHojaDeVidaPDFService;
-    /**
-     * constructor del controlador.
-     * se utilizar para inyectar el servicio de generador de hoja de vida a PDF.
-     */
-    public function __construct(GeneradorHojaDeVidaPDFService $generadorHojaDeVidaPDFService)
-    {
+    protected $puntajeService;
+
+    public function __construct(
+        GeneradorHojaDeVidaPDFService $generadorHojaDeVidaPDFService,
+        PuntajeAspiranteService $puntajeService
+    ) {
         $this->generadorHojaDeVidaPDFService = $generadorHojaDeVidaPDFService;
+        $this->puntajeService = $puntajeService;
     }
 
     /**
@@ -156,13 +158,17 @@ class PostulacionController
                 ->orderBy('created_at', 'desc')
                 ->get();
 
-            // Agregar estado de aval TH por convocatoria (desde convocatoria_avales, no del flag global del usuario)
-            $postulaciones->each(function ($p) {
+            // Agregar estado de aval TH y puntaje por postulación
+            $puntajeService = $this->puntajeService;
+            $postulaciones->each(function ($p) use ($puntajeService) {
                 $p->aval_th_aprobado = ConvocatoriaAval::where('convocatoria_id', $p->convocatoria_id)
                     ->where('user_id', $p->user_id)
                     ->where('aval', 'talento_humano')
                     ->where('estado', 'aprobado')
                     ->exists();
+                if ($p->usuarioPostulacion) {
+                    $p->usuarioPostulacion->puntaje_aspirante = $puntajeService->calcular((int) $p->user_id)['total'];
+                }
             });
 
             return response()->json(['postulaciones' => $postulaciones], 200);

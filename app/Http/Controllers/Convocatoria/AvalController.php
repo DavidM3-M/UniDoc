@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Convocatoria;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\TalentoHumano\NotificacionController;
+use App\Services\PuntajeAspiranteService;
 use Illuminate\Http\Request;
 use App\Models\Usuario\User;
 use App\Models\TalentoHumano\ConvocatoriaAval;
@@ -13,6 +14,8 @@ use Illuminate\Support\Facades\Log;
 
 class AvalController extends Controller
 {
+    public function __construct(private readonly PuntajeAspiranteService $puntajeService) {}
+
     /** Mapea rol → nombre de aval almacenado en convocatoria_avales */
     private const ROLE_AVAL = [
         'Talento Humano' => 'talento_humano',
@@ -111,10 +114,25 @@ class AvalController extends Controller
                 }
             }
 
-            return response()->json(['data' => $usuarios]);
+            return response()->json(['data' => $this->appendPuntajes($usuarios)]);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Error al obtener usuarios.', 'error' => $e->getMessage()], 500);
         }
+    }
+
+    /** Inyecta puntaje_aspirante en cada elemento de la colección / array. */
+    private function appendPuntajes($usuarios): array
+    {
+        $result = [];
+        foreach ($usuarios as $u) {
+            $arr    = is_array($u) ? $u : $u->toArray();
+            $userId = $arr['id'] ?? null;
+            if ($userId) {
+                $arr['puntaje_aspirante'] = $this->puntajeService->calcular((int) $userId)['total'];
+            }
+            $result[] = $arr;
+        }
+        return $result;
     }
 
     public function avalHojaVida(Request $request, $userId)

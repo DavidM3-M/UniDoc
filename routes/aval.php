@@ -6,6 +6,11 @@ use App\Http\Controllers\TalentoHumano\PostulacionController;
 use App\Http\Controllers\TalentoHumano\ConvocatoriaController;
 use App\Http\Controllers\Convocatoria\RectoriaVerificacionDocumentosController;
 use App\Http\Controllers\Convocatoria\VicerrectoriaVerificacionDocumentosController;
+use App\Http\Controllers\Aspirante\PuntajeAspiranteController;
+
+// Endpoint compartido: consultar puntaje de cualquier aspirante (todos los roles de panel)
+Route::middleware(['api', 'auth:api', 'role:Talento Humano|Coordinador|Vicerrectoria|Rectoria'])
+    ->get('/aspirante/{userId}/puntaje', [PuntajeAspiranteController::class, 'calcular']);
 
 // Grupo Rectoría
 Route::group([
