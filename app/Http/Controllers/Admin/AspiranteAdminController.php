@@ -218,9 +218,9 @@ class AspiranteAdminController extends Controller
                     'informacionContactoUsuario',
                     'epsUsuario.documentosEps',
                     'rutUsuario.documentosRut',
-                    'idiomasUsuario',
-                    'experienciasUsuario',
-                    'estudiosUsuario',
+                    'idiomasUsuario.documentosIdioma',
+                    'experienciasUsuario.documentosExperiencia',
+                    'estudiosUsuario.documentosEstudio',
                     'produccionAcademicaUsuario',
                     'aptitudesUsuario',
                     'postulacionesUsuario.convocatoriaPostulacion',
@@ -300,9 +300,33 @@ class AspiranteAdminController extends Controller
                         'archivo_url' => asset('storage/' . $doc->archivo),
                     ])->values(),
                 ] : null,
-                'idiomas' => $aspirante->idiomasUsuario,
-                'experiencias' => $aspirante->experienciasUsuario,
-                'estudios' => $aspirante->estudiosUsuario,
+                'idiomas' => $aspirante->idiomasUsuario->map(fn($idioma) => array_merge(
+                    $idioma->toArray(),
+                    ['documentos_idioma' => $idioma->documentosIdioma->map(fn($doc) => [
+                        'id_documento' => $doc->id_documento,
+                        'archivo' => $doc->archivo,
+                        'archivo_url' => asset('storage/' . $doc->archivo),
+                        'estado' => $doc->estado,
+                    ])->values()]
+                ))->values(),
+                'experiencias' => $aspirante->experienciasUsuario->map(fn($exp) => array_merge(
+                    $exp->toArray(),
+                    ['documentos_experiencia' => $exp->documentosExperiencia->map(fn($doc) => [
+                        'id_documento' => $doc->id_documento,
+                        'archivo' => $doc->archivo,
+                        'archivo_url' => asset('storage/' . $doc->archivo),
+                        'estado' => $doc->estado,
+                    ])->values()]
+                ))->values(),
+                'estudios' => $aspirante->estudiosUsuario->map(fn($est) => array_merge(
+                    $est->toArray(),
+                    ['documentos_estudio' => $est->documentosEstudio->map(fn($doc) => [
+                        'id_documento' => $doc->id_documento,
+                        'archivo' => $doc->archivo,
+                        'archivo_url' => asset('storage/' . $doc->archivo),
+                        'estado' => $doc->estado,
+                    ])->values()]
+                ))->values(),
                 'produccion_academica' => $aspirante->produccionAcademicaUsuario,
                 'aptitudes' => $aspirante->aptitudesUsuario,
                 'postulaciones' => $aspirante->postulacionesUsuario,
