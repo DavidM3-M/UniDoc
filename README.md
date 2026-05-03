@@ -108,6 +108,12 @@ php artisan jwt:secret
 # 7. Correr migraciones y seeders
 php artisan migrate --seed
 
+# 7b. (Opcional) Poblar datos de prueba adicionales
+#     Crea 10 aspirantes demo, convocatorias de ejemplo y postulaciones de prueba
+php artisan db:seed --class=DemoAspirantesSeeder
+php artisan db:seed --class=DemoConvocatoriasSeeder
+php artisan db:seed --class=PostulacionesDemoSeeder
+
 # 8. Enlace de almacenamiento
 php artisan storage:link
 
