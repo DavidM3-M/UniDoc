@@ -5253,6 +5253,122 @@
                                                   }
                                   }
                               ]
+                 },
+                 {
+                     "name":  "Inteligencia Artificial (IA)",
+                     "description":  "Endpoints de IA con Groq (llama-3.3-70b-versatile). Requieren autenticaci\u00f3n y rol Talento Humano, Coordinador, Vicerrectoria o Rectoria. Variable de entorno necesaria: GROK_API_KEY.",
+                     "item":  [
+                                  {
+                                      "name":  "Consultar aspirante(s)",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{token}}"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"pregunta\": \"\\u00bfQu\u00e9 documentos tiene Juan P\u00e9rez?\",\n  \"user_id\": null,\n  \"convocatoria_id\": null,\n  \"buscar\": null,\n  \"historial\": []\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{base_url}}/ia/aspirante/consultar",
+                                                                  "host":  [
+                                                                               "{{base_url}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "ia",
+                                                                               "aspirante",
+                                                                               "consultar"
+                                                                           ]
+                                                              },
+                                                      "description":  "Consulta en lenguaje natural sobre un aspirante individual o todos los postulantes de una convocatoria.\n\n**Campos:**\n- `pregunta` (requerido): pregunta en lenguaje natural (m\u00e1x. 2000 chars)\n- `user_id` (opcional): ID del aspirante para contexto individual\n- `convocatoria_id` (opcional): ID de convocatoria para consultar todos sus postulantes\n- `buscar` (opcional): t\u00e9rmino libre por nombre o c\u00e9dula\n- `historial` (opcional): array de mensajes previos con `role` y `content`\n\n**Respuesta 200:**\n```json\n{ \"respuesta\": \"El aspirante tiene un puntaje de 155 puntos...\" }\n```\n\n**Errores:**\n- `401` \u2014 Token inv\u00e1lido\n- `403` \u2014 Rol no autorizado\n- `500` \u2014 GROK_API_KEY no configurada o error de la API"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Buscar aspirante por nombre / c\u00e9dula",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{token}}"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"pregunta\": \"Dame el perfil completo de Mar\u00eda Garc\u00eda\",\n  \"buscar\": \"Mar\u00eda Garc\u00eda\",\n  \"historial\": []\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{base_url}}/ia/buscar",
+                                                                  "host":  [
+                                                                               "{{base_url}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "ia",
+                                                                               "buscar"
+                                                                           ]
+                                                              },
+                                                      "description":  "Alias del endpoint de consulta orientado a b\u00fasquedas por nombre completo o n\u00famero de c\u00e9dula. Usa el campo `buscar` para filtrar aspirantes en la base de datos antes de enviar el contexto a la IA.\n\n**Respuesta 200:**\n```json\n{ \"respuesta\": \"Encontr\u00e9 a Mar\u00eda Garc\u00eda. Su puntaje total es...\" }\n```\n\n**Errores:**\n- `401` \u2014 Token inv\u00e1lido\n- `403` \u2014 Rol no autorizado\n- `500` \u2014 GROK_API_KEY no configurada o error de la API"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Validar documento con IA",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{token}}"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"documento_url\": \"https://storage.example.com/documentos/diploma_maestria.pdf\",\n  \"tipo_esperado\": \"Diploma de Maestr\u00eda\",\n  \"nombre_archivo\": \"diploma_maestria.pdf\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{base_url}}/ia/documento/validar",
+                                                                  "host":  [
+                                                                               "{{base_url}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "ia",
+                                                                               "documento",
+                                                                               "validar"
+                                                                           ]
+                                                              },
+                                                      "description":  "Analiza un PDF y determina si corresponde al tipo de documento esperado.\n\n**Campos:**\n- `documento_url` (requerido): URL p\u00fablica del PDF\n- `tipo_esperado` (requerido): tipo de documento esperado (ej: `\"Diploma de Maestr\u00eda\"`)\n- `nombre_archivo` (opcional): nombre del archivo; se infiere de la URL si se omite\n\n**Respuesta 200:**\n```json\n{\n  \"valido\": true,\n  \"confianza\": \"alta\",\n  \"mensaje\": \"El documento corresponde a un diploma de maestr\u00eda expedido por la Universidad Nacional.\",\n  \"advertencias\": []\n}\n```\n\n**Errores:**\n- `401` \u2014 Token inv\u00e1lido\n- `403` \u2014 Rol no autorizado\n- `500` \u2014 GROK_API_KEY no configurada o error de la API"
+                                                  }
+                                  }
+                              ]
                  }
              ]
 }

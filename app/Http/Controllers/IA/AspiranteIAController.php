@@ -28,6 +28,10 @@ class AspiranteIAController extends Controller
             'pregunta'        => 'required|string|max:2000',
             'user_id'         => 'nullable|integer',
             'convocatoria_id' => 'nullable|integer',
+            'buscar'          => 'nullable|string|max:300',
+            'historial'       => 'nullable|array|max:20',
+            'historial.*.role'    => 'required|string|in:user,assistant',
+            'historial.*.content' => 'required|string|max:4000',
         ]);
 
         $apiKey = config('services.grok.api_key');
@@ -35,42 +39,71 @@ class AspiranteIAController extends Controller
             return response()->json(['message' => 'API key de IA no configurada. Agrega GROK_API_KEY al .env'], 500);
         }
 
-        $contexto = '';
+        $contexto    = '';
+        $modoBusqueda = false;
+
         if ($request->user_id) {
             $contexto = $this->buildAspiranteContext((int) $request->user_id);
         } elseif ($request->convocatoria_id) {
             $contexto = $this->buildConvocatoriaContext((int) $request->convocatoria_id);
+        } elseif ($request->buscar) {
+            // Búsqueda explícita por nombre/cédula desde el frontend
+            $contexto    = $this->buildBusquedaContext($request->buscar);
+            $modoBusqueda = true;
+        } else {
+            // Sin contexto fijo: intentar extraer términos de la pregunta y buscar en BD
+            $terminos = $this->extractSearchTerms($request->pregunta);
+            if (!empty($terminos)) {
+                $contexto    = $this->buildBusquedaContext(implode(' ', $terminos));
+                $modoBusqueda = true;
+            }
         }
 
         $sinContexto = !$contexto;
 
         $systemPrompt =
-            "Eres un asistente experto en evaluación de docentes universitarios para el sistema UniDoc de la Universidad Autónoma. " .
-            "Ayudas a los paneles de Talento Humano, Coordinadores, Vicerrectoría y Rectoría a evaluar y comparar aspirantes. " .
-            "Responde siempre en español, de forma clara, objetiva y profesional.\n\n" .
+            "Eres el asistente de UniDoc, un colega digital que ayuda al equipo de Talento Humano, " .
+            "Coordinadores, Vicerrectoría y Rectoría a revisar perfiles de aspirantes y sus documentos. " .
+            "Tu tono es cercano, natural y directo — como el de alguien que conoce bien el sistema y " .
+            "conversa con confianza, sin sonar a robot ni a informe oficial. " .
+            "Usa frases cortas, evita la jerga burocrática y, cuando tengas varios datos, " .
+            "preséntalos de forma visual (listas, separadores) pero sin exagerar el formato. " .
+            "Responde siempre en español.\n\n" .
 
-            "REGLAS ESTRICTAS — DEBES SEGUIRLAS SIN EXCEPCIÓN:\n" .
-            "1. SOLO puedes hablar de aspirantes o datos que aparezcan explícitamente en la sección 'INFORMACIÓN DE ASPIRANTES DISPONIBLE'. " .
-            "2. NUNCA inventes, supongas ni completes información que no esté en esa sección. " .
-            "3. NUNCA uses nombres, puntajes, títulos, publicaciones ni ningún dato que no haya sido proporcionado. " .
-            "4. Si no tienes información de aspirantes, responde EXACTAMENTE: " .
-            "'No tengo datos de aspirantes en este momento. Por favor, abre el perfil de un aspirante o selecciona una convocatoria activa para que pueda analizar información real.' " .
-            "5. Si el usuario pide algo que no puedes responder con los datos disponibles, díselo claramente en lugar de inventar. " .
-            "6. Al ordenar los mejores aspirantes, usa ÚNICAMENTE los puntajes del sistema (campo 'Puntaje total') — no calcules ni estimes puntajes propios.\n" .
+            "REGLAS QUE NO PUEDES ROMPER:\n" .
+            "1. Solo habla de datos que aparezcan en la sección 'INFORMACIÓN DISPONIBLE'. " .
+            "2. Nunca inventes, supongas ni rellenes huecos con información propia. " .
+            "3. Si algo no está en los datos, díselo al usuario con naturalidad, sin dramas. " .
+            "4. Para ordenar aspirantes usa únicamente el campo 'Puntaje total' del sistema.\n" .
+            "5. DOCUMENTOS: Cuando el contexto incluya líneas con el formato '📄 [Nombre](URL)', " .
+            "DEBES incluirlas tal cual en tu respuesta para que el usuario pueda abrir el archivo. " .
+            "No modifiques, acortes ni omitas esas URLs. Escríbelas exactamente como aparecen en el contexto.\n" .
 
             ($sinContexto
-                ? "\nATENCIÓN: No se ha proporcionado información de aspirantes. Aplica la regla 4 para CUALQUIER pregunta sobre aspirantes o candidatos."
-                : "\n\nINFORMACIÓN DE ASPIRANTES DISPONIBLE (ÚNICA FUENTE DE VERDAD):\n{$contexto}");
+                ? "\nATENCIÓN: No se encontraron datos en la base de datos para esta consulta. " .
+                  "Puedes buscar por nombre, apellido o número de cédula. Ejemplo: '¿Qué documentos tiene Juan Pérez?' o 'Busca a María García'."
+                : ($modoBusqueda
+                    ? "\n\nRESULTADOS DE BÚSQUEDA EN BASE DE DATOS (ÚNICA FUENTE DE VERDAD):\n{$contexto}"
+                    : "\n\nINFORMACIÓN DE ASPIRANTES DISPONIBLE (ÚNICA FUENTE DE VERDAD):\n{$contexto}"));
+
+        // Construir mensajes: system + historial previo + pregunta actual
+        $historial = collect($request->historial ?? [])
+            ->map(fn($m) => ['role' => $m['role'], 'content' => $m['content']])
+            ->values()
+            ->toArray();
+
+        $messages = array_merge(
+            [['role' => 'system', 'content' => $systemPrompt]],
+            $historial,
+            [['role' => 'user', 'content' => $request->pregunta]]
+        );
 
         $response = Http::timeout(30)
             ->withToken($apiKey)
             ->post("{$this->baseUrl}/chat/completions", [
-                'model'    => $this->model,
-                'messages' => [
-                    ['role' => 'system', 'content' => $systemPrompt],
-                    ['role' => 'user',   'content' => $request->pregunta],
-                ],
-                'temperature' => 0.3,
+                'model'       => $this->model,
+                'messages'    => $messages,
+                'temperature' => 0.4,
                 'max_tokens'  => 1500,
             ]);
 
@@ -159,9 +192,9 @@ class AspiranteIAController extends Controller
     private function buildAspiranteContext(int $userId): string
     {
         $user = User::with([
-            'estudiosUsuario',
-            'idiomasUsuario',
-            'experienciasUsuario',
+            'estudiosUsuario.documentosEstudio',
+            'idiomasUsuario.documentosIdioma',
+            'experienciasUsuario.documentosExperiencia',
             'produccionAcademicaUsuario',
         ])->find($userId);
 
@@ -183,12 +216,26 @@ class AspiranteIAController extends Controller
         foreach ($user->estudiosUsuario as $e) {
             $grad    = ($e->graduado === 'Si') ? 'Graduado' : 'En curso';
             $lines[] = "  - {$e->tipo_estudio}: \"{$e->titulo_estudio}\" en {$e->institucion} [{$grad}]";
+            foreach ($e->documentosEstudio as $doc) {
+                if (!empty($doc->archivo)) {
+                    $url     = asset('storage/' . $doc->archivo);
+                    $nombre  = basename($doc->archivo);
+                    $lines[] = "    📄 [Documento estudio: {$nombre}]({$url})";
+                }
+            }
         }
 
         $lines[] = "";
         $lines[] = "IDIOMAS:";
         foreach ($user->idiomasUsuario as $i) {
             $lines[] = "  - {$i->idioma} Nivel {$i->nivel}";
+            foreach ($i->documentosIdioma as $doc) {
+                if (!empty($doc->archivo)) {
+                    $url     = asset('storage/' . $doc->archivo);
+                    $nombre  = basename($doc->archivo);
+                    $lines[] = "    📄 [Certificado idioma {$i->idioma}: {$nombre}]({$url})";
+                }
+            }
         }
 
         $lines[] = "";
@@ -196,6 +243,13 @@ class AspiranteIAController extends Controller
         foreach ($user->experienciasUsuario as $exp) {
             $hasta   = $exp->trabajo_actual ? 'Actual' : ($exp->fecha_finalizacion ?? 'N/D');
             $lines[] = "  - {$exp->tipo_experiencia}: {$exp->cargo} en {$exp->institucion_experiencia} ({$exp->fecha_inicio} - {$hasta})";
+            foreach ($exp->documentosExperiencia as $doc) {
+                if (!empty($doc->archivo)) {
+                    $url     = asset('storage/' . $doc->archivo);
+                    $nombre  = basename($doc->archivo);
+                    $lines[] = "    📄 [Certificado experiencia - {$exp->cargo}: {$nombre}]({$url})";
+                }
+            }
         }
 
         $lines[] = "";
@@ -246,6 +300,180 @@ class AspiranteIAController extends Controller
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * Busca usuarios en la BD por nombre, apellido o número de identificación
+     * y construye un contexto detallado con sus datos para la IA.
+     */
+    private function buildBusquedaContext(string $query): string
+    {
+        $query = trim($query);
+
+        // Separar términos de búsqueda y escapar caracteres especiales de LIKE
+        $terminos = array_filter(
+            array_unique(array_map('trim', preg_split('/\s+/', $query))),
+            fn($t) => mb_strlen($t) >= 2
+        );
+
+        if (empty($terminos)) {
+            return "Consulta de búsqueda vacía o demasiado corta.";
+        }
+
+        $users = User::with([
+            'estudiosUsuario.documentosEstudio',
+            'idiomasUsuario.documentosIdioma',
+            'experienciasUsuario.documentosExperiencia',
+            'produccionAcademicaUsuario',
+            'postulacionesUsuario.convocatoriaPostulacion',
+            'roles',
+        ])
+        ->where(function ($q) use ($terminos) {
+            foreach ($terminos as $t) {
+                $like = '%' . addcslashes($t, '%_\\') . '%';
+                $q->orWhere('primer_nombre',         'LIKE', $like)
+                  ->orWhere('segundo_nombre',         'LIKE', $like)
+                  ->orWhere('primer_apellido',        'LIKE', $like)
+                  ->orWhere('segundo_apellido',       'LIKE', $like)
+                  ->orWhere('numero_identificacion',  'LIKE', $like)
+                  ->orWhere('email',                  'LIKE', $like);
+            }
+        })
+        ->limit(10)
+        ->get();
+
+        if ($users->isEmpty()) {
+            return "No se encontraron usuarios en la base de datos con el criterio: \"{$query}\".";
+        }
+
+        $lines = [
+            "=== BÚSQUEDA: \"{$query}\" — {$users->count()} usuario(s) encontrado(s) ===",
+            "",
+        ];
+
+        foreach ($users as $user) {
+            $rol      = $user->roles->first()?->name ?? 'Sin rol';
+            $nombreC  = trim("{$user->primer_nombre} {$user->segundo_nombre} {$user->primer_apellido} {$user->segundo_apellido}");
+
+            try {
+                $p = $this->puntajeService->calcular($user->id);
+            } catch (\Exception) {
+                $p = ['total' => 0, 'estudios' => 0, 'idiomas' => 0, 'experiencia' => 0];
+            }
+
+            $lines[] = "── {$nombreC} (ID sistema: {$user->id}) ──";
+            $lines[] = "  Rol: {$rol}";
+            $lines[] = "  Cédula/Identificación: {$user->numero_identificacion} ({$user->tipo_identificacion})";
+            $lines[] = "  Email: {$user->email}";
+            $lines[] = "  Puntaje total: {$p['total']} pts  (Estudios: {$p['estudios']} | Idiomas: {$p['idiomas']} | Experiencia: {$p['experiencia']})";
+
+            // Estudios
+            if ($user->estudiosUsuario->isNotEmpty()) {
+                $lines[] = "  ESTUDIOS:";
+                foreach ($user->estudiosUsuario as $e) {
+                    $grad    = ($e->graduado === 'Si') ? 'Graduado' : 'En curso';
+                    $lines[] = "    · {$e->tipo_estudio}: \"{$e->titulo_estudio}\" — {$e->institucion} [{$grad}]";
+                    foreach ($e->documentosEstudio as $doc) {
+                        if (!empty($doc->archivo)) {
+                            $url     = asset('storage/' . $doc->archivo);
+                            $nombre  = basename($doc->archivo);
+                            $lines[] = "      📄 [Documento estudio: {$nombre}]({$url})";
+                        }
+                    }
+                }
+            } else {
+                $lines[] = "  ESTUDIOS: Sin estudios registrados.";
+            }
+
+            // Idiomas
+            if ($user->idiomasUsuario->isNotEmpty()) {
+                $lines[] = "  IDIOMAS:";
+                foreach ($user->idiomasUsuario as $i) {
+                    $lines[] = "    · {$i->idioma} — Nivel {$i->nivel}";
+                    foreach ($i->documentosIdioma as $doc) {
+                        if (!empty($doc->archivo)) {
+                            $url     = asset('storage/' . $doc->archivo);
+                            $nombre  = basename($doc->archivo);
+                            $lines[] = "      📄 [Certificado {$i->idioma}: {$nombre}]({$url})";
+                        }
+                    }
+                }
+            } else {
+                $lines[] = "  IDIOMAS: Sin idiomas registrados.";
+            }
+
+            // Experiencia
+            if ($user->experienciasUsuario->isNotEmpty()) {
+                $lines[] = "  EXPERIENCIA LABORAL:";
+                foreach ($user->experienciasUsuario as $exp) {
+                    $hasta   = $exp->trabajo_actual ? 'Actual' : ($exp->fecha_finalizacion ?? 'N/D');
+                    $lines[] = "    · {$exp->tipo_experiencia}: {$exp->cargo} en {$exp->institucion_experiencia} ({$exp->fecha_inicio} – {$hasta})";
+                    foreach ($exp->documentosExperiencia as $doc) {
+                        if (!empty($doc->archivo)) {
+                            $url     = asset('storage/' . $doc->archivo);
+                            $nombre  = basename($doc->archivo);
+                            $lines[] = "      📄 [Certificado experiencia {$exp->cargo}: {$nombre}]({$url})";
+                        }
+                    }
+                }
+            } else {
+                $lines[] = "  EXPERIENCIA LABORAL: Sin experiencias registradas.";
+            }
+
+            // Producción académica
+            $numProd = $user->produccionAcademicaUsuario->count();
+            $lines[] = "  PRODUCCIÓN ACADÉMICA: {$numProd} ítem(s) registrado(s).";
+
+            // Postulaciones
+            $postulaciones = $user->postulacionesUsuario;
+            if ($postulaciones->isNotEmpty()) {
+                $lines[] = "  POSTULACIONES:";
+                foreach ($postulaciones as $post) {
+                    $conv    = $post->convocatoriaPostulacion;
+                    $nomConv = $conv ? ($conv->nombre_convocatoria ?? "Convocatoria #{$conv->id_convocatoria}") : 'Convocatoria desconocida';
+                    $lines[] = "    · {$nomConv} — Estado: {$post->estado_postulacion}";
+                }
+            } else {
+                $lines[] = "  POSTULACIONES: Sin postulaciones registradas.";
+            }
+
+            $lines[] = "";
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Extrae términos de búsqueda relevantes (nombres propios y números de cédula)
+     * de una pregunta en lenguaje natural.
+     */
+    private function extractSearchTerms(string $pregunta): array
+    {
+        // Palabras comunes en español que no son nombres propios
+        $stopWords = [
+            'los', 'las', 'que', 'con', 'por', 'para', 'del', 'una', 'uno',
+            'tiene', 'esta', 'están', 'son', 'sus', 'cuales', 'cual', 'cuántos',
+            'cómo', 'quiénes', 'quién', 'cuáles', 'cómo', 'quiero', 'buscar',
+            'busca', 'dónde', 'donde', 'información', 'informacion', 'perfil',
+            'documentos', 'documento', 'aspirante', 'usuario', 'datos',
+            'registrado', 'registrados', 'sistema', 'hay', 'ver', 'obtener',
+            'me', 'mi', 'sobre', 'del', 'dime', 'muéstrame', 'encuentras',
+        ];
+
+        // Números de cédula / identificación (6+ dígitos consecutivos)
+        preg_match_all('/\b\d{6,}\b/', $pregunta, $numMatches);
+
+        // Palabras capitalizadas (posibles nombres propios), mínimo 3 caracteres
+        preg_match_all('/\b[A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,}\b/u', $pregunta, $nameMatches);
+
+        $nombres = array_filter(
+            $nameMatches[0],
+            fn($w) => !in_array(mb_strtolower($w), $stopWords)
+        );
+
+        $terminos = array_merge($numMatches[0], array_values($nombres));
+
+        return array_unique($terminos);
     }
 
     /**

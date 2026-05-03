@@ -41,4 +41,8 @@ return [
         'redirect'      => env('GOOGLE_REDIRECT_URI', 'http://localhost:8000/api/auth/google/callback'),
     ],
 
+    'grok' => [
+        'api_key' => env('GROK_API_KEY'),
+    ],
+
 ];
