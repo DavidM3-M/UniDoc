@@ -52,6 +52,7 @@ Route::group([
     Route::delete('eliminar-contratacion/{id}',[ContratacionController::class, 'eliminarContratacion']);
     Route::get('obtener-contratacion/{id_contratacion}',[ContratacionController::class, 'obtenerContratacionPorId']);
     Route::get('obtener-contrataciones',[ContratacionController::class, 'obtenerTodasLasContrataciones']);
+    Route::get('obtener-contratacion/{id_contratacion}/bitacora',[ContratacionController::class, 'obtenerBitacora']);
 
     // Rutas para gestionar avales por convocatoria
     Route::get('avales',[ConvocatoriaAvalController::class, 'index']);

@@ -5,13 +5,16 @@ namespace App\Http\Controllers\TalentoHumano;
 use App\Http\Requests\RequestTalentoHumano\RequestContratacion\CrearContratacionRequest;
 use App\Http\Requests\RequestTalentoHumano\RequestContratacion\ActualizarContratacionRequest;
 use App\Models\Usuario\User;
-use Illuminate\Support\Facades\DB;
 use App\Models\TalentoHumano\Contratacion;
+use App\Models\TalentoHumano\ContratacionBitacora;
 use App\Models\TalentoHumano\Convocatoria;
 use App\Models\TalentoHumano\ConvocatoriaAval;
-use Illuminate\Support\Facades\Auth;
+use App\Constants\ConstTalentoHumano\TipoProceso;
+use App\Constants\ConstTalentoHumano\TipoVinculacion;
 use App\Services\AprobarDocumentosService;
 use App\Services\RevertirDocumentosService;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class ContratacionController
@@ -52,9 +55,12 @@ class ContratacionController
     public function crearContratacion(CrearContratacionRequest $request, $user_id)
     {
         try {
-            DB::transaction(function () use ($request, $user_id) { // Inicia una transacción para asegurar la atomicidad de las operaciones
-                $datosContratacion = $request->validated(); // Validar los datos de la solicitud
-                // Si se envía una convocatoria, verificar que los avales requeridos estén aprobados para este usuario
+            $contratacionCreada = null;
+
+            DB::transaction(function () use ($request, $user_id, &$contratacionCreada) {
+                $datosContratacion = $request->validated();
+
+                // Verificar avales de convocatoria si aplica
                 if (!empty($datosContratacion['convocatoria_id'])) {
                     $conv = Convocatoria::find($datosContratacion['convocatoria_id']);
                     if ($conv && !empty($conv->avales_establecidos)) {
@@ -72,20 +78,39 @@ class ContratacionController
                         }
                     }
                 }
-                $datosContratacion['user_id'] = $user_id; // Asignar el user_id a los datos de contratación
 
-                $existeContratacion = Contratacion::where('user_id', $user_id)->exists(); // Verificar si ya existe una contratación para el usuario
-                if ($existeContratacion) {
-                    throw new \Exception('El usuario ya tiene una contratación existente.', 409);
+                $datosContratacion['user_id']       = $user_id;
+                $datosContratacion['tipo_proceso']   = $datosContratacion['tipo_proceso']   ?? TipoProceso::CONTRATACION;
+                $datosContratacion['tipo_vinculacion'] = $datosContratacion['tipo_vinculacion'] ?? TipoVinculacion::DOCENTE;
+
+                $usuario = User::findOrFail($user_id);
+
+                // La doble contratación (ascenso, cambio de cargo o segundo contrato) está permitida.
+                // Solo en la primera contratación (tipo_proceso = 'Contratacion') se cambia el rol.
+                $contratacionCreada = Contratacion::create($datosContratacion);
+
+                if ($datosContratacion['tipo_proceso'] === TipoProceso::CONTRATACION) {
+                    // Asignar rol según tipo de vinculación indicado por Talento Humano
+                    $nuevoRol = $datosContratacion['tipo_vinculacion'] === TipoVinculacion::ADMINISTRATIVO
+                        ? 'Administrativo'
+                        : 'Docente';
+                    $usuario->syncRoles([$nuevoRol]);
+
+                    // Solo se aprueban documentos académicos para docentes
+                    if ($nuevoRol === 'Docente') {
+                        $this->aprobarDocumentosService->aprobarDocumentosDeUsuario($usuario);
+                    }
                 }
 
-                $usuario = User::findOrFail($user_id); // Buscar el usuario por su ID
-                Contratacion::create($datosContratacion); // Crear la contratación en la base de datos
-
-                $usuario->syncRoles(['Docente']); // Cambiar el rol del usuario a 'Docente'
-
-                $this->aprobarDocumentosService->aprobarDocumentosDeUsuario($usuario); // Aprobar los documentos del usuario
-
+                // Registrar en bitácora legal
+                ContratacionBitacora::create([
+                    'contratacion_id'  => $contratacionCreada->id_contratacion,
+                    'user_modifico_id' => Auth::id(),
+                    'tipo_modificacion' => 'creacion',
+                    'datos_anteriores' => null,
+                    'datos_nuevos'     => $contratacionCreada->toArray(),
+                    'motivo'           => null,
+                ]);
             });
 
             // Notificar al usuario que ha sido contratado
@@ -98,14 +123,15 @@ class ContratacionController
                 Log::error('Error al notificar nueva contratación: ' . $notifEx->getMessage());
             }
 
-            return response()->json([ // Respuesta exitosa
-                'message' => 'Contratación creada y rol actualizado a docente.',
+            $tipoProceso = $request->validated()['tipo_proceso'] ?? TipoProceso::CONTRATACION;
+            return response()->json([
+                'message' => 'Contratación registrada correctamente. Proceso: ' . $tipoProceso,
             ], 201);
-        } catch (\Exception $e) { // Manejo de excepciones
+        } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Ocurrió un error',
-                'error' => $e->getMessage()
-            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
+                'error'   => $e->getMessage()
+            ], is_numeric($e->getCode()) && $e->getCode() >= 400 ? (int) $e->getCode() : 500);
         }
     }
 
@@ -124,12 +150,27 @@ class ContratacionController
     public function actualizarContratacion(ActualizarContratacionRequest $request, $id_contratacion)
     {
         try {
-            DB::transaction(function () use ($request, $id_contratacion) { // Inicia una transacción para asegurar la atomicidad de las operaciones
-                $contratacion = Contratacion::findOrFail($id_contratacion); // Buscar la contratación por su ID
+            DB::transaction(function () use ($request, $id_contratacion) {
+                $contratacion = Contratacion::findOrFail($id_contratacion);
 
-                $datosActualizarContratacion = $request->validated(); // Validar los datos de la solicitud
-                $contratacion->update($datosActualizarContratacion); // Actualizar los datos de la contratación
+                // Capturar snapshot antes del cambio para bitácora legal
+                $datosAnteriores = $contratacion->toArray();
 
+                $datosActualizar = $request->validated();
+                $motivo          = $datosActualizar['motivo'];
+                unset($datosActualizar['motivo']); // No persiste en la tabla de contratos
+
+                $contratacion->update($datosActualizar);
+
+                // Registrar modificación en bitácora legal
+                ContratacionBitacora::create([
+                    'contratacion_id'   => $contratacion->id_contratacion,
+                    'user_modifico_id'  => Auth::id(),
+                    'tipo_modificacion' => 'actualizacion',
+                    'datos_anteriores'  => $datosAnteriores,
+                    'datos_nuevos'      => $contratacion->fresh()->toArray(),
+                    'motivo'            => $motivo,
+                ]);
             });
 
             return response()->json([
@@ -138,8 +179,8 @@ class ContratacionController
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al actualizar la contratación.',
-                'error' => $e->getMessage()
-            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
+                'error'   => $e->getMessage()
+            ], is_numeric($e->getCode()) && $e->getCode() >= 400 ? (int) $e->getCode() : 500);
         }
     }
 
@@ -158,28 +199,78 @@ class ContratacionController
      */
     public function eliminarContratacion($id)
     {
+        // El motivo de eliminación se requiere como query param para trazabilidad legal
+        $motivo = request()->input('motivo');
+        if (empty($motivo) || strlen(trim($motivo)) < 5) {
+            return response()->json([
+                'message' => 'Debe indicar el motivo de la eliminación (mínimo 5 caracteres) por cumplimiento legal.',
+            ], 422);
+        }
+
         try {
-            DB::transaction(function () use ($id) { // Inicia una transacción para asegurar la atomicidad de las operaciones
-                $contratacion = Contratacion::findOrFail($id); // Buscar la contratación por su ID
-                $usuario = $contratacion->UsuarioContratacion; // Obtener el usuario relacionado con la contratación
+            DB::transaction(function () use ($id, $motivo) {
+                $contratacion = Contratacion::findOrFail($id);
+                $usuario      = $contratacion->usuarioContratacion;
 
-                $contratacion->delete(); // Eliminar la contratación
+                // Snapshot antes de eliminar
+                $datosAnteriores = $contratacion->toArray();
 
-                if ($usuario) { // Verificar si el usuario existe
-                    $usuario->syncRoles(['Aspirante']);
+                // Registrar en bitácora ANTES de eliminar (para mantener la FK válida)
+                ContratacionBitacora::create([
+                    'contratacion_id'   => $contratacion->id_contratacion,
+                    'user_modifico_id'  => Auth::id(),
+                    'tipo_modificacion' => 'eliminacion',
+                    'datos_anteriores'  => $datosAnteriores,
+                    'datos_nuevos'      => null,
+                    'motivo'            => $motivo,
+                ]);
 
-                    $this->revertirDocumentosService->revertirDocumentosDeUsuario($usuario); // Revertir los documentos del usuario
+                $contratacion->delete();
+
+                // Solo revertir rol si el usuario ya no tiene más contratos activos
+                if ($usuario) {
+                    $tieneOtrosContratos = Contratacion::where('user_id', $usuario->id)->exists();
+                    if (!$tieneOtrosContratos) {
+                        $usuario->syncRoles(['Aspirante']);
+                        $this->revertirDocumentosService->revertirDocumentosDeUsuario($usuario);
+                    }
                 }
             });
 
-            return response()->json([ // Respuesta exitosa
-                'message' => 'Contratación eliminada y rol cambiado a aspirante.'
+            return response()->json([
+                'message' => 'Contratación eliminada. El usuario ha sido revertido a Aspirante si no tenía más contratos.'
             ], 200);
-        } catch (\Exception $e) { // Manejo de excepciones
+        } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al eliminar la contratación.',
-                'error' => $e->getMessage()
-            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
+                'error'   => $e->getMessage()
+            ], is_numeric($e->getCode()) && $e->getCode() >= 400 ? (int) $e->getCode() : 500);
+        }
+    }
+
+    /**
+     * Obtener la bitácora de cambios de un contrato específico.
+     * Incluye quién modificó, cuándo, el tipo de operación y el motivo.
+     */
+    public function obtenerBitacora($id_contratacion)
+    {
+        try {
+            $bitacora = ContratacionBitacora::with([
+                'usuarioQueModifico:id,primer_nombre,primer_apellido,email',
+            ])
+                ->where('contratacion_id', $id_contratacion)
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            return response()->json([
+                'message'  => 'Bitácora obtenida correctamente.',
+                'bitacora' => $bitacora,
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Error al obtener la bitácora.',
+                'error'   => $e->getMessage()
+            ], 500);
         }
     }
 

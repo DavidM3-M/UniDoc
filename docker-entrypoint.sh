@@ -25,6 +25,34 @@ chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache 2>/dev/null || 
 # Recrear el symlink storage con ruta Linux correcta (el del repo apunta a ruta Windows)
 php artisan storage:link --force || true
 
+# ─── Migraciones (siempre — Laravel rastrea las ejecutadas) ──────────────
+echo ">> Ejecutando migraciones..."
+php artisan migrate --force || true
+
+# ─── Seeders (solo si la DB está vacía — tabla roles sin datos) ──────────
+# Consulta directa vía PDO para no depender de archivos centinela.
+# Si la tabla roles tiene 0 filas → primer arranque → ejecutar seeders.
+ROLES_COUNT=$(php -r "
+try {
+    \$host = getenv('DB_HOST')     ?: 'localhost';
+    \$port = getenv('DB_PORT')     ?: '5432';
+    \$db   = getenv('DB_DATABASE') ?: 'banco_oferentes_db';
+    \$user = getenv('DB_USERNAME') ?: 'unidoc';
+    \$pass = getenv('DB_PASSWORD') ?: 'unidoc';
+    \$pdo  = new PDO(\"pgsql:host=\$host;port=\$port;dbname=\$db\", \$user, \$pass);
+    echo \$pdo->query('SELECT COUNT(*) FROM roles')->fetchColumn();
+} catch (Exception \$e) { echo 0; }
+" 2>/dev/null || echo "0")
+
+if [ -z "$ROLES_COUNT" ] || [ "$ROLES_COUNT" -eq 0 ] 2>/dev/null; then
+    echo ">> Base de datos vacía. Ejecutando seeders..."
+    php artisan db:seed --force \
+        && echo ">> Seeders completados. Base de datos lista." \
+        || echo ">> Advertencia: los seeders fallaron. Revise los logs."
+else
+    echo ">> Base de datos ya inicializada ($ROLES_COUNT roles). Saltando seeders."
+fi
+
 # Cachés de Laravel (no requieren DB, mejoran el tiempo de arranque en frío)
 php artisan config:cache  || true
 php artisan route:cache   || true

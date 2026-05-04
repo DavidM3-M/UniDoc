@@ -4,6 +4,8 @@ namespace App\Http\Requests\RequestTalentoHumano\RequestContratacion;
 
 use App\Constants\ConstTalentoHumano\TipoContratacion;
 use App\Constants\ConstTalentoHumano\AreasContratacion;
+use App\Constants\ConstTalentoHumano\TipoProceso;
+use App\Constants\ConstTalentoHumano\TipoVinculacion;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -31,25 +33,16 @@ class ActualizarContratacionRequest extends FormRequest
     // Método que define las reglas de validación para los datos enviados en la solicitud.
     {
         return [
-            'tipo_contrato' => ['sometimes','required','string', Rule::in(TipoContratacion::all())],
-              // El campo `tipo_contrato` es opcional (`sometimes`), pero si está presente, es obligatorio (`required`).
-            // Su valor debe estar dentro de los valores definidos en `TipoContratacion::all()`.
-            'area' => ['sometimes','required','string', Rule::in(AreasContratacion::all())],
-             // El campo `area` es opcional, pero si está presente, es obligatorio.
-            // Su valor debe estar dentro de los valores definidos en `AreasContratacion::all()`.
-            'fecha_inicio' => 'sometimes|required|date',
-             // El campo `fecha_inicio` tiene un error tipográfico (`sometimes1` en lugar de `sometimes`).
-            // Si se corrige, sería opcional, pero si está presente, debe ser una fecha válida (`date`).
-            'fecha_fin' => 'sometimes|required|date',
-              // El campo `fecha_fin` es opcional, pero si está presente, es obligatorio.
-            // Debe ser una fecha válida (`date`).
-            'valor_contrato' => 'sometimes|required|numeric',
-             // El campo `valor_contrato` es opcional, pero si está presente, es obligatorio.
-            // Debe ser un valor numérico (`numeric`).
-            'observaciones' => 'sometimes|nullable|string|regex:/^[\pL\pN\s\-]+$/u',
-            // El campo `observaciones` es opcional, pero si está presente, debe ser una cadena (`string`).
-            // Puede ser nulo (`nullable`) y debe cumplir con un patrón regex que permite letras, números, espacios y guiones.
-   
+            // Motivo del cambio — requerido para trazabilidad legal
+            'motivo'          => 'required|string|min:5|max:500',
+            'tipo_proceso'    => ['sometimes', 'string', Rule::in(TipoProceso::all())],
+            'tipo_vinculacion' => ['sometimes', 'string', Rule::in(TipoVinculacion::all())],
+            'tipo_contrato'   => ['sometimes', 'required', 'string', Rule::in(TipoContratacion::all())],
+            'area'            => ['sometimes', 'required', 'string', Rule::in(AreasContratacion::all())],
+            'fecha_inicio'    => 'sometimes|required|date',
+            'fecha_fin'       => 'sometimes|required|date',
+            'valor_contrato'  => 'sometimes|required|numeric',
+            'observaciones'   => 'sometimes|nullable|string|regex:/^[\pL\pN\s\-,.;:()]+$/u',
         ];
     }
     protected function failedValidation(Validator $validator)
