@@ -9,49 +9,45 @@ use Illuminate\Support\Facades\DB;
  *
  * Before: 'Vicerrectoría', 'Rectoría'
  * After : 'Vicerrectoria', 'Rectoria'
+ *
+ * MariaDB no soporta CAST(... AS JSON) — se asigna el resultado de REPLACE
+ * directamente (MariaDB almacena JSON como texto internamente).
  */
 return new class extends Migration
 {
     public function up(): void
     {
-        // convocatorias.avales_establecidos  (JSON — cast a TEXT para LIKE en PostgreSQL)
+        // convocatorias.avales_establecidos (columna JSON)
         DB::statement("
             UPDATE convocatorias
-            SET    avales_establecidos = REPLACE(avales_establecidos::text, 'Vicerrectoría', 'Vicerrectoria')::json
-            WHERE  avales_establecidos::text LIKE '%Vicerrectoría%'
+            SET avales_establecidos = REPLACE(CAST(avales_establecidos AS CHAR), 'Vicerrectoría', 'Vicerrectoria')
+            WHERE CAST(avales_establecidos AS CHAR) LIKE '%Vicerrectoría%'
         ");
         DB::statement("
             UPDATE convocatorias
-            SET    avales_establecidos = REPLACE(avales_establecidos::text, 'Rectoría', 'Rectoria')::json
-            WHERE  avales_establecidos::text LIKE '%Rectoría%'
+            SET avales_establecidos = REPLACE(CAST(avales_establecidos AS CHAR), 'Rectoría', 'Rectoria')
+            WHERE CAST(avales_establecidos AS CHAR) LIKE '%Rectoría%'
         ");
 
-        // convocatoria_avales.aval  (plain string column)
-        DB::statement("
-            UPDATE convocatoria_avales
-            SET    aval = 'Vicerrectoria'
-            WHERE  aval = 'Vicerrectoría'
-        ");
-        DB::statement("
-            UPDATE convocatoria_avales
-            SET    aval = 'Rectoria'
-            WHERE  aval = 'Rectoría'
-        ");
+        // convocatoria_avales.aval (columna de texto plano)
+        DB::statement("UPDATE convocatoria_avales SET aval = 'Vicerrectoria' WHERE aval = 'Vicerrectoría'");
+        DB::statement("UPDATE convocatoria_avales SET aval = 'Rectoria' WHERE aval = 'Rectoría'");
     }
 
     public function down(): void
     {
         DB::statement("
             UPDATE convocatorias
-            SET    avales_establecidos = REPLACE(avales_establecidos::text, 'Vicerrectoria', 'Vicerrectoría')::json
-            WHERE  avales_establecidos::text LIKE '%Vicerrectoria%'
+            SET avales_establecidos = REPLACE(CAST(avales_establecidos AS CHAR), 'Vicerrectoria', 'Vicerrectoría')
+            WHERE CAST(avales_establecidos AS CHAR) LIKE '%Vicerrectoria%'
         ");
         DB::statement("
             UPDATE convocatorias
-            SET    avales_establecidos = REPLACE(avales_establecidos::text, 'Rectoria', 'Rectoría')::json
-            WHERE  avales_establecidos::text LIKE '%Rectoria%'
+            SET avales_establecidos = REPLACE(CAST(avales_establecidos AS CHAR), 'Rectoria', 'Rectoría')
+            WHERE CAST(avales_establecidos AS CHAR) LIKE '%Rectoria%'
         ");
+
         DB::statement("UPDATE convocatoria_avales SET aval = 'Vicerrectoría' WHERE aval = 'Vicerrectoria'");
-        DB::statement("UPDATE convocatoria_avales SET aval = 'Rectoría'      WHERE aval = 'Rectoria'");
+        DB::statement("UPDATE convocatoria_avales SET aval = 'Rectoría' WHERE aval = 'Rectoria'");
     }
 };

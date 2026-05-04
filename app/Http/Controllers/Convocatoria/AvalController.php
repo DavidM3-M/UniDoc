@@ -265,11 +265,6 @@ class AvalController extends Controller
                     'aval_vicerrectoria'  => $user->aval_vicerrectoria,
                     'aval_coordinador'    => $user->aval_coordinador,
                     'aval_talento_humano' => $user->aval_talento_humano,
-                    // Segundo contrato (postulación a otra convocatoria)
-                    'aval_rectoria_2' => $user->aval_rectoria_2 ?? false,
-                    'aval_vicerrectoria_2' => $user->aval_vicerrectoria_2 ?? false,
-                    'aval_coordinador_2' => $user->aval_coordinador_2 ?? false,
-                    'aval_talento_humano_2' => $user->aval_talento_humano_2 ?? false,
                 ]
             ]);
         } catch (\Exception $e) {
@@ -278,14 +273,12 @@ class AvalController extends Controller
     }
 
     /**
-
      * Rechazar aval de un aspirante en la cadena, acotado a una convocatoria.
      */
     public function rechazarAval(Request $request, $userId)
     {
         try {
             $request->validate([
-
                 'motivo_rechazo'  => 'required|string|max:1000',
                 'convocatoria_id' => 'nullable|integer',
             ]);
@@ -355,7 +348,6 @@ class AvalController extends Controller
                 Log::error("Error al enviar notificación de rechazo de aval [{$role}] para usuario {$user->id}: " . $notifEx->getMessage());
             }
 
-
             return response()->json(['message' => "Rechazo registrado exitosamente por {$role}."], 200);
 
         } catch (\Exception $e) {
@@ -363,7 +355,6 @@ class AvalController extends Controller
             if ($status < 400 || $status > 499) {
                 $status = 500;
             }
-
             return response()->json(['message' => $e->getMessage() ?: 'Error al registrar el rechazo.', 'error' => $e->getMessage()], $status);
         }
     }

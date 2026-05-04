@@ -4,7 +4,6 @@ use App\Http\Controllers\TalentoHumano\ContratacionController;
 use App\Http\Controllers\TalentoHumano\ConvocatoriaController;
 use App\Http\Controllers\TalentoHumano\ConvocatoriaAvalController;
 use App\Http\Controllers\TalentoHumano\ExperienciaRequeridaController;
-use App\Http\Controllers\TalentoHumano\AscensoController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\TalentoHumano\PostulacionController;
 
@@ -53,14 +52,6 @@ Route::group([
     Route::delete('eliminar-contratacion/{id}',[ContratacionController::class, 'eliminarContratacion']);
     Route::get('obtener-contratacion/{id_contratacion}',[ContratacionController::class, 'obtenerContratacionPorId']);
     Route::get('obtener-contrataciones',[ContratacionController::class, 'obtenerTodasLasContrataciones']);
-
-    // Rutas relacionadas con ascensos
-    Route::post('crear-ascenso',[AscensoController::class, 'crearAscenso']);
-    Route::put('actualizar-ascenso/{id_ascenso}',[AscensoController::class, 'actualizarAscenso']);
-    Route::delete('eliminar-ascenso/{id_ascenso}',[AscensoController::class, 'eliminarAscenso']);
-    Route::get('obtener-ascenso/{id_ascenso}',[AscensoController::class, 'obtenerAscenso']);
-    Route::get('obtener-ascensos',[AscensoController::class, 'obtenerAscensos']);
-    Route::get('obtener-ascensos-usuario/{user_id}',[AscensoController::class, 'obtenerAscensosUsuario']);
 
     // Rutas para gestionar avales por convocatoria
     Route::get('avales',[ConvocatoriaAvalController::class, 'index']);

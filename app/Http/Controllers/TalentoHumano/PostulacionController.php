@@ -52,7 +52,7 @@ class PostulacionController
     {
         try {
             $convocatoria = Convocatoria::findOrFail($convocatoriaId);
-            // Verificar si la convocatoria está cerrada
+             // Verificar si la convocatoria está cerrada
             if ($convocatoria->estado_convocatoria === 'Cerrada') {
                 return response()->json([
                     'mensaje' => 'Esta convocatoria ya está cerrada'
@@ -65,7 +65,7 @@ class PostulacionController
                     'mensaje' => 'La fecha de cierre de esta convocatoria ya ha pasado'
                 ], 403);
             }
-
+            
             DB::transaction(function () use ($request, $convocatoriaId) { // Validar el ID de la convocatoria
                 $user = $request->user()->load(['experienciasUsuario', 'estudiosUsuario', 'idiomasUsuario', 'facultades']); // Obtener el usuario autenticado con todas las relaciones necesarias
 
@@ -86,7 +86,7 @@ class PostulacionController
                 // Verificar requisitos de la convocatoria
                 $this->verificarRequisitosConvocatoria($user, $convocatoria);
 
-                Postulacion::create([
+                Postulacion::create([ // Crear la postulación
                     'user_id' => $user->id,
                     'convocatoria_id' => $convocatoriaId,
                     'estado_postulacion' => 'Enviada'
@@ -95,8 +95,6 @@ class PostulacionController
                 // Crear registros de avales pendientes para este postulante si la convocatoria los requiere
                 if (!empty($convocatoria->avales_establecidos) && is_array($convocatoria->avales_establecidos)) {
                     foreach ($convocatoria->avales_establecidos as $avalRequerido) {
-                        // Al usar el ID de la convocatoria actual, los avales de contratos viejos 
-                        // permanecen intactos en la DB con sus IDs de convocatorias anteriores.
                         ConvocatoriaAval::updateOrCreate(
                             [
                                 'convocatoria_id' => $convocatoriaId,
@@ -104,10 +102,7 @@ class PostulacionController
                                 'aval' => $avalRequerido,
                             ],
                             [
-                                'estado' => 'pending', // <--- Forzamos el estado inicial
-                                'aprobador_id' => null, // Limpiamos quién aprobó antes
-                                'fecha_aprobacion' => null,
-                                'comentario' => null
+                                'estado' => 'pending'
                             ]
                         );
                     }
@@ -157,7 +152,6 @@ class PostulacionController
     public function obtenerPostulaciones()
     {
         try {
-
             $postulaciones = Postulacion::with('usuarioPostulacion', 'convocatoriaPostulacion')
                 ->orderBy('created_at', 'desc')
                 ->get();
@@ -382,6 +376,7 @@ class PostulacionController
             return response()->json([ // Retornar un mensaje de éxito
                 'message' => 'Postulación eliminada correctamente.'
             ]);
+
         } catch (\Exception $e) { // Manejar excepciones
             return response()->json([ // Retornar un mensaje de error
                 'message' => 'Ocurrió un error al eliminar la postulación.',
@@ -428,26 +423,26 @@ class PostulacionController
         }
     }
     /**
-     * Generar la hoja de vida en PDF de un usuario (para Rectoría/Vicerrectoría).
-     *
-     * Este método genera el PDF de la hoja de vida de un usuario sin necesidad de verificar
-     * una postulación específica. Es utilizado por roles administrativos como Rectoría.
-     *
-     * @param int $idUsuario ID del usuario cuya hoja de vida se desea generar.
-     * @return \Illuminate\Http\JsonResponse|\Symfony\Component\HttpFoundation\BinaryFileResponse
-     * Respuesta JSON con mensaje de error o archivo PDF generado exitosamente.
-     */
-    public function generarHojaDeVidaPDFSimple($idUsuario)
-    {
-        try {
-            return $this->generadorHojaDeVidaPDFService->generar($idUsuario);
-        } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Ocurrió un error al generar la hoja de vida.',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+ * Generar la hoja de vida en PDF de un usuario (para Rectoría/Vicerrectoría).
+ *
+ * Este método genera el PDF de la hoja de vida de un usuario sin necesidad de verificar
+ * una postulación específica. Es utilizado por roles administrativos como Rectoría.
+ *
+ * @param int $idUsuario ID del usuario cuya hoja de vida se desea generar.
+ * @return \Illuminate\Http\JsonResponse|\Symfony\Component\HttpFoundation\BinaryFileResponse
+ * Respuesta JSON con mensaje de error o archivo PDF generado exitosamente.
+ */
+public function generarHojaDeVidaPDFSimple($idUsuario)
+{
+    try {
+        return $this->generadorHojaDeVidaPDFService->generar($idUsuario);
+    } catch (\Exception $e) {
+        return response()->json([
+            'message' => 'Ocurrió un error al generar la hoja de vida.',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
 
     /**
      * Verificar si el usuario cumple con los requisitos de la convocatoria.
@@ -628,7 +623,7 @@ class PostulacionController
         if ($anosUsuario < $anosRequeridos) {
             throw new \Exception(
                 "No cumples con los años de experiencia requeridos en {$tipoRequerido}. " .
-                    "Se requieren {$anosRequeridos} años y tienes {$anosUsuario} años.",
+                "Se requieren {$anosRequeridos} años y tienes {$anosUsuario} años.",
                 403
             );
         }
@@ -712,7 +707,7 @@ class PostulacionController
         foreach ($experiencias as $experiencia) {
             // Asumir que tipo_experiencia indica si es docente o administrativo
             $esExperienciaAdministrativa = strtolower($experiencia->tipo_experiencia) === 'administrativo' ||
-                strtolower($experiencia->tipo_experiencia) === 'administrativa';
+                                           strtolower($experiencia->tipo_experiencia) === 'administrativa';
 
             if ($esAdministrativo && !$esExperienciaAdministrativa) {
                 continue; // Si la convocatoria es administrativa, solo contar experiencia administrativa
@@ -750,7 +745,6 @@ class PostulacionController
         if ($totalAnosUsuario < $totalAnosRequeridos) {
             throw new \Exception(
                 "No cumples con los años de experiencia requeridos. " .
-
                 "Se requieren {$totalAnosRequeridos} años en total y tienes {$totalAnosUsuario} años.",
                 403
             );
@@ -834,14 +828,14 @@ class PostulacionController
             }
 
             $cumpleRequisito = false;
-
+            
             // Normalizar idioma requerido (remover tildes, espacios)
             $idiomaRequeridoNormalizado = $this->normalizarIdioma((string)$idiomaRequerido);
 
             foreach ($idiomasUsuario as $idiomaUsuario) {
                 // Normalizar idioma del usuario
                 $idiomaUsuarioNormalizado = $this->normalizarIdioma((string)$idiomaUsuario->idioma);
-
+                
                 Log::info('DEBUG verificarRequisitosIdiomas - Comparando idiomas:', [
                     'idioma_requerido_original' => $idiomaRequerido,
                     'idioma_requerido_normalizado' => $idiomaRequeridoNormalizado,
@@ -851,7 +845,7 @@ class PostulacionController
                     'nivel_requerido' => $nivelRequerido,
                     'coinciden_idiomas' => $idiomaUsuarioNormalizado === $idiomaRequeridoNormalizado,
                 ]);
-
+                
                 if ($idiomaUsuarioNormalizado === $idiomaRequeridoNormalizado) {
                     if ($this->compararNivelesIdioma($idiomaUsuario->nivel, $nivelRequerido)) {
                         $cumpleRequisito = true;
@@ -866,7 +860,7 @@ class PostulacionController
             }
         }
     }
-
+    
     /**
      * Normalizar nombre de idioma: remover tildes, espacios extra, convertir a minúsculas
      */
@@ -946,7 +940,7 @@ class PostulacionController
             $perfilLower = strtolower($nombrePerfil);
 
             return str_contains($tituloEstudio, $perfilLower) ||
-                str_contains($perfilLower, $tituloEstudio);
+                   str_contains($perfilLower, $tituloEstudio);
         });
 
         if ($estudiosRelacionados->isEmpty()) {
@@ -1050,7 +1044,7 @@ class PostulacionController
             TiposEstudio::POSTDOCTORADO => 'Postdoctorado',
         ];
 
-        $nivelesTexto = array_map(function ($nivel) use ($nombres) {
+        $nivelesTexto = array_map(function($nivel) use ($nombres) {
             return $nombres[$nivel] ?? $nivel;
         }, $niveles);
 
