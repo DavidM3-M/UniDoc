@@ -38,6 +38,28 @@ class ContratacionController
         $this->revertirDocumentosService = $revertirDocumentosService;
     }
 
+    private function normalizarAval(string $aval): string
+    {
+        return match ($aval) {
+            'Talento Humano', 'talento humano', 'talento_humano' => 'talento_humano',
+            'Coordinador', 'Coordinación', 'coordinacion', 'coordinador' => 'coordinador',
+            'Vicerrectoría', 'Vicerrectoria', 'vicerrectoria' => 'vicerrectoria',
+            'Rectoría', 'Rectoria', 'rectoria' => 'rectoria',
+            default => $aval,
+        };
+    }
+
+    private function avalAliases(string $aval): array
+    {
+        return match ($aval) {
+            'talento_humano' => ['talento_humano', 'Talento Humano', 'talento humano'],
+            'coordinador'    => ['coordinador', 'Coordinador', 'Coordinación', 'coordinacion'],
+            'vicerrectoria'  => ['vicerrectoria', 'Vicerrectoria', 'Vicerrectoría'],
+            'rectoria'       => ['rectoria', 'Rectoria', 'Rectoría'],
+            default          => [$aval],
+        };
+    }
+
     /**
      * Crear una contratación para un usuario y asignarle el rol de docente.
      *
@@ -66,12 +88,13 @@ class ContratacionController
                     if ($conv && !empty($conv->avales_establecidos)) {
                         $faltantes = [];
                         foreach ($conv->avales_establecidos as $avalRequerido) {
+                            $avalNormalizado = $this->normalizarAval((string) $avalRequerido);
                             $aprobado = ConvocatoriaAval::where('convocatoria_id', $conv->id_convocatoria)
                                 ->where('user_id', $user_id)
-                                ->where('aval', $avalRequerido)
+                                ->whereIn('aval', $this->avalAliases($avalNormalizado))
                                 ->where('estado', 'aprobado')
                                 ->exists();
-                            if (!$aprobado) $faltantes[] = $avalRequerido;
+                            if (!$aprobado) $faltantes[] = $avalNormalizado;
                         }
                         if (!empty($faltantes)) {
                             throw new \Exception('Faltan avales necesarios: ' . implode(', ', $faltantes), 403);

@@ -16,6 +16,9 @@ class EstadoPostulacion
     // Estado cuando la postulación ha sido aprobada
     public const APROBADA = 'Aprobada';
 
+    // Estado cuando el aspirante acepta la oferta
+    public const ACEPTADA = 'Aceptada';
+
     // Retorna todos los estados de postulación disponibles como un arreglo
     public static function all(): array
     {
@@ -24,6 +27,7 @@ class EstadoPostulacion
             self::FALTANDOCUMENTOS,
             self::RECHAZADA,
             self::APROBADA,
+            self::ACEPTADA,
         ];
     }
 }

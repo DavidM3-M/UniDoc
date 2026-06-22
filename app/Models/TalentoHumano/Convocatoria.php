@@ -50,6 +50,10 @@ class Convocatoria extends Model
         'cantidad_experiencia',
         'unidad_experiencia',
         'referencia_experiencia',
+        
+        // Campos para doble contratación
+        'permite_doble_contratacion',
+        'notas_doble_contratacion',
     ];
 
     protected $casts = [
@@ -70,6 +74,7 @@ class Convocatoria extends Model
         'cantidad_experiencia' => 'integer',
         'unidad_experiencia' => 'string',
         'referencia_experiencia' => 'string',
+        'permite_doble_contratacion' => 'boolean',
     ];
 
     /**

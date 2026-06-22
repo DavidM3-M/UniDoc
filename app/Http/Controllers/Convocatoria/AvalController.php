@@ -8,6 +8,8 @@ use App\Services\PuntajeAspiranteService;
 use Illuminate\Http\Request;
 use App\Models\Usuario\User;
 use App\Models\TalentoHumano\ConvocatoriaAval;
+use App\Models\TalentoHumano\Convocatoria;
+use App\Models\TalentoHumano\Contratacion;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -24,14 +26,64 @@ class AvalController extends Controller
         'Rectoria'       => 'rectoria',
     ];
 
+    /** Compatibilidad con valores legacy/humanos guardados en convocatoria_avales. */
+    private function avalAliases(string $aval): array
+    {
+        return match ($aval) {
+            'talento_humano' => ['talento_humano', 'Talento Humano', 'talento humano'],
+            'coordinador'    => ['coordinador', 'Coordinador', 'Coordinación', 'coordinacion'],
+            'vicerrectoria'  => ['vicerrectoria', 'Vicerrectoria', 'Vicerrectoría'],
+            'rectoria'       => ['rectoria', 'Rectoria', 'Rectoría'],
+            default          => [$aval],
+        };
+    }
+
     /** Devuelve true si el aspirante tiene el aval aprobado para la convocatoria dada. */
     private function tieneAval(int $userId, int $convocatoriaId, string $avalNombre): bool
     {
         return ConvocatoriaAval::where('convocatoria_id', $convocatoriaId)
             ->where('user_id', $userId)
-            ->where('aval', $avalNombre)
+            ->whereIn('aval', $this->avalAliases($avalNombre))
             ->where('estado', 'aprobado')
             ->exists();
+    }
+
+    /** Valida si el aspirante puede tener múltiples contratos */
+    private function validarDobleContratacion(int $userId, int $convocatoriaId): bool
+    {
+        $convocatoria = Convocatoria::find($convocatoriaId);
+        
+        if (!$convocatoria) {
+            throw new \Exception('Convocatoria no encontrada.', 404);
+        }
+
+        // Buscar contratos activos del usuario
+        $contratosActivos = Contratacion::where('user_id', $userId)
+            ->where(function($query) {
+                $query->whereNull('fecha_fin')
+                      ->orWhere('fecha_fin', '>', now());
+            })
+            ->count();
+
+        // Si hay contratos activos y la convocatoria NO permite doble
+        if ($contratosActivos > 0 && !$convocatoria->permite_doble_contratacion) {
+            throw new \Exception(
+                'El aspirante ya tiene un contrato activo. '
+                . 'Esta convocatoria no permite doble contratación.',
+                403
+            );
+        }
+
+        // Límite máximo de contratos simultáneos
+        $maxContratos = config('unidoc.max_contratos_simultaneos', 2);
+        if ($contratosActivos >= $maxContratos) {
+            throw new \Exception(
+                "El aspirante ha alcanzado el máximo de contratos simultáneos ({$maxContratos}).",
+                403
+            );
+        }
+
+        return true;
     }
 
     public function listarUsuarios(Request $request)
@@ -51,7 +103,7 @@ class AvalController extends Controller
 
                 if ($prerequisito) {
                     $userIds = ConvocatoriaAval::where('convocatoria_id', $convId)
-                        ->where('aval', $prerequisito)
+                        ->whereIn('aval', $this->avalAliases($prerequisito))
                         ->where('estado', 'aprobado')
                         ->pluck('user_id');
 
@@ -70,7 +122,7 @@ class AvalController extends Controller
 
                 if ($propioAval) {
                     $aprobadosSet = ConvocatoriaAval::where('convocatoria_id', $convId)
-                        ->where('aval', $propioAval)
+                        ->whereIn('aval', $this->avalAliases($propioAval))
                         ->where('estado', 'aprobado')
                         ->pluck('user_id')
                         ->flip()
@@ -100,7 +152,7 @@ class AvalController extends Controller
                 };
 
                 if ($propioAval) {
-                    $aprobadosSet = ConvocatoriaAval::where('aval', $propioAval)
+                    $aprobadosSet = ConvocatoriaAval::whereIn('aval', $this->avalAliases($propioAval))
                         ->where('estado', 'aprobado')
                         ->pluck('user_id')
                         ->flip()
@@ -158,6 +210,8 @@ class AvalController extends Controller
                         if (! $this->tieneAval($user->id, $convocatoriaId, 'vicerrectoria')) {
                             throw new \Exception('El aspirante no cuenta con el aval de Vicerrectoría para esta convocatoria.', 403);
                         }
+                        // Validar doble contratación
+                        $this->validarDobleContratacion($user->id, $convocatoriaId);
                         break;
                     case 'Coordinador':
                         if (! $this->tieneAval($user->id, $convocatoriaId, 'talento_humano')) {
@@ -261,10 +315,14 @@ class AvalController extends Controller
             if ($convId) {
                 $avales = ConvocatoriaAval::where('convocatoria_id', $convId)
                     ->where('user_id', $user->id)
-                    ->get()
-                    ->keyBy('aval');
+                    ->get();
 
-                $getEstado = fn(string $aval) => isset($avales[$aval]) && $avales[$aval]->estado === 'aprobado';
+                $getEstado = function (string $aval) use ($avales) {
+                    $aliases = $this->avalAliases($aval);
+                    return $avales->contains(function ($item) use ($aliases) {
+                        return in_array($item->aval, $aliases, true) && $item->estado === 'aprobado';
+                    });
+                };
 
                 return response()->json([
                     'data' => [
@@ -330,6 +388,20 @@ class AvalController extends Controller
                                 throw new \Exception('El aspirante no cuenta con el aval de Vicerrectoría para esta convocatoria.', 403);
                             }
                             break;
+                    }
+
+                    // Validar que no se pueda rechazar si ya fue aprobado
+                    $avalActual = ConvocatoriaAval::where('convocatoria_id', $convocatoriaId)
+                        ->where('user_id', $user->id)
+                        ->whereIn('aval', $this->avalAliases($avalNombre))
+                        ->first();
+
+                    if ($avalActual && $avalActual->estado === 'aprobado') {
+                        throw new \Exception(
+                            "El aval de {$role} ya fue aprobado para esta convocatoria. "
+                            . "No se puede rechazar una decisión ya tomada.",
+                            409
+                        );
                     }
 
                     // Marcar el aval como rechazado en convocatoria_avales

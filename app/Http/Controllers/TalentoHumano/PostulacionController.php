@@ -32,6 +32,18 @@ class PostulacionController
         $this->puntajeService = $puntajeService;
     }
 
+    /** Normaliza el nombre de aval a clave técnica usada en convocatoria_avales. */
+    private function normalizarAval(string $aval): string
+    {
+        return match ($aval) {
+            'Talento Humano', 'talento humano', 'talento_humano' => 'talento_humano',
+            'Coordinador', 'Coordinación', 'coordinacion', 'coordinador' => 'coordinador',
+            'Vicerrectoría', 'Vicerrectoria', 'vicerrectoria' => 'vicerrectoria',
+            'Rectoría', 'Rectoria', 'rectoria' => 'rectoria',
+            default => $aval,
+        };
+    }
+
     /**
      * Crear una postulación del usuario autenticado a una convocatoria.
      *
@@ -97,11 +109,12 @@ class PostulacionController
                 // Crear registros de avales pendientes para este postulante si la convocatoria los requiere
                 if (!empty($convocatoria->avales_establecidos) && is_array($convocatoria->avales_establecidos)) {
                     foreach ($convocatoria->avales_establecidos as $avalRequerido) {
+                        $avalNormalizado = $this->normalizarAval((string) $avalRequerido);
                         ConvocatoriaAval::updateOrCreate(
                             [
                                 'convocatoria_id' => $convocatoriaId,
                                 'user_id' => $user->id,
-                                'aval' => $avalRequerido,
+                                'aval' => $avalNormalizado,
                             ],
                             [
                                 'estado' => 'pending'
@@ -800,6 +813,13 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
             return;
         }
 
+        // Normalizar formatos heredados/mixtos para evitar errores de tipo
+        $requisitosIdiomas = $this->normalizarRequisitosIdiomas($requisitosIdiomas);
+
+        if (empty($requisitosIdiomas)) {
+            return;
+        }
+
         $idiomasUsuario = $user->idiomasUsuario;
 
         // Detectar si llegó como array indexado (lista de niveles mínimos, ej. ['A2', 'B1'])
@@ -808,7 +828,7 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
         if ($esIndexado) {
             // El usuario debe tener al menos un idioma con nivel >= al requerido para cada entrada
             foreach ($requisitosIdiomas as $nivelRequerido) {
-                if (!in_array(strtoupper($nivelRequerido), NivelIdioma::all())) {
+                if (!in_array($nivelRequerido, NivelIdioma::all(), true)) {
                     throw new \Exception("Nivel de idioma no válido: {$nivelRequerido}. Los niveles válidos son: " . implode(', ', NivelIdioma::all()) . ".", 400);
                 }
 
@@ -829,7 +849,7 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
 
         foreach ($requisitosIdiomas as $idiomaRequerido => $nivelRequerido) {
             // Verificar que el nivel requerido sea válido
-            if (!in_array(strtoupper($nivelRequerido), NivelIdioma::all())) {
+            if (!in_array($nivelRequerido, NivelIdioma::all(), true)) {
                 throw new \Exception("Nivel de idioma no válido: {$nivelRequerido}. Los niveles válidos son: " . implode(', ', NivelIdioma::all()) . ".", 400);
             }
 
@@ -892,8 +912,11 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
     {
         $jerarquiaNiveles = NivelIdioma::all();
 
-        $posicionUsuario = array_search(strtoupper($nivelUsuario), $jerarquiaNiveles);
-        $posicionRequerido = array_search(strtoupper($nivelRequerido), $jerarquiaNiveles);
+        $nivelUsuario = strtoupper(trim((string) $nivelUsuario));
+        $nivelRequerido = strtoupper(trim((string) $nivelRequerido));
+
+        $posicionUsuario = array_search($nivelUsuario, $jerarquiaNiveles, true);
+        $posicionRequerido = array_search($nivelRequerido, $jerarquiaNiveles, true);
 
         // Si alguno de los niveles no está en la jerarquía, devolver false
         if ($posicionUsuario === false || $posicionRequerido === false) {
@@ -901,6 +924,76 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
         }
 
         return $posicionUsuario >= $posicionRequerido;
+    }
+
+    /**
+     * Normalizar requisitos de idiomas en formatos mixtos/legados.
+     *
+     * Soporta:
+     * - Lista indexada de niveles: ['A2', 'B1']
+     * - Mapa idioma => nivel: ['Ingles' => 'B1']
+     * - Lista de objetos/arrays: [['idioma' => 'Ingles', 'nivel' => 'B1']]
+     */
+    private function normalizarRequisitosIdiomas(array $requisitosIdiomas): array
+    {
+        $asociativos = [];
+        $indexados = [];
+
+        foreach ($requisitosIdiomas as $clave => $valor) {
+            // Caso mapa idioma => nivel
+            if (!is_int($clave) && is_scalar($valor)) {
+                $idioma = trim((string) $clave);
+                $nivel = $this->normalizarNivelIdioma($valor);
+                if ($idioma !== '' && $nivel !== null) {
+                    $asociativos[$idioma] = $nivel;
+                }
+                continue;
+            }
+
+            // Caso lista indexada con nivel directo
+            if (is_scalar($valor)) {
+                $nivel = $this->normalizarNivelIdioma($valor);
+                if ($nivel !== null) {
+                    $indexados[] = $nivel;
+                }
+                continue;
+            }
+
+            // Caso lista indexada de objetos/arreglos
+            if (is_array($valor)) {
+                $idioma = isset($valor['idioma']) && is_scalar($valor['idioma'])
+                    ? trim((string) $valor['idioma'])
+                    : '';
+
+                $nivel = $this->normalizarNivelIdioma($valor['nivel'] ?? $valor['level'] ?? ($valor[0] ?? null));
+
+                if ($nivel === null) {
+                    continue;
+                }
+
+                if ($idioma !== '') {
+                    $asociativos[$idioma] = $nivel;
+                } else {
+                    $indexados[] = $nivel;
+                }
+            }
+        }
+
+        // Si hay requisitos por idioma, priorizarlos sobre la lista genérica.
+        return !empty($asociativos) ? $asociativos : $indexados;
+    }
+
+    /**
+     * Convertir un nivel de idioma a string estándar en mayúscula.
+     */
+    private function normalizarNivelIdioma($nivel): ?string
+    {
+        if (!is_scalar($nivel)) {
+            return null;
+        }
+
+        $nivelNormalizado = strtoupper(trim((string) $nivel));
+        return $nivelNormalizado !== '' ? $nivelNormalizado : null;
     }
 
     /**
