@@ -79,7 +79,7 @@ class PostulacionController
                     'mensaje' => 'La fecha de cierre de esta convocatoria ya ha pasado'
                 ], 403);
             }
-            
+
             DB::transaction(function () use ($request, $convocatoriaId) { // Validar el ID de la convocatoria
                 $user = $request->user()->load(['experienciasUsuario', 'estudiosUsuario', 'idiomasUsuario', 'facultades']); // Obtener el usuario autenticado con todas las relaciones necesarias
 
@@ -854,14 +854,14 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
             }
 
             $cumpleRequisito = false;
-            
+
             // Normalizar idioma requerido (remover tildes, espacios)
             $idiomaRequeridoNormalizado = $this->normalizarIdioma((string)$idiomaRequerido);
 
             foreach ($idiomasUsuario as $idiomaUsuario) {
                 // Normalizar idioma del usuario
                 $idiomaUsuarioNormalizado = $this->normalizarIdioma((string)$idiomaUsuario->idioma);
-                
+
                 Log::info('DEBUG verificarRequisitosIdiomas - Comparando idiomas:', [
                     'idioma_requerido_original' => $idiomaRequerido,
                     'idioma_requerido_normalizado' => $idiomaRequeridoNormalizado,
@@ -871,7 +871,7 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
                     'nivel_requerido' => $nivelRequerido,
                     'coinciden_idiomas' => $idiomaUsuarioNormalizado === $idiomaRequeridoNormalizado,
                 ]);
-                
+
                 if ($idiomaUsuarioNormalizado === $idiomaRequeridoNormalizado) {
                     if ($this->compararNivelesIdioma($idiomaUsuario->nivel, $nivelRequerido)) {
                         $cumpleRequisito = true;
@@ -886,7 +886,7 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
             }
         }
     }
-    
+
     /**
      * Normalizar nombre de idioma: remover tildes, espacios extra, convertir a minúsculas
      */
