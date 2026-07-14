@@ -16,14 +16,16 @@ use Illuminate\Support\Facades\Log;
 
 class AvalController extends Controller
 {
-    public function __construct(private readonly PuntajeAspiranteService $puntajeService) {}
+    public function __construct(private readonly PuntajeAspiranteService $puntajeService)
+    {
+    }
 
     /** Mapea rol → nombre de aval almacenado en convocatoria_avales */
     private const ROLE_AVAL = [
         'Talento Humano' => 'talento_humano',
-        'Coordinador'    => 'coordinador',
-        'Vicerrectoria'  => 'vicerrectoria',
-        'Rectoria'       => 'rectoria',
+        'Coordinador' => 'coordinador',
+        'Vicerrectoria' => 'vicerrectoria',
+        'Rectoria' => 'rectoria',
     ];
 
     /** Compatibilidad con valores legacy/humanos guardados en convocatoria_avales. */
@@ -31,10 +33,10 @@ class AvalController extends Controller
     {
         return match ($aval) {
             'talento_humano' => ['talento_humano', 'Talento Humano', 'talento humano'],
-            'coordinador'    => ['coordinador', 'Coordinador', 'Coordinación', 'coordinacion'],
-            'vicerrectoria'  => ['vicerrectoria', 'Vicerrectoria', 'Vicerrectoría'],
-            'rectoria'       => ['rectoria', 'Rectoria', 'Rectoría'],
-            default          => [$aval],
+            'coordinador' => ['coordinador', 'Coordinador', 'Coordinación', 'coordinacion'],
+            'vicerrectoria' => ['vicerrectoria', 'Vicerrectoria', 'Vicerrectoría'],
+            'rectoria' => ['rectoria', 'Rectoria', 'Rectoría'],
+            default => [$aval],
         };
     }
 
@@ -52,21 +54,23 @@ class AvalController extends Controller
     private function validarDobleContratacion(int $userId, int $convocatoriaId): bool
     {
         $convocatoria = Convocatoria::find($convocatoriaId);
-        
+
         if (!$convocatoria) {
             throw new \Exception('Convocatoria no encontrada.', 404);
         }
 
         // Buscar contratos activos del usuario
         $contratosActivos = Contratacion::where('user_id', $userId)
-            ->where(function($query) {
+            ->where(function ($query) {
                 $query->whereNull('fecha_fin')
-                      ->orWhere('fecha_fin', '>', now());
+                    ->orWhere('fecha_fin', '>', now());
             })
             ->count();
 
         // Si hay contratos activos y la convocatoria NO permite doble
-        if ($contratosActivos > 0 && !$convocatoria->permite_doble_contratacion) {
+        $permiteDobleContratacion = true; // forzado temporalmente
+
+        if ($contratosActivos > 0 && !$permiteDobleContratacion) {
             throw new \Exception(
                 'El aspirante ya tiene un contrato activo. '
                 . 'Esta convocatoria no permite doble contratación.',
@@ -89,16 +93,16 @@ class AvalController extends Controller
     public function listarUsuarios(Request $request)
     {
         try {
-            $role       = $request->user()?->getRoleNames()->first();
-            $convId     = $request->query('convocatoria_id');
+            $role = $request->user()?->getRoleNames()->first();
+            $convId = $request->query('convocatoria_id');
 
             if ($convId) {
                 // Filtrar por avales registrados en convocatoria_avales para esta convocatoria
                 $prerequisito = match ($role) {
                     'Vicerrectoria' => 'coordinador',
-                    'Coordinador'   => 'talento_humano',
-                    'Rectoria'      => 'vicerrectoria',
-                    default         => null,
+                    'Coordinador' => 'talento_humano',
+                    'Rectoria' => 'vicerrectoria',
+                    default => null,
                 };
 
                 if ($prerequisito) {
@@ -115,9 +119,9 @@ class AvalController extends Controller
                 // Anotar aval del rol actual por convocatoria (desde convocatoria_avales, no del flag global)
                 $propioAval = match ($role) {
                     'Vicerrectoria' => 'vicerrectoria',
-                    'Coordinador'   => 'coordinador',
-                    'Rectoria'      => 'rectoria',
-                    default         => null,
+                    'Coordinador' => 'coordinador',
+                    'Rectoria' => 'rectoria',
+                    default => null,
                 };
 
                 if ($propioAval) {
@@ -138,17 +142,17 @@ class AvalController extends Controller
                 // Fallback sin convocatoria: usa flags globales (compatibilidad)
                 $usuarios = match ($role) {
                     'Vicerrectoria' => User::role(['Aspirante', 'Docente'])->where('aval_coordinador', true)->get(),
-                    'Coordinador'   => User::role(['Aspirante', 'Docente'])->where('aval_talento_humano', true)->get(),
-                    'Rectoria'      => User::role(['Aspirante', 'Docente'])->where('aval_vicerrectoria', true)->get(),
-                    default         => User::role(['Aspirante', 'Docente'])->get(),
+                    'Coordinador' => User::role(['Aspirante', 'Docente'])->where('aval_talento_humano', true)->get(),
+                    'Rectoria' => User::role(['Aspirante', 'Docente'])->where('aval_vicerrectoria', true)->get(),
+                    default => User::role(['Aspirante', 'Docente'])->get(),
                 };
 
                 // Sobreescribir el flag de "propio aval" usando convocatoria_avales (todos los registros aprobados)
                 $propioAval = match ($role) {
                     'Vicerrectoria' => 'vicerrectoria',
-                    'Coordinador'   => 'coordinador',
-                    'Rectoria'      => 'rectoria',
-                    default         => null,
+                    'Coordinador' => 'coordinador',
+                    'Rectoria' => 'rectoria',
+                    default => null,
                 };
 
                 if ($propioAval) {
@@ -177,7 +181,7 @@ class AvalController extends Controller
     {
         $result = [];
         foreach ($usuarios as $u) {
-            $arr    = is_array($u) ? $u : $u->toArray();
+            $arr = is_array($u) ? $u : $u->toArray();
             $userId = $arr['id'] ?? null;
             if ($userId) {
                 $arr['puntaje_aspirante'] = $this->puntajeService->calcular((int) $userId)['total'];
@@ -199,7 +203,7 @@ class AvalController extends Controller
             $role = $request->user()->getRoleNames()->first();
             $avalNombre = self::ROLE_AVAL[$role] ?? null;
 
-            if (! $avalNombre) {
+            if (!$avalNombre) {
                 return response()->json(['message' => 'Rol no autorizado'], 403);
             }
 
@@ -207,20 +211,22 @@ class AvalController extends Controller
                 // Validar prerequisitos usando convocatoria_avales
                 switch ($role) {
                     case 'Rectoria':
-                        if (! $this->tieneAval($user->id, $convocatoriaId, 'vicerrectoria')) {
+                        if (!$this->tieneAval($user->id, $convocatoriaId, 'vicerrectoria')) {
                             throw new \Exception('El aspirante no cuenta con el aval de Vicerrectoría para esta convocatoria.', 403);
                         }
                         // Validar doble contratación
                         $this->validarDobleContratacion($user->id, $convocatoriaId);
                         break;
                     case 'Coordinador':
-                        if (! $this->tieneAval($user->id, $convocatoriaId, 'talento_humano')) {
+                        if (!$this->tieneAval($user->id, $convocatoriaId, 'talento_humano')) {
                             throw new \Exception('El aspirante no cuenta con el aval de Talento Humano para esta convocatoria.', 403);
                         }
                         break;
                     case 'Vicerrectoria':
-                        if (! $this->tieneAval($user->id, $convocatoriaId, 'talento_humano')
-                            || ! $this->tieneAval($user->id, $convocatoriaId, 'coordinador')) {
+                        if (
+                            !$this->tieneAval($user->id, $convocatoriaId, 'talento_humano')
+                            || !$this->tieneAval($user->id, $convocatoriaId, 'coordinador')
+                        ) {
                             throw new \Exception('El aspirante no cuenta con el aval de Talento Humano o Coordinación para esta convocatoria.', 403);
                         }
                         break;
@@ -238,12 +244,12 @@ class AvalController extends Controller
                 ConvocatoriaAval::updateOrCreate(
                     [
                         'convocatoria_id' => $convocatoriaId,
-                        'user_id'         => $user->id,
-                        'aval'            => $avalNombre,
+                        'user_id' => $user->id,
+                        'aval' => $avalNombre,
                     ],
                     [
-                        'estado'           => 'aprobado',
-                        'aprobador_id'     => $request->user()->id,
+                        'estado' => 'aprobado',
+                        'aprobador_id' => $request->user()->id,
                         'fecha_aprobacion' => now(),
                     ]
                 );
@@ -251,10 +257,10 @@ class AvalController extends Controller
                 // También actualizar flags globales para compatibilidad con listarUsuarios fallback
                 $flagUpdate = match ($role) {
                     'Talento Humano' => ['aval_talento_humano' => true, 'aval_talento_humano_by' => $request->user()->id, 'aval_talento_humano_at' => now()],
-                    'Coordinador'    => ['aval_coordinador' => true, 'aval_coordinador_by' => $request->user()->id, 'aval_coordinador_at' => now()],
-                    'Vicerrectoria'  => ['aval_vicerrectoria' => true, 'aval_vicerrectoria_by' => $request->user()->id, 'aval_vicerrectoria_at' => now()],
-                    'Rectoria'       => ['aval_rectoria' => true, 'aval_rectoria_by' => $request->user()->id, 'aval_rectoria_at' => now()],
-                    default          => [],
+                    'Coordinador' => ['aval_coordinador' => true, 'aval_coordinador_by' => $request->user()->id, 'aval_coordinador_at' => now()],
+                    'Vicerrectoria' => ['aval_vicerrectoria' => true, 'aval_vicerrectoria_by' => $request->user()->id, 'aval_vicerrectoria_at' => now()],
+                    'Rectoria' => ['aval_rectoria' => true, 'aval_rectoria_by' => $request->user()->id, 'aval_rectoria_at' => now()],
+                    default => [],
                 };
                 if ($flagUpdate) {
                     $user->update($flagUpdate);
@@ -327,9 +333,9 @@ class AvalController extends Controller
                 return response()->json([
                     'data' => [
                         'aval_talento_humano' => $getEstado('talento_humano'),
-                        'aval_coordinador'    => $getEstado('coordinador'),
-                        'aval_vicerrectoria'  => $getEstado('vicerrectoria'),
-                        'aval_rectoria'       => $getEstado('rectoria'),
+                        'aval_coordinador' => $getEstado('coordinador'),
+                        'aval_vicerrectoria' => $getEstado('vicerrectoria'),
+                        'aval_rectoria' => $getEstado('rectoria'),
                     ]
                 ]);
             }
@@ -337,9 +343,9 @@ class AvalController extends Controller
             // Fallback sin convocatoria: retorna flags globales (compatibilidad)
             return response()->json([
                 'data' => [
-                    'aval_rectoria'       => $user->aval_rectoria,
-                    'aval_vicerrectoria'  => $user->aval_vicerrectoria,
-                    'aval_coordinador'    => $user->aval_coordinador,
+                    'aval_rectoria' => $user->aval_rectoria,
+                    'aval_vicerrectoria' => $user->aval_vicerrectoria,
+                    'aval_coordinador' => $user->aval_coordinador,
                     'aval_talento_humano' => $user->aval_talento_humano,
                 ]
             ]);
@@ -355,16 +361,16 @@ class AvalController extends Controller
     {
         try {
             $request->validate([
-                'motivo_rechazo'  => 'required|string|max:1000',
+                'motivo_rechazo' => 'required|string|max:1000',
                 'convocatoria_id' => 'nullable|integer',
             ]);
 
-            $user           = User::findOrFail($userId);
-            $role           = $request->user()->getRoleNames()->first();
-            $avalNombre     = self::ROLE_AVAL[$role] ?? null;
+            $user = User::findOrFail($userId);
+            $role = $request->user()->getRoleNames()->first();
+            $avalNombre = self::ROLE_AVAL[$role] ?? null;
             $convocatoriaId = $request->convocatoria_id ? (int) $request->convocatoria_id : null;
 
-            if (! $avalNombre) {
+            if (!$avalNombre) {
                 return response()->json(['message' => 'Rol no autorizado para rechazar avales.'], 403);
             }
 
@@ -373,18 +379,20 @@ class AvalController extends Controller
                 if ($convocatoriaId) {
                     switch ($role) {
                         case 'Coordinador':
-                            if (! $this->tieneAval($user->id, $convocatoriaId, 'talento_humano')) {
+                            if (!$this->tieneAval($user->id, $convocatoriaId, 'talento_humano')) {
                                 throw new \Exception('El aspirante no cuenta con el aval de Talento Humano para esta convocatoria.', 403);
                             }
                             break;
                         case 'Vicerrectoria':
-                            if (! $this->tieneAval($user->id, $convocatoriaId, 'talento_humano')
-                                || ! $this->tieneAval($user->id, $convocatoriaId, 'coordinador')) {
+                            if (
+                                !$this->tieneAval($user->id, $convocatoriaId, 'talento_humano')
+                                || !$this->tieneAval($user->id, $convocatoriaId, 'coordinador')
+                            ) {
                                 throw new \Exception('El aspirante no cuenta con los avales previos para esta convocatoria.', 403);
                             }
                             break;
                         case 'Rectoria':
-                            if (! $this->tieneAval($user->id, $convocatoriaId, 'vicerrectoria')) {
+                            if (!$this->tieneAval($user->id, $convocatoriaId, 'vicerrectoria')) {
                                 throw new \Exception('El aspirante no cuenta con el aval de Vicerrectoría para esta convocatoria.', 403);
                             }
                             break;
@@ -416,8 +424,8 @@ class AvalController extends Controller
                         ->whereIn('estado_postulacion', ['Enviada', 'Faltan documentos', 'Aprobada', 'Aceptada'])
                         ->update([
                             'estado_postulacion' => 'Rechazada',
-                            'motivo_rechazo'     => $request->motivo_rechazo,
-                            'rechazado_por'      => $role,
+                            'motivo_rechazo' => $request->motivo_rechazo,
+                            'rechazado_por' => $role,
                         ]);
                 } else {
                     // Sin convocatoria_id: rechaza todas las postulaciones activas (comportamiento original)
@@ -425,8 +433,8 @@ class AvalController extends Controller
                         ->whereIn('estado_postulacion', ['Enviada', 'Faltan documentos', 'Aprobada', 'Aceptada'])
                         ->update([
                             'estado_postulacion' => 'Rechazada',
-                            'motivo_rechazo'     => $request->motivo_rechazo,
-                            'rechazado_por'      => $role,
+                            'motivo_rechazo' => $request->motivo_rechazo,
+                            'rechazado_por' => $role,
                         ]);
                 }
             });

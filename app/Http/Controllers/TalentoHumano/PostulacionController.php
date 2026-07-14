@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use App\Http\Controllers\TalentoHumano\NotificacionController;
 use App\Services\PuntajeAspiranteService;
+use App\Constants\ConstTalentoHumano\Aprobaciones;
 
 class PostulacionController
 {
@@ -30,18 +31,6 @@ class PostulacionController
     ) {
         $this->generadorHojaDeVidaPDFService = $generadorHojaDeVidaPDFService;
         $this->puntajeService = $puntajeService;
-    }
-
-    /** Normaliza el nombre de aval a clave técnica usada en convocatoria_avales. */
-    private function normalizarAval(string $aval): string
-    {
-        return match ($aval) {
-            'Talento Humano', 'talento humano', 'talento_humano' => 'talento_humano',
-            'Coordinador', 'Coordinación', 'coordinacion', 'coordinador' => 'coordinador',
-            'Vicerrectoría', 'Vicerrectoria', 'vicerrectoria' => 'vicerrectoria',
-            'Rectoría', 'Rectoria', 'rectoria' => 'rectoria',
-            default => $aval,
-        };
     }
 
     /**
@@ -66,7 +55,7 @@ class PostulacionController
     {
         try {
             $convocatoria = Convocatoria::findOrFail($convocatoriaId);
-             // Verificar si la convocatoria está cerrada
+            // Verificar si la convocatoria está cerrada
             if ($convocatoria->estado_convocatoria === 'Cerrada') {
                 return response()->json([
                     'mensaje' => 'Esta convocatoria ya está cerrada'
@@ -109,12 +98,13 @@ class PostulacionController
                 // Crear registros de avales pendientes para este postulante si la convocatoria los requiere
                 if (!empty($convocatoria->avales_establecidos) && is_array($convocatoria->avales_establecidos)) {
                     foreach ($convocatoria->avales_establecidos as $avalRequerido) {
-                        $avalNormalizado = $this->normalizarAval((string) $avalRequerido);
+                        $avalClave = Aprobaciones::toDatabaseKey($avalRequerido) ?? $avalRequerido;
+
                         ConvocatoriaAval::updateOrCreate(
                             [
                                 'convocatoria_id' => $convocatoriaId,
                                 'user_id' => $user->id,
-                                'aval' => $avalNormalizado,
+                                'aval' => $avalClave,
                             ],
                             [
                                 'estado' => 'pending'
@@ -171,15 +161,26 @@ class PostulacionController
                 ->orderBy('created_at', 'desc')
                 ->get();
 
-            // Agregar estado de aval TH y puntaje por postulación
             $puntajeService = $this->puntajeService;
             $postulaciones->each(function ($p) use ($puntajeService) {
-                $p->aval_th_aprobado = ConvocatoriaAval::where('convocatoria_id', $p->convocatoria_id)
+                $avales = ConvocatoriaAval::where('convocatoria_id', $p->convocatoria_id)
                     ->where('user_id', $p->user_id)
-                    ->where('aval', 'talento_humano')
-                    ->where('estado', 'aprobado')
-                    ->exists();
+                    ->get();
+
+                $estaAprobado = function (array $nombres) use ($avales): bool {
+                    return $avales->contains(function ($a) use ($nombres) {
+                        return in_array($a->aval, $nombres) && $a->estado === 'aprobado';
+                    });
+                };
+
+                // Asignar directamente a la postulación, NO a usuarioPostulacion
+                $p->aval_talento_humano = $estaAprobado(['talento_humano', 'Talento Humano', 'talento humano']);
+                $p->aval_coordinador = $estaAprobado(['coordinador', 'Coordinador', 'Coordinación', 'coordinacion']);
+                $p->aval_vicerrectoria = $estaAprobado(['vicerrectoria', 'Vicerrectoria', 'Vicerrectoría']);
+                $p->aval_rectoria = $estaAprobado(['rectoria', 'Rectoria', 'Rectoría']);
+
                 if ($p->usuarioPostulacion) {
+                    // Esto sí es seguro: el puntaje es del usuario, no depende de la convocatoria
                     $p->usuarioPostulacion->puntaje_aspirante = $puntajeService->calcular((int) $p->user_id)['total'];
                 }
             });
@@ -187,7 +188,7 @@ class PostulacionController
             return response()->json(['postulaciones' => $postulaciones], 200);
 
         } catch (\Exception $e) {
-            return response()->json([ // Manejar excepciones
+            return response()->json([
                 'message' => 'Ocurrió un error al obtener las postulaciones.',
                 'error' => $e->getMessage()
             ], 500);
@@ -304,7 +305,7 @@ class PostulacionController
         try {
             $request->validate([
                 'estado_postulacion' => ['required', 'string', Rule::in(EstadoPostulacion::all())],
-                'motivo_rechazo'     => ['nullable', 'string', 'max:1000'],
+                'motivo_rechazo' => ['nullable', 'string', 'max:1000'],
             ]);
 
             // El motivo es obligatorio cuando se rechaza la postulación
@@ -325,11 +326,11 @@ class PostulacionController
 
                 if ($request->estado_postulacion === EstadoPostulacion::RECHAZADA) {
                     $postulacion->motivo_rechazo = $request->motivo_rechazo;
-                    $postulacion->rechazado_por  = $request->user()->getRoleNames()->first() ?? 'Talento Humano';
+                    $postulacion->rechazado_por = $request->user()->getRoleNames()->first() ?? 'Talento Humano';
                 } else {
                     // Limpiar el motivo si el estado vuelve a uno no rechazado
                     $postulacion->motivo_rechazo = null;
-                    $postulacion->rechazado_por  = null;
+                    $postulacion->rechazado_por = null;
                 }
 
                 $postulacion->save();
@@ -442,26 +443,26 @@ class PostulacionController
         }
     }
     /**
- * Generar la hoja de vida en PDF de un usuario (para Rectoría/Vicerrectoría).
- *
- * Este método genera el PDF de la hoja de vida de un usuario sin necesidad de verificar
- * una postulación específica. Es utilizado por roles administrativos como Rectoría.
- *
- * @param int $idUsuario ID del usuario cuya hoja de vida se desea generar.
- * @return \Illuminate\Http\JsonResponse|\Symfony\Component\HttpFoundation\BinaryFileResponse
- * Respuesta JSON con mensaje de error o archivo PDF generado exitosamente.
- */
-public function generarHojaDeVidaPDFSimple($idUsuario)
-{
-    try {
-        return $this->generadorHojaDeVidaPDFService->generar($idUsuario);
-    } catch (\Exception $e) {
-        return response()->json([
-            'message' => 'Ocurrió un error al generar la hoja de vida.',
-            'error' => $e->getMessage()
-        ], 500);
+     * Generar la hoja de vida en PDF de un usuario (para Rectoría/Vicerrectoría).
+     *
+     * Este método genera el PDF de la hoja de vida de un usuario sin necesidad de verificar
+     * una postulación específica. Es utilizado por roles administrativos como Rectoría.
+     *
+     * @param int $idUsuario ID del usuario cuya hoja de vida se desea generar.
+     * @return \Illuminate\Http\JsonResponse|\Symfony\Component\HttpFoundation\BinaryFileResponse
+     * Respuesta JSON con mensaje de error o archivo PDF generado exitosamente.
+     */
+    public function generarHojaDeVidaPDFSimple($idUsuario)
+    {
+        try {
+            return $this->generadorHojaDeVidaPDFService->generar($idUsuario);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Ocurrió un error al generar la hoja de vida.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
-}
 
     /**
      * Verificar si el usuario cumple con los requisitos de la convocatoria.
@@ -604,17 +605,17 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
     private function verificarExperienciaCantidadUnidad($user, $convocatoria)
     {
         $cantidadRequerida = $convocatoria->cantidad_experiencia;
-        $unidad            = strtolower(trim($convocatoria->unidad_experiencia));
-        $tipoFiltro        = $convocatoria->tipo_experiencia_requerida ?? null;
+        $unidad = strtolower(trim($convocatoria->unidad_experiencia));
+        $tipoFiltro = $convocatoria->tipo_experiencia_requerida ?? null;
 
         $totalDias = $this->calcularTotalDiasExperiencia($user->experienciasUsuario, $tipoFiltro);
 
         // Convertir el requisito a días para comparar en la misma unidad
         $diasRequeridos = match (true) {
-            str_starts_with($unidad, 'año')  => $cantidadRequerida * 365.25,
-            str_starts_with($unidad, 'mes')  => $cantidadRequerida * 30.44,
-            str_starts_with($unidad, 'sem')  => $cantidadRequerida * 7,
-            default                          => $cantidadRequerida * 365.25, // default años
+            str_starts_with($unidad, 'año') => $cantidadRequerida * 365.25,
+            str_starts_with($unidad, 'mes') => $cantidadRequerida * 30.44,
+            str_starts_with($unidad, 'sem') => $cantidadRequerida * 7,
+            default => $cantidadRequerida * 365.25, // default años
         };
 
         if ($totalDias < $diasRequeridos) {
@@ -634,9 +635,9 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
     private function verificarAniosExperienciaPorTipo($user, $convocatoria)
     {
         $anosRequeridos = $convocatoria->anos_experiencia_requerida;
-        $tipoRequerido  = $convocatoria->tipo_experiencia_requerida;
+        $tipoRequerido = $convocatoria->tipo_experiencia_requerida;
 
-        $totalDias  = $this->calcularTotalDiasExperiencia($user->experienciasUsuario, $tipoRequerido);
+        $totalDias = $this->calcularTotalDiasExperiencia($user->experienciasUsuario, $tipoRequerido);
         $anosUsuario = round($totalDias / 365.25, 1);
 
         if ($anosUsuario < $anosRequeridos) {
@@ -726,7 +727,7 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
         foreach ($experiencias as $experiencia) {
             // Asumir que tipo_experiencia indica si es docente o administrativo
             $esExperienciaAdministrativa = strtolower($experiencia->tipo_experiencia) === 'administrativo' ||
-                                           strtolower($experiencia->tipo_experiencia) === 'administrativa';
+                strtolower($experiencia->tipo_experiencia) === 'administrativa';
 
             if ($esAdministrativo && !$esExperienciaAdministrativa) {
                 continue; // Si la convocatoria es administrativa, solo contar experiencia administrativa
@@ -813,13 +814,6 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
             return;
         }
 
-        // Normalizar formatos heredados/mixtos para evitar errores de tipo
-        $requisitosIdiomas = $this->normalizarRequisitosIdiomas($requisitosIdiomas);
-
-        if (empty($requisitosIdiomas)) {
-            return;
-        }
-
         $idiomasUsuario = $user->idiomasUsuario;
 
         // Detectar si llegó como array indexado (lista de niveles mínimos, ej. ['A2', 'B1'])
@@ -828,7 +822,7 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
         if ($esIndexado) {
             // El usuario debe tener al menos un idioma con nivel >= al requerido para cada entrada
             foreach ($requisitosIdiomas as $nivelRequerido) {
-                if (!in_array($nivelRequerido, NivelIdioma::all(), true)) {
+                if (!in_array(strtoupper($nivelRequerido), NivelIdioma::all())) {
                     throw new \Exception("Nivel de idioma no válido: {$nivelRequerido}. Los niveles válidos son: " . implode(', ', NivelIdioma::all()) . ".", 400);
                 }
 
@@ -849,18 +843,18 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
 
         foreach ($requisitosIdiomas as $idiomaRequerido => $nivelRequerido) {
             // Verificar que el nivel requerido sea válido
-            if (!in_array($nivelRequerido, NivelIdioma::all(), true)) {
+            if (!in_array(strtoupper($nivelRequerido), NivelIdioma::all())) {
                 throw new \Exception("Nivel de idioma no válido: {$nivelRequerido}. Los niveles válidos son: " . implode(', ', NivelIdioma::all()) . ".", 400);
             }
 
             $cumpleRequisito = false;
 
             // Normalizar idioma requerido (remover tildes, espacios)
-            $idiomaRequeridoNormalizado = $this->normalizarIdioma((string)$idiomaRequerido);
+            $idiomaRequeridoNormalizado = $this->normalizarIdioma((string) $idiomaRequerido);
 
             foreach ($idiomasUsuario as $idiomaUsuario) {
                 // Normalizar idioma del usuario
-                $idiomaUsuarioNormalizado = $this->normalizarIdioma((string)$idiomaUsuario->idioma);
+                $idiomaUsuarioNormalizado = $this->normalizarIdioma((string) $idiomaUsuario->idioma);
 
                 Log::info('DEBUG verificarRequisitosIdiomas - Comparando idiomas:', [
                     'idioma_requerido_original' => $idiomaRequerido,
@@ -912,11 +906,8 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
     {
         $jerarquiaNiveles = NivelIdioma::all();
 
-        $nivelUsuario = strtoupper(trim((string) $nivelUsuario));
-        $nivelRequerido = strtoupper(trim((string) $nivelRequerido));
-
-        $posicionUsuario = array_search($nivelUsuario, $jerarquiaNiveles, true);
-        $posicionRequerido = array_search($nivelRequerido, $jerarquiaNiveles, true);
+        $posicionUsuario = array_search(strtoupper($nivelUsuario), $jerarquiaNiveles);
+        $posicionRequerido = array_search(strtoupper($nivelRequerido), $jerarquiaNiveles);
 
         // Si alguno de los niveles no está en la jerarquía, devolver false
         if ($posicionUsuario === false || $posicionRequerido === false) {
@@ -924,76 +915,6 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
         }
 
         return $posicionUsuario >= $posicionRequerido;
-    }
-
-    /**
-     * Normalizar requisitos de idiomas en formatos mixtos/legados.
-     *
-     * Soporta:
-     * - Lista indexada de niveles: ['A2', 'B1']
-     * - Mapa idioma => nivel: ['Ingles' => 'B1']
-     * - Lista de objetos/arrays: [['idioma' => 'Ingles', 'nivel' => 'B1']]
-     */
-    private function normalizarRequisitosIdiomas(array $requisitosIdiomas): array
-    {
-        $asociativos = [];
-        $indexados = [];
-
-        foreach ($requisitosIdiomas as $clave => $valor) {
-            // Caso mapa idioma => nivel
-            if (!is_int($clave) && is_scalar($valor)) {
-                $idioma = trim((string) $clave);
-                $nivel = $this->normalizarNivelIdioma($valor);
-                if ($idioma !== '' && $nivel !== null) {
-                    $asociativos[$idioma] = $nivel;
-                }
-                continue;
-            }
-
-            // Caso lista indexada con nivel directo
-            if (is_scalar($valor)) {
-                $nivel = $this->normalizarNivelIdioma($valor);
-                if ($nivel !== null) {
-                    $indexados[] = $nivel;
-                }
-                continue;
-            }
-
-            // Caso lista indexada de objetos/arreglos
-            if (is_array($valor)) {
-                $idioma = isset($valor['idioma']) && is_scalar($valor['idioma'])
-                    ? trim((string) $valor['idioma'])
-                    : '';
-
-                $nivel = $this->normalizarNivelIdioma($valor['nivel'] ?? $valor['level'] ?? ($valor[0] ?? null));
-
-                if ($nivel === null) {
-                    continue;
-                }
-
-                if ($idioma !== '') {
-                    $asociativos[$idioma] = $nivel;
-                } else {
-                    $indexados[] = $nivel;
-                }
-            }
-        }
-
-        // Si hay requisitos por idioma, priorizarlos sobre la lista genérica.
-        return !empty($asociativos) ? $asociativos : $indexados;
-    }
-
-    /**
-     * Convertir un nivel de idioma a string estándar en mayúscula.
-     */
-    private function normalizarNivelIdioma($nivel): ?string
-    {
-        if (!is_scalar($nivel)) {
-            return null;
-        }
-
-        $nivelNormalizado = strtoupper(trim((string) $nivel));
-        return $nivelNormalizado !== '' ? $nivelNormalizado : null;
     }
 
     /**
@@ -1039,7 +960,7 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
             $perfilLower = strtolower($nombrePerfil);
 
             return str_contains($tituloEstudio, $perfilLower) ||
-                   str_contains($perfilLower, $tituloEstudio);
+                str_contains($perfilLower, $tituloEstudio);
         });
 
         if ($estudiosRelacionados->isEmpty()) {
@@ -1143,7 +1064,7 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
             TiposEstudio::POSTDOCTORADO => 'Postdoctorado',
         ];
 
-        $nivelesTexto = array_map(function($nivel) use ($nombres) {
+        $nivelesTexto = array_map(function ($nivel) use ($nombres) {
             return $nombres[$nivel] ?? $nivel;
         }, $niveles);
 
