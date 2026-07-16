@@ -31,7 +31,15 @@ class GoogleAuthController
         $raw = (string) config('app.frontend_url', env('FRONTEND_URL', 'http://localhost:5173'));
         $first = trim(explode(',', $raw)[0] ?? 'http://localhost:5173');
 
-        return rtrim($first !== '' ? $first : 'http://localhost:5173', '/');
+        $frontendUrl = rtrim($first !== '' ? $first : 'http://localhost:5173', '/');
+        $appUrl = rtrim((string) config('app.url', ''), '/');
+        $appPath = (string) parse_url($appUrl, PHP_URL_PATH);
+
+        if ($appPath !== '' && $appPath !== '/' && !str_ends_with($frontendUrl, $appPath)) {
+            $frontendUrl .= $appPath;
+        }
+
+        return $frontendUrl;
     }
 
     /**
