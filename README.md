@@ -29,6 +29,7 @@
    - [Ubicaciones](#ubicaciones)
    - [Constantes](#constantes)
    - [Notificaciones](#notificaciones)
+   - [Inteligencia Artificial (IA)](#inteligencia-artificial-ia)
 9. [Formatos de Respuesta](#formatos-de-respuesta)
 10. [Colección Postman](#colección-postman)
 11. [Flujo de Trabajo del Sistema](#flujo-de-trabajo-del-sistema)
@@ -107,6 +108,12 @@ php artisan jwt:secret
 # 7. Correr migraciones y seeders
 php artisan migrate --seed
 
+# 7b. (Opcional) Poblar datos de prueba adicionales
+#     Crea 10 aspirantes demo, convocatorias de ejemplo y postulaciones de prueba
+php artisan db:seed --class=DemoAspirantesSeeder
+php artisan db:seed --class=DemoConvocatoriasSeeder
+php artisan db:seed --class=PostulacionesDemoSeeder
+
 # 8. Enlace de almacenamiento
 php artisan storage:link
 
@@ -133,6 +140,8 @@ DB_PASSWORD=secret
 
 JWT_SECRET=<generado con jwt:secret>
 JWT_TTL=1440          # minutos (24 horas)
+
+GROK_API_KEY=<tu clave de API de Groq>   # https://console.groq.com/keys
 
 MAIL_MAILER=smtp
 MAIL_HOST=smtp.mailtrap.io
@@ -483,6 +492,29 @@ La API usa **JWT (JSON Web Token)**. Pasos:
 | GET | `/aspirante/obtener-normativas` | Lista normativas vigentes |
 | GET | `/aspirante/obtener-normativa/{id}` | Detalle de normativa |
 
+#### Puntaje de Aptitud
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| GET | `/aspirante/mi-puntaje` | Calcula y retorna el puntaje de aptitud del aspirante autenticado |
+
+**Respuesta 200:**
+```json
+{
+  "total": 155,
+  "estudios": 80,
+  "idiomas": 25,
+  "experiencia": 50,
+  "desglose": {
+    "estudios": [{ "titulo": "Maestría en Educación", "puntaje": 80 }],
+    "idiomas": [{ "idioma": "Inglés", "nivel": "B2", "puntaje": 25 }],
+    "experiencia": [{ "tipo": "Docencia Universitaria", "anios": 5, "puntaje": 50 }]
+  }
+}
+```
+
+> El puntaje también es accesible para los roles de panel (Talento Humano, Coordinador, Vicerrectoría, Rectoría) vía `GET /aspirante/{userId}/puntaje`.
+
 ---
 
 ### Docente
@@ -717,6 +749,12 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | GET | `/admin/aspirantes/{id}` | Detalle de aspirante |
 | GET | `/admin/aspirantes/{id}/hoja-vida-pdf` | HV del aspirante en PDF |
 | POST | `/admin/aspirantes/{id}/dar-aval` | Otorga aval al aspirante |
+
+#### Puntaje de Aptitud (compartido: TH, Coordinador, Vicerrectoría, Rectoría)
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| GET | `/aspirante/{userId}/puntaje` | Calcula y retorna el puntaje de aptitud de un aspirante específico |
 
 ---
 
@@ -982,6 +1020,77 @@ Permite a cualquier usuario autenticado consultar y gestionar sus propias notifi
 | Aval final de Rectoría completado | DB + Email | El aspirante |
 | **Aval rechazado (TH / Coord / VR / Rectoría)** | DB + Email | El aspirante (con etapa y motivo) |
 | **Documento rechazado** | DB + Email | El propietario del documento (con motivo) |
+
+---
+
+### Inteligencia Artificial (IA)
+
+**Prefijo:** `/ia` | **Middleware:** `auth:api`, `role:Talento Humano|Coordinador|Vicerrectoria|Rectoria`
+
+Integración con la API de **Groq** (modelo `llama-3.3-70b-versatile`) para asistencia inteligente al equipo revisor. Requiere la variable de entorno `GROK_API_KEY` configurada en `.env`.
+
+> Todos los endpoints de IA requieren autenticación y el rol correspondiente. Las respuestas son siempre en español.
+
+#### Consulta sobre aspirantes
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| POST | `/ia/aspirante/consultar` | Consulta libre sobre un aspirante o todos los de una convocatoria |
+| POST | `/ia/buscar` | Alias de búsqueda por nombre / número de cédula |
+
+**Campos `POST /ia/aspirante/consultar` (JSON):**
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `pregunta` | string | Sí | Pregunta en lenguaje natural (máx. 2000 chars) |
+| `user_id` | integer | No | ID del aspirante a consultar (contexto individual) |
+| `convocatoria_id` | integer | No | ID de convocatoria (contexto de todos sus postulantes) |
+| `buscar` | string | No | Término libre de búsqueda por nombre o cédula (máx. 300 chars) |
+| `historial` | array | No | Historial de conversación previo (máx. 20 turnos) |
+| `historial[].role` | string | Sí* | `"user"` o `"assistant"` |
+| `historial[].content` | string | Sí* | Contenido del mensaje (máx. 4000 chars) |
+
+> Si no se envía ningún contexto (`user_id`, `convocatoria_id` ni `buscar`), el asistente intenta extraer términos de búsqueda de la pregunta y busca automáticamente en la base de datos.
+
+**Respuesta `200`:**
+```json
+{
+  "respuesta": "El aspirante Juan Pérez tiene un puntaje total de 155 puntos..."
+}
+```
+
+#### Validación de documentos con IA
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| POST | `/ia/documento/validar` | Analiza si un documento PDF corresponde al tipo esperado |
+
+**Campos `POST /ia/documento/validar` (JSON):**
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `documento_url` | string | Sí | URL pública del documento PDF |
+| `tipo_esperado` | string | Sí | Tipo de documento esperado (ej: `"Diploma de Maestría"`) |
+| `nombre_archivo` | string | No | Nombre del archivo (se infiere de la URL si se omite) |
+
+**Respuesta `200`:**
+```json
+{
+  "valido": true,
+  "confianza": "alta",
+  "mensaje": "El documento corresponde a un diploma de maestría expedido por la Universidad Nacional.",
+  "advertencias": []
+}
+```
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `valido` | boolean \| null | `true` si el documento corresponde al tipo esperado; `null` si no se pudo determinar |
+| `confianza` | string | `"alta"`, `"media"` o `"baja"` |
+| `mensaje` | string | Explicación breve en español |
+| `advertencias` | array | Lista de advertencias opcionales |
+
+> **Nota:** La validación se basa en el texto extraído del PDF. Para documentos escaneados sin capa de texto, la confianza puede ser baja y se valida únicamente por nombre de archivo.
 
 ---
 

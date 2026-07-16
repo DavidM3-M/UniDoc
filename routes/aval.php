@@ -6,6 +6,22 @@ use App\Http\Controllers\TalentoHumano\PostulacionController;
 use App\Http\Controllers\TalentoHumano\ConvocatoriaController;
 use App\Http\Controllers\Convocatoria\RectoriaVerificacionDocumentosController;
 use App\Http\Controllers\Convocatoria\VicerrectoriaVerificacionDocumentosController;
+use App\Http\Controllers\Aspirante\PuntajeAspiranteController;
+use App\Http\Controllers\IA\AspiranteIAController;
+
+// Endpoints compartidos (TH, Coordinador, Vicerrectoría, Rectoría)
+Route::middleware(['api', 'auth:api', 'role:Talento Humano|Coordinador|Vicerrectoria|Rectoria'])
+    ->group(function () {
+        // Puntaje de aptitud de un aspirante
+        Route::get('/aspirante/{userId}/puntaje', [PuntajeAspiranteController::class, 'calcular']);
+
+        // IA: consulta sobre aspirante(s), búsqueda general y validación de documentos
+        Route::prefix('ia')->group(function () {
+            Route::post('aspirante/consultar',    [AspiranteIAController::class, 'consultar']);
+            Route::post('buscar',                 [AspiranteIAController::class, 'consultar']); // alias: búsqueda por nombre/cédula
+            Route::post('documento/validar',      [AspiranteIAController::class, 'validarDocumento']);
+        });
+    });
 
 // Grupo Rectoría
 Route::group([

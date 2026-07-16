@@ -26,3 +26,5 @@ require __DIR__ . '/aval.php';
 require __DIR__ . '/coordinador.php';
 // Incluye el archivo notificaciones.php, contiene rutas compartidas de notificaciones
 require __DIR__ . '/notificaciones.php';
+// Incluye el archivo administrativo.php, contiene rutas para el rol Administrativo
+require __DIR__ . '/administrativo.php';

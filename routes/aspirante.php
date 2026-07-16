@@ -17,7 +17,7 @@ use App\Http\Controllers\Aspirante\NormativaController;
 use App\Http\Controllers\Aspirante\CertificacionBancariaController;
 use App\Http\Controllers\Aspirante\PensionController;
 use App\Http\Controllers\Aspirante\AntecedentesJudicialesController;
-use App\Http\Controllers\Aspirante\ArlController;
+use App\Http\Controllers\Aspirante\PuntajeAspiranteController;
 
 // Define un grupo de rutas con configuraciones específicas para el rol "Aspirante"
 Route::group([
@@ -112,6 +112,9 @@ Route::group([
     Route::get('obtener-arl', [ArlController::class, 'obtenerArl']);
     Route::post('crear-arl', [ArlController::class, 'crearArl']);
     Route::put('actualizar-arl', [ArlController::class, 'actualizarArl']);
+
+    // Ruta para consultar el puntaje propio del aspirante
+    Route::get('mi-puntaje', [PuntajeAspiranteController::class, 'calcular']);
 
 
 

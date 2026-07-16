@@ -16,7 +16,11 @@ RUN apt-get update && apt-get install -y \
     imagemagick \
     ghostscript \
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+    poppler-utils \
+>>>>>>> 7f3bc2997a51f7c7a305bd059cafd2d5412843e0
     libpq-dev \
 >>>>>>> 95d2f50479d8cb3b3a68b6f3a3efbc25b4c5cdb0
     && rm -rf /var/lib/apt/lists/*

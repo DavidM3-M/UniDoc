@@ -26,6 +26,9 @@ class DatabaseSeeder extends Seeder
         $this->call(AmbitoDivulgacionSeeder::class);
         $this->call(AspiranteSeeder::class);
         $this->call(CoordinadorSeeder::class);
+        $this->call(DemoAspirantesSeeder::class);
+        $this->call(DemoConvocatoriasSeeder::class);
+        $this->call(PostulacionesDemoSeeder::class);
 
 
     }
