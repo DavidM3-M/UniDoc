@@ -19,10 +19,10 @@ class GoogleAuthController
         $request = request();
 
         $configured = trim((string) config('services.google.redirect', ''));
-        $hasForwardedHost = trim((string) $request->header('X-Forwarded-Host', '')) !== '';
 
-        // Si ya hay una URL configurada no-localhost y no estamos detrás de proxy, se respeta.
-        if ($configured !== '' && !str_contains($configured, 'localhost') && !$hasForwardedHost) {
+        // Si ya hay una URL explícita (normalmente de entorno productivo), siempre se respeta.
+        // Esto evita mismatch cuando los proxies reescriben headers de host/proto.
+        if ($configured !== '' && !str_contains($configured, 'localhost')) {
             return $configured;
         }
 
