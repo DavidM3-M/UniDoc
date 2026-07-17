@@ -12,6 +12,37 @@ use PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth;
 class GoogleAuthController
 {
     /**
+     * Resuelve la URL de callback OAuth de Google considerando reverse proxy.
+     */
+    private function resolveGoogleRedirectUrl(): string
+    {
+        $request = request();
+
+        $configured = trim((string) config('services.google.redirect', ''));
+        $hasForwardedHost = trim((string) $request->header('X-Forwarded-Host', '')) !== '';
+
+        // Si ya hay una URL configurada no-localhost y no estamos detrás de proxy, se respeta.
+        if ($configured !== '' && !str_contains($configured, 'localhost') && !$hasForwardedHost) {
+            return $configured;
+        }
+
+        $scheme = trim((string) $request->header('X-Forwarded-Proto', ''));
+        if ($scheme === '') {
+            $scheme = $request->getScheme();
+        }
+
+        $host = trim((string) $request->header('X-Forwarded-Host', ''));
+        if ($host === '') {
+            $host = (string) $request->getHost();
+        }
+
+        $prefix = trim((string) $request->header('X-Forwarded-Prefix', ''), '/');
+        $prefixPath = $prefix !== '' ? '/' . $prefix : '';
+
+        return sprintf('%s://%s%s/api/auth/google/callback', $scheme, $host, $prefixPath);
+    }
+
+    /**
      * Resuelve un municipio válido para creación de usuarios OAuth.
      */
     private function resolveMunicipioId(): int
@@ -47,6 +78,9 @@ class GoogleAuthController
      */
     public function redirect()
     {
+        $redirectUrl = $this->resolveGoogleRedirectUrl();
+        config(['services.google.redirect' => $redirectUrl]);
+
         return Socialite::driver('google')
             ->stateless()
             ->redirect();
@@ -59,7 +93,12 @@ class GoogleAuthController
     public function callback()
     {
         try {
-            $googleUser = Socialite::driver('google')->stateless()->user();
+            $redirectUrl = $this->resolveGoogleRedirectUrl();
+            config(['services.google.redirect' => $redirectUrl]);
+
+            $googleUser = Socialite::driver('google')
+                ->stateless()
+                ->user();
 
             $googleId = (string) $googleUser->getId();
             $email = (string) $googleUser->getEmail();
