@@ -4,6 +4,7 @@ namespace App\Http\Controllers\ApoyoProfesoral;
 
 use App\Services\CertificadoDocenteService;
 use App\Http\Requests\RequestSecretaria\CrearCertificadosMasivosRequest;
+use App\Http\Requests\RequestSecretaria\ActualizarCertificadoRequest;
 use App\Models\Usuario\User;
 use App\Models\Aspirante\Estudio;
 use Illuminate\Support\Facades\Log;
@@ -109,6 +110,7 @@ class GenerarCertificadosController
                 'fecha_convalidacion'      => $request->fecha_convalidacion,
                 'resolucion_convalidacion' => $request->resolucion_convalidacion,
                 'posible_fecha_graduacion' => $request->posible_fecha_graduacion,
+                'es_certificado'           => true,
             ]);
 
             // Guardar documento asociado (polimórfico)
@@ -123,5 +125,90 @@ class GenerarCertificadosController
             'status'  => 'success',
             'mensaje' => 'Certificados generados y estudios registrados correctamente.'
         ]);
+    }
+
+    /**
+     * Actualizar un certificado generado por Apoyo Profesoral.
+     *
+     * Solo opera sobre registros de estudio marcados como certificado (`es_certificado = true`),
+     * de modo que este endpoint no pueda modificar los estudios reales de un docente. Tras
+     * actualizar los datos, se regenera el PDF del certificado para que su contenido visible
+     * quede consistente con la nueva información, reemplazando el documento asociado.
+     *
+     * @param ActualizarCertificadoRequest $request Datos validados del certificado.
+     * @param int $id ID del estudio-certificado a actualizar.
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function actualizarCertificado(ActualizarCertificadoRequest $request, $id)
+    {
+        try {
+            // Solo se permiten certificados generados (es_certificado = true), no estudios reales del docente.
+            $estudio = Estudio::where('id_estudio', $id)
+                ->where('es_certificado', true)
+                ->firstOrFail();
+
+            DB::transaction(function () use ($request, $estudio) {
+                $estudio->update($request->validated()); // Actualiza los campos enviados
+
+                // Regenerar el PDF con los datos ya actualizados
+                $docente = $estudio->usuarioEstudio;
+                $pdfFile = $this->certificadoService->generarPDF([
+                    'docente_id'         => $docente->id,
+                    'nombre_docente'     => $docente->primer_nombre . ' ' . $docente->segundo_nombre . ' ' . $docente->primer_apellido . ' ' . $docente->segundo_apellido,
+                    'titulo_certificado' => $estudio->titulo_estudio,
+                    'fecha'              => Carbon::parse($estudio->fecha_fin ?? $estudio->fecha_inicio)->translatedFormat('d \d\e F \d\e Y'),
+                ]);
+
+                // Reemplaza el documento anterior y lo deja aprobado (igual que en la creación)
+                $documento = $this->archivoService->actualizarArchivoDocumento($pdfFile, $estudio, 'Estudios');
+                $documento->update(['estado' => 'aprobado']);
+
+                unlink($pdfFile->getRealPath()); // Elimina el PDF temporal
+            });
+
+            return response()->json([
+                'status'  => 'success',
+                'mensaje' => 'Certificado actualizado correctamente.',
+            ], 200);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['message' => 'Certificado no encontrado.'], 404);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Error al actualizar el certificado.',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Eliminar un certificado generado por Apoyo Profesoral.
+     *
+     * Solo opera sobre registros marcados como certificado (`es_certificado = true`); elimina
+     * el documento (PDF) asociado y luego el registro de estudio, dentro de una transacción.
+     *
+     * @param int $id ID del estudio-certificado a eliminar.
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function eliminarCertificado($id)
+    {
+        try {
+            $estudio = Estudio::where('id_estudio', $id)
+                ->where('es_certificado', true)
+                ->firstOrFail();
+
+            DB::transaction(function () use ($estudio) {
+                $this->archivoService->eliminarArchivoDocumento($estudio); // Borra el PDF y su registro
+                $estudio->delete(); // Borra el estudio-certificado
+            });
+
+            return response()->json(['mensaje' => 'Certificado eliminado correctamente.'], 200);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['message' => 'Certificado no encontrado.'], 404);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Error al eliminar el certificado.',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
     }
 }
