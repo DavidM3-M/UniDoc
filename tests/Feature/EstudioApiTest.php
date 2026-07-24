@@ -57,6 +57,22 @@ class EstudioApiTest extends TestCase
         ]);
     }
 
+    /** Crea un estudio marcado como certificado generado masivamente por Apoyo Profesoral. */
+    private function crearCertificado(User $user): Estudio
+    {
+        return Estudio::create([
+            'user_id'            => $user->id,
+            'tipo_estudio'       => 'Curso programado o capacitación',
+            'graduado'           => 'Si',
+            'institucion'        => 'Universidad Nacional',
+            'titulo_convalidado' => 'No',
+            'titulo_estudio'     => 'Certificado de Capacitación Docente',
+            'fecha_inicio'       => '2024-01-15',
+            'fecha_fin'          => '2024-06-30',
+            'es_certificado'     => true,
+        ]);
+    }
+
     /** Datos válidos mínimos para crear un estudio. */
     private function datosEstudioValido(): array
     {
@@ -303,6 +319,20 @@ class EstudioApiTest extends TestCase
                  ->assertJsonPath('errors.tipo_estudio', fn($v) => !empty($v));
     }
 
+    /** PUT /api/docente/actualizar-estudio/{id} sobre un certificado debe retornar 403. */
+    public function test_actualizar_certificado_retorna_403(): void
+    {
+        $user        = $this->crearDocente();
+        $certificado = $this->crearCertificado($user);
+
+        $response = $this->actingAs($user, 'api')
+                         ->putJson("/api/docente/actualizar-estudio/{$certificado->id_estudio}", [
+                             'titulo_estudio' => 'Intento de edición',
+                         ]);
+
+        $response->assertStatus(403);
+    }
+
     // ---------------------------------------------------------------
     // Eliminar estudio
     // ---------------------------------------------------------------
@@ -339,5 +369,17 @@ class EstudioApiTest extends TestCase
         $response = $this->deleteJson("/api/docente/eliminar-estudio/{$estudio->id_estudio}");
 
         $response->assertStatus(401);
+    }
+
+    /** DELETE /api/docente/eliminar-estudio/{id} sobre un certificado debe retornar 403. */
+    public function test_eliminar_certificado_retorna_403(): void
+    {
+        $user        = $this->crearDocente();
+        $certificado = $this->crearCertificado($user);
+
+        $response = $this->actingAs($user, 'api')
+                         ->deleteJson("/api/docente/eliminar-estudio/{$certificado->id_estudio}");
+
+        $response->assertStatus(403);
     }
 }

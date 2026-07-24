@@ -172,13 +172,19 @@ class EstudioController
     public function actualizarEstudio(ActualizarEstudioRequest $request, $id)
     {
         try {
-            DB::transaction(function () use ($request, $id) {
-                $user = $request->user(); // Usuario autenticado
+            $user = $request->user(); // Usuario autenticado
 
-                $estudio = Estudio::where('id_estudio', $id) // Busca el estudio del usuario
-                    ->where('user_id', $user->id)
-                    ->firstOrFail();
+            $estudio = Estudio::where('id_estudio', $id) // Busca el estudio del usuario
+                ->where('user_id', $user->id)
+                ->firstOrFail();
 
+            if ($estudio->es_certificado) {
+                return response()->json([
+                    'message' => 'No es posible editar un certificado generado por Apoyo Profesoral.',
+                ], 403);
+            }
+
+            DB::transaction(function () use ($request, $estudio) {
                 $datos = $request->validated(); // Valida y obtiene los datos
                 $estudio->update($datos); // Actualiza los datos del estudio
 
@@ -190,6 +196,8 @@ class EstudioController
             return response()->json([
                 'message' => 'Estudio actualizado correctamente',
             ], 200);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['message' => 'Estudio no encontrado.'], 404);
         } catch (\Exception $e) {
             return response()->json([ // Manejo de errores
                 'message' => 'Error al actualizar el estudio',
@@ -219,6 +227,12 @@ class EstudioController
             $estudio = Estudio::where('id_estudio', $id) // Busca el estudio del usuario
                 ->where('user_id', $user->id)
                 ->firstOrFail();
+
+            if ($estudio->es_certificado) {
+                return response()->json([
+                    'message' => 'No es posible eliminar un certificado generado por Apoyo Profesoral.',
+                ], 403);
+            }
 
             DB::transaction(function () use ($estudio) { // Elimina el estudio y sus archivos dentro de una transacción
                 $this->archivoService->eliminarArchivoDocumento($estudio);

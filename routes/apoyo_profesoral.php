@@ -38,6 +38,9 @@ Route::group([
 
     // Rutas para generar certificados
     Route::post('crear-certificados-masivos', [GenerarCertificadosController::class, 'crearCertificadosMasivos']);
+    // Editar / eliminar certificados ya generados (solo registros marcados como certificado)
+    Route::put('actualizar-certificado/{id}', [GenerarCertificadosController::class, 'actualizarCertificado']);
+    Route::delete('eliminar-certificado/{id}', [GenerarCertificadosController::class, 'eliminarCertificado']);
 
 
 
