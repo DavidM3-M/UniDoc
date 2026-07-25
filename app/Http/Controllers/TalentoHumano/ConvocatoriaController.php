@@ -21,6 +21,26 @@ class ConvocatoriaController
     protected $archivoService;
 
     /**
+     * Construye una URL pública para archivos en storage considerando
+     * despliegue embebido con prefijo (ej: /convocatorias-app).
+     */
+    private function buildStorageUrl(?string $archivo): ?string
+    {
+        if (empty($archivo)) {
+            return null;
+        }
+
+        $archivo = ltrim($archivo, '/');
+        $forwardedPrefix = trim((string) request()->header('X-Forwarded-Prefix', ''), '/');
+
+        if ($forwardedPrefix !== '') {
+            return url($forwardedPrefix . '/storage/' . $archivo);
+        }
+
+        return asset('storage/' . $archivo);
+    }
+
+    /**
      * Constructor del controlador de convocatorias.
      *
      * Inyecta el servicio `ArchivoService`, utilizado para gestionar operaciones de almacenamiento,
@@ -260,7 +280,7 @@ public function obtenerConvocatorias()
                     'id_documento' => $doc->id_documento,
                     'archivo' => $doc->archivo,
                     'estado' => $doc->estado ?? '',
-                    'url' => asset('storage/' . $doc->archivo),
+                    'url' => $this->buildStorageUrl($doc->archivo),
                 ];
             })->toArray();
 
@@ -349,7 +369,7 @@ public function obtenerConvocatorias()
                 'id_documento' => $doc->id_documento,
                 'archivo' => $doc->archivo,
                 'estado' => $doc->estado ?? '',
-                'url' => asset('storage/' . $doc->archivo),
+                'url' => $this->buildStorageUrl($doc->archivo),
             ];
         })->toArray();
 
@@ -621,7 +641,7 @@ public function obtenerConvocatoriaPublicaPorId($id_convocatoria)
                 'id_documento' => $doc->id_documento,
                 'archivo' => $doc->archivo,
                 'estado' => $doc->estado ?? '',
-                'url' => asset('storage/' . $doc->archivo),
+                'url' => $this->buildStorageUrl($doc->archivo),
             ];
         })->toArray();
 

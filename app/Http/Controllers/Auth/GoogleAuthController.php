@@ -12,6 +12,37 @@ use PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth;
 class GoogleAuthController
 {
     /**
+     * Resuelve la URL de callback OAuth de Google considerando reverse proxy.
+     */
+    private function resolveGoogleRedirectUrl(): string
+    {
+        $request = request();
+
+        $configured = trim((string) config('services.google.redirect', ''));
+
+        // Si ya hay una URL explícita (normalmente de entorno productivo), siempre se respeta.
+        // Esto evita mismatch cuando los proxies reescriben headers de host/proto.
+        if ($configured !== '' && !str_contains($configured, 'localhost')) {
+            return $configured;
+        }
+
+        $scheme = trim((string) $request->header('X-Forwarded-Proto', ''));
+        if ($scheme === '') {
+            $scheme = $request->getScheme();
+        }
+
+        $host = trim((string) $request->header('X-Forwarded-Host', ''));
+        if ($host === '') {
+            $host = (string) $request->getHost();
+        }
+
+        $prefix = trim((string) $request->header('X-Forwarded-Prefix', ''), '/');
+        $prefixPath = $prefix !== '' ? '/' . $prefix : '';
+
+        return sprintf('%s://%s%s/api/auth/google/callback', $scheme, $host, $prefixPath);
+    }
+
+    /**
      * Resuelve un municipio válido para creación de usuarios OAuth.
      */
     private function resolveMunicipioId(): int
@@ -31,7 +62,15 @@ class GoogleAuthController
         $raw = (string) config('app.frontend_url', env('FRONTEND_URL', 'http://localhost:5173'));
         $first = trim(explode(',', $raw)[0] ?? 'http://localhost:5173');
 
-        return rtrim($first !== '' ? $first : 'http://localhost:5173', '/');
+        $frontendUrl = rtrim($first !== '' ? $first : 'http://localhost:5173', '/');
+        $appUrl = rtrim((string) config('app.url', ''), '/');
+        $appPath = (string) parse_url($appUrl, PHP_URL_PATH);
+
+        if ($appPath !== '' && $appPath !== '/' && !str_ends_with($frontendUrl, $appPath)) {
+            $frontendUrl .= $appPath;
+        }
+
+        return $frontendUrl;
     }
 
     /**
@@ -39,6 +78,9 @@ class GoogleAuthController
      */
     public function redirect()
     {
+        $redirectUrl = $this->resolveGoogleRedirectUrl();
+        config(['services.google.redirect' => $redirectUrl]);
+
         return Socialite::driver('google')
             ->stateless()
             ->redirect();
@@ -51,7 +93,12 @@ class GoogleAuthController
     public function callback()
     {
         try {
-            $googleUser = Socialite::driver('google')->stateless()->user();
+            $redirectUrl = $this->resolveGoogleRedirectUrl();
+            config(['services.google.redirect' => $redirectUrl]);
+
+            $googleUser = Socialite::driver('google')
+                ->stateless()
+                ->user();
 
             $googleId = (string) $googleUser->getId();
             $email = (string) $googleUser->getEmail();
