@@ -85,7 +85,7 @@ class EstudioController
             $user = $request->user(); // Obtiene el usuario autenticado
 
             $estudios = Estudio::where('user_id', $user->id) // Consulta los estudios del usuario con sus documentos
-                ->with(['documentosEstudio:id_documento,documentable_id,archivo,estado'])
+                ->with(['documentosEstudio:id_documento,documentable_id,archivo,estado,motivo_rechazo'])
                 ->orderBy('created_at')
                 ->get();
 
@@ -136,7 +136,7 @@ class EstudioController
 
             $estudio = Estudio::where('id_estudio', $id) // Busca el estudio por ID y por usuario
                 ->where('user_id', $user->id)
-                ->with(['documentosEstudio:id_documento,documentable_id,archivo,estado'])
+                ->with(['documentosEstudio:id_documento,documentable_id,archivo,estado,motivo_rechazo'])
                 ->firstOrFail();
 
             $estudio->documentosEstudio->each(function ($documento) { // Agrega URL del archivo si existe
