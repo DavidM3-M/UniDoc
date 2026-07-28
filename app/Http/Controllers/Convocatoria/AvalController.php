@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Convocatoria;
 
+use App\Constants\ConstTalentoHumano\EstadoPostulacion;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\TalentoHumano\NotificacionController;
 use App\Services\PuntajeAspiranteService;
@@ -48,6 +49,22 @@ class AvalController extends Controller
             ->whereIn('aval', $this->avalAliases($avalNombre))
             ->where('estado', 'aprobado')
             ->exists();
+    }
+
+    /** Valida que la postulación no haya sido rechazada para esta convocatoria. */
+    private function validarPostulacionNoRechazada(User $user, int $convocatoriaId): void
+    {
+        $postulacionRechazada = $user->postulacionesUsuario()
+            ->where('convocatoria_id', $convocatoriaId)
+            ->where('estado_postulacion', EstadoPostulacion::RECHAZADA)
+            ->exists();
+
+        if ($postulacionRechazada) {
+            throw new \Exception(
+                'No se pueden registrar avales porque la postulación fue rechazada para esta convocatoria.',
+                409
+            );
+        }
     }
 
     /** Valida si el aspirante puede tener múltiples contratos */
@@ -208,6 +225,8 @@ class AvalController extends Controller
             }
 
             DB::transaction(function () use ($request, $user, $role, $convocatoriaId, $avalNombre) {
+                $this->validarPostulacionNoRechazada($user, $convocatoriaId);
+
                 // Validar prerequisitos usando convocatoria_avales
                 switch ($role) {
                     case 'Rectoria':
@@ -377,6 +396,7 @@ class AvalController extends Controller
             DB::transaction(function () use ($request, $user, $role, $avalNombre, $convocatoriaId) {
                 // Validar prerequisitos (usando convocatoria_avales si hay convocatoria_id)
                 if ($convocatoriaId) {
+                    $this->validarPostulacionNoRechazada($user, $convocatoriaId);
                     switch ($role) {
                         case 'Coordinador':
                             if (!$this->tieneAval($user->id, $convocatoriaId, 'talento_humano')) {
