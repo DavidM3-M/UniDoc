@@ -35,6 +35,8 @@ Route::group([
     Route::get('filtrar-docentes-experiencia-id/{id}', [FiltrarDocentesController::class, 'obtenerExperienciasPorDocente']);
     Route::get('filtrar-docentes-tipo-experiencia/{tipo}', [FiltrarDocentesController::class, 'filtrarPorTipoExperiencia']);
 
+    // Ruta para listar docentes con su puntaje total y categoría (escalafón)
+    Route::get('listar-docentes-puntaje', [FiltrarDocentesController::class, 'listarDocentesConPuntaje']);
 
     // Rutas para generar certificados
     Route::post('crear-certificados-masivos', [GenerarCertificadosController::class, 'crearCertificadosMasivos']);

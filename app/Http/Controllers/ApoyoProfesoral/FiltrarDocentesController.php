@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Log;
 // Definición de la clase FiltrarDocentesController, que contiene métodos para filtrar y mostrar información de docentes.
 
 use Illuminate\Support\Facades\Storage;
+use App\Services\CalculoPuntajeDocenteService;
 
 class FiltrarDocentesController
 {
@@ -506,6 +507,61 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al filtrar la producción académica.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Lista todos los docentes con su puntaje total y categoría (escalafón) calculados.
+     *
+     * @param CalculoPuntajeDocenteService $servicio
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function listarDocentesConPuntaje(CalculoPuntajeDocenteService $servicio)
+    {
+        try {
+            // Carga los docentes junto con todas las relaciones que necesita
+            // CalculoPuntajeDocenteService::evaluar() para evitar consultas N+1.
+            $docentes = User::role('Docente')
+                ->with([
+                    'contratacionUsuario',
+                    'estudiosUsuario.documentosEstudio',
+                    'idiomasUsuario.documentosIdioma',
+                    'produccionAcademicaUsuario.documentosProduccionAcademica',
+                    'evaluacionDocenteUsuario',
+                ])
+                ->get();
+
+            $data = $docentes->map(function ($docente) use ($servicio) {
+                $resultado = $servicio->evaluar($docente);
+
+                return [
+                    'id' => $docente->id,
+                    'nombre_completo' => trim(preg_replace('/\s+/', ' ', implode(' ', [
+                        $docente->primer_nombre,
+                        $docente->segundo_nombre,
+                        $docente->primer_apellido,
+                        $docente->segundo_apellido,
+                    ]))),
+                    'email' => $docente->email,
+                    'numero_identificacion' => $docente->numero_identificacion,
+                    'puntaje_total' => $resultado['puntaje_total'],
+                    'categoria_lograda' => $resultado['categoria_lograda'],
+                    'razon' => $resultado['razon'],
+                ];
+            })->values();
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $data
+            ], 200);
+        } catch (\Exception $e) {
+            Log::error('Error al listar docentes con puntaje: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Ocurrió un error al listar los docentes con su puntaje.',
                 'error' => $e->getMessage()
             ], 500);
         }
