@@ -26,7 +26,12 @@ class Estudio extends Model
         'posible_fecha_graduacion',
         'titulo_estudio',
         'fecha_inicio',
-        'fecha_fin'
+        'fecha_fin',
+        'es_certificado'
+    ];
+
+    protected $casts = [
+        'es_certificado' => 'boolean',
     ];
 
      // Relación polimórfica con documentos

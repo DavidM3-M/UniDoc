@@ -80,7 +80,7 @@ class ExperienciaController
         try {
             $user = $request->user(); // Se obtiene el usuario autenticado.
             $experiencias = Experiencia::where('user_id', $user->id) // Se consultan las experiencias del usuario, incluyendo los documentos asociados.
-                ->with(['documentosExperiencia:id_documento,documentable_id,archivo,estado'])
+                ->with(['documentosExperiencia:id_documento,documentable_id,archivo,estado,motivo_rechazo'])
                 ->orderBy('created_at')
                 ->get();
 
@@ -128,7 +128,7 @@ class ExperienciaController
             $user = $request->user(); // Se obtiene el usuario autenticado.
             $experiencia = Experiencia::where('id_experiencia', $id) // Se busca la experiencia por ID y usuario.
                 ->where('user_id', $user->id)
-                ->with(['documentosExperiencia:id_documento,documentable_id,archivo,estado'])
+                ->with(['documentosExperiencia:id_documento,documentable_id,archivo,estado,motivo_rechazo'])
                 ->firstOrFail();
 
             $experiencia->documentosExperiencia->each(function ($documento) { // Se agrega la URL de los archivos si existen.

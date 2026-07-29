@@ -82,7 +82,7 @@ class ProduccionAcademicaController
          $user = $request->user(); // Obtiene el usuario actual
 
          $producciones = ProduccionAcademica::where('user_id', $user->id) // Consulta las producciones académicas del usuario con sus documentos
-            ->with(['documentosProduccionAcademica:id_documento,documentable_id,archivo,estado'])
+            ->with(['documentosProduccionAcademica:id_documento,documentable_id,archivo,estado,motivo_rechazo'])
             ->orderBy('created_at')
             ->get();
 
@@ -129,7 +129,7 @@ class ProduccionAcademicaController
 
          $produccion = ProduccionAcademica::where('id_produccion_academica', $id) // Busca la producción académica del usuario por ID
             ->where('user_id', $user->id)
-            ->with(['documentosProduccionAcademica:id_documento,documentable_id,archivo,estado'])
+            ->with(['documentosProduccionAcademica:id_documento,documentable_id,archivo,estado,motivo_rechazo'])
             ->firstOrFail();
 
          $produccion->documentosProduccionAcademica->each(function ($documento) { // Agrega URL pública del archivo a cada documento

@@ -84,7 +84,7 @@ class IdiomaController
             $user = $request->user(); // Obtiene el usuario autenticado
 
             $idiomas = Idioma::where('user_id', $user->id) // Consulta los idiomas asociados al usuario
-                ->with(['documentosIdioma:id_documento,documentable_id,archivo,estado'])
+                ->with(['documentosIdioma:id_documento,documentable_id,archivo,estado,motivo_rechazo'])
                 ->orderBy('created_at')
                 ->get();
 
@@ -131,7 +131,7 @@ class IdiomaController
 
             $idioma = Idioma::where('id_idioma', $id) // Busca el idioma por ID e ID del usuario
                 ->where('user_id', $user->id)
-                ->with(['documentosIdioma:id_documento,documentable_id,archivo,estado'])
+                ->with(['documentosIdioma:id_documento,documentable_id,archivo,estado,motivo_rechazo'])
                 ->firstOrFail(); // Falla si no encuentra el idioma
 
             $idioma->documentosIdioma->each(function ($documento) { // Añade URL completa a cada archivo

@@ -103,13 +103,14 @@ class CalculoPuntajeDocenteService
             ];
         // Si tiene Doctorado pero no cumple reuqisiatos para Titular, es Asociado
         } elseif ($tieneDoctorado) {
-            $faltantes = collect($cumpleTitular)->filter(fn($v) => !$v)->keys()->toArray();
+            $faltantesDetalle = $this->detalleFaltantes($cumpleTitular, $titular, $user, $anios, $puntaje);
+            $faltantes = collect($faltantesDetalle)->pluck('campo')->toArray();
             $resultado = [
                 'valido' => true,
                 'categoria_lograda' => 'Asociado',
                 'razon' => 'Tiene Doctorado aprobado. Clasificado como Asociado. Para ascender a Titular le faltan: ' . implode(', ', $faltantes),
                 'puntaje_total' => $puntaje,
-                'faltantes_por_categoria' => ['Titular' => $faltantes],
+                'faltantes_por_categoria' => ['Titular' => $faltantesDetalle],
             ];
         // Si no tiene doctorado, se evalúa para Asistente o Auxiliar
         } else {
@@ -138,18 +139,68 @@ class CalculoPuntajeDocenteService
                 ];
             // Si no cumple requisitos, queda en Auxiliar
             } else {
-                $faltantesAsistente = collect($cumpleAsistente)->filter(fn($v) => !$v)->keys()->toArray();
+                $faltantesDetalle = $this->detalleFaltantes($cumpleAsistente, $asistente, $user, $anios, $puntaje);
+                $faltantesAsistente = collect($faltantesDetalle)->pluck('campo')->toArray();
                 $resultado = [
                     'valido' => true,
                     'categoria_lograda' => 'Auxiliar',
                     'razon' => 'No cumple requisitos para categorías superiores. Le faltan para Asistente: ' . implode(', ', $faltantesAsistente),
                     'puntaje_total' => $puntaje,
-                    'faltantes_por_categoria' => ['Asistente' => $faltantesAsistente],
+                    'faltantes_por_categoria' => ['Asistente' => $faltantesDetalle],
                 ];
             }
         }
 
         return $resultado; // Devolver la evaluación completa
+    }
+
+    // Construye, para cada criterio que no se cumple, un mensaje claro con el valor requerido y el actual del docente
+    protected function detalleFaltantes(array $cumple, array $requisitos, User $user, int $anios, int $puntaje): array
+    {
+        $evaluacionActual = optional($user->evaluacionDocenteUsuario)->promedio_evaluacion_docente;
+
+        // Descripción de cada criterio: mensaje para el usuario, valor requerido y valor actual (si aplica)
+        $info = [
+            'formacion' => [
+                'mensaje' => "Debe tener un estudio de tipo {$requisitos['formacion']} con documento aprobado.",
+                'requerido' => $requisitos['formacion'],
+                'actual' => null,
+            ],
+            'ingles' => [
+                'mensaje' => "Debe certificar un nivel de inglés mínimo de {$requisitos['ingles']}, con documento aprobado.",
+                'requerido' => $requisitos['ingles'],
+                'actual' => null,
+            ],
+            'evaluacion' => [
+                'mensaje' => "La evaluación docente debe ser mínimo {$requisitos['evaluacion']}.",
+                'requerido' => $requisitos['evaluacion'],
+                'actual' => $evaluacionActual,
+            ],
+            'puntaje' => [
+                'mensaje' => "Debe alcanzar al menos {$requisitos['puntaje']} puntos de producción académica.",
+                'requerido' => $requisitos['puntaje'],
+                'actual' => $puntaje,
+            ],
+            'anos' => [
+                'mensaje' => "Debe tener al menos {$requisitos['anos']} años de antigüedad en planta.",
+                'requerido' => $requisitos['anos'],
+                'actual' => $anios,
+            ],
+            'produccion_academica' => [
+                'mensaje' => 'Debe tener al menos un producto de producción académica aprobado.',
+                'requerido' => 1,
+                'actual' => null,
+            ],
+        ];
+
+        $faltantes = [];
+        foreach ($cumple as $criterio => $ok) {
+            if (!$ok) {
+                $faltantes[] = array_merge(['campo' => $criterio], $info[$criterio]);
+            }
+        }
+
+        return $faltantes;
     }
 
     // Valida que el nivel de inglés del usuario cumpla o supere el requerido
