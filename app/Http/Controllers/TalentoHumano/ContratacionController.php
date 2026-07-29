@@ -14,6 +14,7 @@ use App\Constants\ConstTalentoHumano\TipoProceso;
 use App\Constants\ConstTalentoHumano\TipoVinculacion;
 use App\Services\AprobarDocumentosService;
 use App\Services\RevertirDocumentosService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -184,17 +185,26 @@ class ContratacionController
     /**
      * Eliminar una contratación y revertir el estado del usuario.
      */
-    public function eliminarContratacion($id)
+    public function eliminarContratacion(Request $request, $id)
     {
-        $motivo = request()->input('motivo');
-        if (empty($motivo) || strlen(trim($motivo)) < 5) {
+        $motivoSeleccionado = trim((string) $request->input('motivo_eliminacion', ''));
+        $motivoTexto = trim((string) $request->input('motivo', ''));
+
+        $motivoFinal = match ($motivoSeleccionado) {
+            'desvinculacion' => 'Se desvinculó del contrato por finalización o desvinculación del proceso.',
+            'no_vinculacion' => 'No se logró vincular al usuario al proceso o contrato.',
+            'otro' => $motivoTexto,
+            default => $motivoTexto ?: $motivoSeleccionado,
+        };
+
+        if (empty($motivoFinal) || strlen(trim($motivoFinal)) < 5) {
             return response()->json([
                 'message' => 'Debe indicar el motivo de la eliminación (mínimo 5 caracteres) por cumplimiento legal.',
             ], 422);
         }
 
         try {
-            DB::transaction(function () use ($id, $motivo) {
+            DB::transaction(function () use ($id, $motivoFinal) {
                 $contratacion = Contratacion::findOrFail($id);
                 $usuario      = $contratacion->usuarioContratacion;
 
@@ -206,7 +216,7 @@ class ContratacionController
                     'tipo_modificacion' => 'eliminacion',
                     'datos_anteriores'  => $datosAnteriores,
                     'datos_nuevos'      => null,
-                    'motivo'            => $motivo,
+                    'motivo'            => $motivoFinal,
                 ]);
 
                 $contratacion->delete();
@@ -217,6 +227,8 @@ class ContratacionController
                         $usuario->syncRoles(['Aspirante']);
                         $this->revertirDocumentosService->revertirDocumentosDeUsuario($usuario);
                     }
+
+                    \App\Http\Controllers\TalentoHumano\NotificacionController::contratacionEliminada($usuario, $motivoFinal, $contratacion->tipo_contrato ?? null);
                 }
             });
 
