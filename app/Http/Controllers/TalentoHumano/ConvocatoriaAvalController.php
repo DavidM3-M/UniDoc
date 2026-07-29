@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\TalentoHumano;
 
+use App\Constants\ConstTalentoHumano\EstadoPostulacion;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Models\TalentoHumano\ConvocatoriaAval;
@@ -11,6 +12,24 @@ use Illuminate\Support\Facades\Log;
 
 class ConvocatoriaAvalController extends Controller
 {
+    /**
+     * Valida que la postulación asociada no haya sido rechazada para la convocatoria.
+     */
+    private function validarPostulacionNoRechazada(User $user, int $convocatoriaId): void
+    {
+        $postulacionRechazada = $user->postulacionesUsuario()
+            ->where('convocatoria_id', $convocatoriaId)
+            ->where('estado_postulacion', EstadoPostulacion::RECHAZADA)
+            ->exists();
+
+        if ($postulacionRechazada) {
+            throw new \Exception(
+                'No se pueden registrar avales porque la postulación fue rechazada para esta convocatoria.',
+                409
+            );
+        }
+    }
+
     // List approvals for a given convocatoria and user (or all for admins)
     public function index(Request $request)
     {
@@ -33,6 +52,9 @@ class ConvocatoriaAvalController extends Controller
             'user_id' => 'required|integer',
             'aval' => 'required|string',
         ]);
+
+        $usuario = User::findOrFail($data['user_id']);
+        $this->validarPostulacionNoRechazada($usuario, $data['convocatoria_id']);
 
         $aval = ConvocatoriaAval::updateOrCreate(
             [
@@ -63,6 +85,8 @@ class ConvocatoriaAvalController extends Controller
         }
 
         $aval = ConvocatoriaAval::findOrFail($id);
+        $usuario = User::findOrFail($aval->user_id);
+        $this->validarPostulacionNoRechazada($usuario, $aval->convocatoria_id);
 
         // Verificar permisos: solo usuarios con rol igual al nombre del aval pueden aprobar/rechazar
         $user = Auth::user();
