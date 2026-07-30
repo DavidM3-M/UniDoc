@@ -643,8 +643,11 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | POST | `/talentoHumano/avales` | Crea / actualiza aval |
 | PUT | `/talentoHumano/avales/{id}` | Aprueba o rechaza aval |
 | POST | `/talento-humano/rechazar-aval/{userId}` | Rechaza perfil del aspirante (cadena de avales) |
+<<<<<<< HEAD
+=======
 | POST | `/talento-humano/aval-hoja-vida/{userId}` | Otorga aval de Talento Humano |
 | GET | `/talento-humano/usuarios/{userId}/avales` | Avales de un usuario (nuevo o legado según `?convocatoria_id`) |
+>>>>>>> 95d2f50479d8cb3b3a68b6f3a3efbc25b4c5cdb0
 
 **Campos `PUT /talentoHumano/avales/{id}` (JSON):**
 
@@ -653,6 +656,8 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | `estado` | string | Sí | `pending`, `aprobado`, `rechazado` |
 | `motivo_rechazo` | string | **Sí si `rechazado`** | Motivo del rechazo |
 
+<<<<<<< HEAD
+=======
 **Campos `POST /talento-humano/aval-hoja-vida/{userId}` (JSON):**
 
 | Campo | Tipo | Requerido | Descripción |
@@ -680,14 +685,18 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 }
 ```
 
+>>>>>>> 95d2f50479d8cb3b3a68b6f3a3efbc25b4c5cdb0
 **Campos `POST /talento-humano/rechazar-aval/{userId}` (JSON):**
 
 | Campo | Tipo | Requerido | Descripción |
 |-------|------|-----------|-------------|
 | `motivo_rechazo` | string | Sí | Razón del rechazo. Se notifica al aspirante y se marcan sus postulaciones activas como `Rechazada` |
+<<<<<<< HEAD
+=======
 | `convocatoria_id` | integer | No | Si se envía, el rechazo aplica solo al aval de esa convocatoria (nuevo flujo); si se omite, aplica al aval global del usuario (flujo legado) |
 
 > **Nota:** Lo mismo aplica a `POST /coordinador/rechazar-aval/{userId}`, `POST /vicerrectoria/rechazar-aval/{userId}` y `POST /rectoria/rechazar-aval/{userId}`.
+>>>>>>> 95d2f50479d8cb3b3a68b6f3a3efbc25b4c5cdb0
 
 ---
 
@@ -1257,6 +1266,11 @@ Cada rol cuenta con un endpoint dedicado de rechazo. Al rechazar se marcan las p
 
 **Body (todos):**
 ```json
+<<<<<<< HEAD
+{ "motivo_rechazo": "El aspirante no cumple con el perfil requerido" }
+```
+
+=======
 {
   "motivo_rechazo": "El aspirante no cumple con el perfil requerido",
   "convocatoria_id": 3
@@ -1265,6 +1279,7 @@ Cada rol cuenta con un endpoint dedicado de rechazo. Al rechazar se marcan las p
 
 > `convocatoria_id` es **opcional**. Si se envía, aplica el rechazo solo al aval de esa convocatoria (nuevo flujo); si se omite, actúa sobre el aval global del usuario (flujo legado).
 
+>>>>>>> 95d2f50479d8cb3b3a68b6f3a3efbc25b4c5cdb0
 ---
 
 ### 3 — Rechazo de aval por convocatoria (`convocatoria_avales`)

@@ -230,6 +230,32 @@ class NotificacionController extends Controller
     }
 
     /**
+     * Notifica al usuario cuando se elimina su contrato por decisión de Talento Humano.
+     */
+    public static function contratacionEliminada(User $usuario, string $motivo, ?string $tipoContrato = null): void
+    {
+        $asunto  = 'Se ha eliminado tu contrato en UniDoc';
+        $mensaje = 'Tu contrato en UniDoc ha sido eliminado por Talento Humano.';
+
+        $detalles = [
+            'Motivo de eliminación' => $motivo,
+        ];
+
+        if (!empty($tipoContrato)) {
+            $detalles['Tipo de contrato'] = $tipoContrato;
+        }
+
+        try {
+            Mail::to($usuario->email)->send(
+                new NotificacionMail($asunto, $mensaje, $usuario->primer_nombre, $detalles)
+            );
+            $usuario->notify(new NotificacionGeneral($mensaje));
+        } catch (\Exception $e) {
+            Log::error("Error al notificar eliminación de contratación a {$usuario->email}: " . $e->getMessage());
+        }
+    }
+
+    /**
      * Notifica a los Coordinadores que un aspirante tiene el aval de Talento Humano
      * y está listo para revisión de Coordinación.
      *
