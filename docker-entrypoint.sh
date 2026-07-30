@@ -12,6 +12,8 @@ sed -i "s/^Listen 80$/Listen ${PORT}/" /etc/apache2/ports.conf
 # Ajustar el VirtualHost en todos los sites habilitados
 sed -i "s/<VirtualHost \*:80>/<VirtualHost *:${PORT}>/" /etc/apache2/sites-available/*.conf
 
+<<<<<<< HEAD
+=======
 # Asegurar que Apache puede seguir symlinks (necesario para /storage/)
 sed -i 's/Options -Indexes$/Options -Indexes +FollowSymLinks/' /etc/apache2/conf-enabled/docker-php.conf 2>/dev/null || true
 sed -i 's/Options Indexes$/Options Indexes +FollowSymLinks/' /etc/apache2/conf-enabled/docker-php.conf 2>/dev/null || true
@@ -53,6 +55,7 @@ else
     echo ">> Base de datos ya inicializada ($ROLES_COUNT roles). Saltando seeders."
 fi
 
+>>>>>>> 95d2f50479d8cb3b3a68b6f3a3efbc25b4c5cdb0
 # Cachés de Laravel (no requieren DB, mejoran el tiempo de arranque en frío)
 php artisan config:cache  || true
 php artisan route:cache   || true
