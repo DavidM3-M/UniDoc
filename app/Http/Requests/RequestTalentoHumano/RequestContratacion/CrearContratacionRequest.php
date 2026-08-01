@@ -10,6 +10,7 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Auth;
 class CrearContratacionRequest extends FormRequest
 {
     /**
@@ -42,8 +43,19 @@ class CrearContratacionRequest extends FormRequest
             'convocatoria_id' => 'nullable|integer|exists:convocatorias,id_convocatoria',
              // El campo `observaciones` es opcional (`nullable`), pero si está presente, debe ser una cadena (`string`).
             // Además, debe cumplir con un patrón regex que permite letras, números, espacios y guiones.
+            // Motivo: solo se exige cuando es Admin quien crea la contratación (bypass del flujo de avales), para trazabilidad legal en la bitácora.
+            'motivo' => [Rule::requiredIf(fn () => $this->esAdmin()), 'string', 'min:5', 'max:500'],
         ];
     }
+
+    private function esAdmin(): bool
+    {
+        /** @var \App\Models\Usuario\User|null $user */
+        $user = Auth::user();
+
+        return $user?->hasRole('Administrador') ?? false;
+    }
+
     protected function failedValidation(Validator $validator)
     // Método que se ejecuta cuando la validación falla.
     {

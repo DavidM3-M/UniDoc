@@ -81,9 +81,12 @@ class ContratacionController
 
             DB::transaction(function () use ($request, $user_id, &$contratacionCreada) {
                 $datosContratacion = $request->validated();
+                /** @var \App\Models\Usuario\User $authUser */
+                $authUser = Auth::user();
+                $esAdmin = $authUser->hasRole('Administrador');
 
-                // Verificar avales de convocatoria si aplica
-                if (!empty($datosContratacion['convocatoria_id'])) {
+                // Verificar avales de convocatoria si aplica (Admin puede omitir este flujo)
+                if (!$esAdmin && !empty($datosContratacion['convocatoria_id'])) {
                     $conv = Convocatoria::find($datosContratacion['convocatoria_id']);
                     if ($conv && !empty($conv->avales_establecidos)) {
                         $faltantes = [];
@@ -101,6 +104,9 @@ class ContratacionController
                         }
                     }
                 }
+
+                $motivo = $esAdmin ? ($datosContratacion['motivo'] ?? null) : null;
+                unset($datosContratacion['motivo']); // No persiste en la tabla de contratos
 
                 $datosContratacion['user_id']       = $user_id;
                 $datosContratacion['tipo_proceso']   = $datosContratacion['tipo_proceso']   ?? TipoProceso::CONTRATACION;
@@ -132,7 +138,7 @@ class ContratacionController
                     'tipo_modificacion' => 'creacion',
                     'datos_anteriores' => null,
                     'datos_nuevos'     => $contratacionCreada->toArray(),
-                    'motivo'           => null,
+                    'motivo'           => $motivo,
                 ]);
             });
 
@@ -347,11 +353,15 @@ class ContratacionController
                 'message' => 'Información de contratación obtenida correctamente.',
                 'contratacion' => $contratacion
             ], 200);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'message' => 'Contratación no encontrada.',
+            ], 404);
         } catch (\Exception $e) { // Manejo de excepciones
             return response()->json([
                 'message' => 'Error al obtener la información de la contratación.',
                 'error' => $e->getMessage()
-            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
+            ], is_numeric($e->getCode()) && $e->getCode() >= 400 ? (int) $e->getCode() : 500);
         }
     }
 
@@ -414,7 +424,7 @@ class ContratacionController
             return response()->json([
                 'message' => 'Error al obtener las contrataciones del usuario autenticado.',
                 'error' => $e->getMessage()
-            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
+            ], is_numeric($e->getCode()) && $e->getCode() >= 400 ? (int) $e->getCode() : 500);
         }
     }
 }
