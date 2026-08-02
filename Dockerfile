@@ -15,14 +15,8 @@ RUN apt-get update && apt-get install -y \
     libmagickwand-dev \
     imagemagick \
     ghostscript \
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-=======
     poppler-utils \
->>>>>>> 7f3bc2997a51f7c7a305bd059cafd2d5412843e0
     libpq-dev \
->>>>>>> 95d2f50479d8cb3b3a68b6f3a3efbc25b4c5cdb0
     && rm -rf /var/lib/apt/lists/*
 
 # Permitir que ImageMagick procese PDFs (necesario para spatie/pdf-to-image)
@@ -31,12 +25,8 @@ RUN sed -i 's/<policy domain="coder" rights="none" pattern="PDF" \/>/<policy dom
 # ─── Extensiones PHP ──────────────────────────────────────────────────────
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install \
-        pdo_mysql \
-<<<<<<< HEAD
-=======
         pdo_pgsql \
         pgsql \
->>>>>>> 95d2f50479d8cb3b3a68b6f3a3efbc25b4c5cdb0
         mbstring \
         exif \
         pcntl \
@@ -62,14 +52,9 @@ RUN { \
     echo 'opcache.fast_shutdown=1'; \
 } > /usr/local/etc/php/conf.d/opcache.ini
 
-<<<<<<< HEAD
-# ─── Apache: habilitar mod_rewrite ───────────────────────────────────────
-RUN a2enmod rewrite
-=======
 # ─── Apache: habilitar mod_rewrite y seguir symlinks ─────────────────────
 RUN a2enmod rewrite \
     && sed -i 's/Options -Indexes$/Options -Indexes +FollowSymLinks/' /etc/apache2/conf-enabled/docker-php.conf 2>/dev/null || true
->>>>>>> 95d2f50479d8cb3b3a68b6f3a3efbc25b4c5cdb0
 
 # ─── Composer ────────────────────────────────────────────────────────────
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
@@ -98,14 +83,9 @@ RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
         /etc/apache2/sites-available/*.conf \
     && sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' \
         /etc/apache2/apache2.conf \
-<<<<<<< HEAD
-        /etc/apache2/conf-available/*.conf
-=======
         /etc/apache2/conf-available/*.conf \
     && printf '\n<Directory /var/www/html/public>\n    AllowOverride All\n    Require all granted\n</Directory>\n' \
         >> /etc/apache2/sites-available/000-default.conf
->>>>>>> 95d2f50479d8cb3b3a68b6f3a3efbc25b4c5cdb0
-
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 # Eliminar CRLF (Windows) para que el script funcione en Linux
 RUN sed -i 's/\r$//' /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
