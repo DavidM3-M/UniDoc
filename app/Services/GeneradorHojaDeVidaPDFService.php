@@ -190,7 +190,6 @@ class GeneradorHojaDeVidaPDFService
                 'Fecha Afiliación Efectiva:' => $epsUsuario->fecha_afiliacion_efectiva,
                 'Fecha Finalización Afiliación:' => $epsUsuario->fecha_finalizacion_afiliacion ?? 'No aplica',
                 'Tipo Afiliado:' => $epsUsuario->tipo_afiliado,
-                'Número Afiliado:' => $epsUsuario->numero_afiliado ?? 'No aplica',
             ];
             // Recorre el array y lo imprime en el PDF
             foreach ($datos as $etiqueta => $valor) {

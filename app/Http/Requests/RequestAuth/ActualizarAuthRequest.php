@@ -30,7 +30,7 @@ class ActualizarAuthRequest extends FormRequest
         return [
             'municipio_id'           => 'sometimes|required|exists:municipios,id_municipio',
             'tipo_identificacion'    => ['sometimes','required','string', Rule::in(TipoIdentificacion::all())],// llamo a la constante TipoIdentificacion para obtener los tipos de identificacion
-            'numero_identificacion'  => 'sometimes|required|string|max:50',
+            'numero_identificacion'  => 'sometimes|required|string|max:50|unique:users,numero_identificacion,' . $this->user()->id,
             'genero'                 => ['sometimes','nullable','string', Rule::in(Genero::all())],//llamo a la constante genero para obtener los tipos de genero
             'primer_nombre'          => 'sometimes|required|string|max:100|regex:/^[\pL\pN\s\-]+$/u',
             'segundo_nombre'         => 'sometimes|nullable|string|max:100|regex:/^[\pL\pN\s\-]+$/u',
