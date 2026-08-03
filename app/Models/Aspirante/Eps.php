@@ -24,8 +24,7 @@ class Eps extends Model
         'estado_afiliacion',
         'fecha_afiliacion_efectiva',
         'fecha_finalizacion_afiliacion',
-        'tipo_afiliado',
-        'numero_afiliado'
+        'tipo_afiliado'
     ];
     
 
