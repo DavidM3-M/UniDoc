@@ -57,8 +57,12 @@ class RutController
             DB::transaction(function () use ($request) { // Se crea el RUT dentro de una transacción de base de datos
 
                 $datos = $request->validated(); // Obtiene los datos validados desde la solicitud
+                $responsabilidades = $datos['responsabilidades_tributarias']; // Se manejan aparte (relación muchos a muchos)
+                unset($datos['responsabilidades_tributarias']);
+
                 $datos['user_id'] = $request->user()->id; // Asigna el ID del usuario autenticado
                 $rut = Rut::create($datos); // Crea el nuevo registro de RUT en la base de datos
+                $rut->responsabilidadesTributarias()->sync($responsabilidades);
 
                 if ($request->hasFile('archivo')) { // Si el usuario adjunta un archivo, se guarda
                     $this->archivoService->guardarArchivoDocumento($request->file('archivo'), $rut, 'Rut');
@@ -92,7 +96,10 @@ class RutController
         try {
 
             $rut = Rut::where('user_id', $request->user()->id) // Busca el RUT asociado al usuario actual y carga sus documentos relacionados
-                ->with(['documentosRut:id_documento,documentable_id,archivo,estado'])
+                ->with([
+                    'documentosRut:id_documento,documentable_id,archivo,estado',
+                    'responsabilidadesTributarias:id,codigo,descripcion',
+                ])
                 ->first(); // Si no se encuentra, lanza una excepción
 
             if (!$rut) {
@@ -135,7 +142,13 @@ class RutController
 
             DB::transaction(function () use ($request) { // Ejecuta la actualización dentro de una transacción
                 $rut = Rut::where('user_id', $request->user()->id)->firstOrFail(); // Busca el RUT del usuario autenticado
-                $rut->update($request->validated()); // Actualiza el registro con los datos validados de la solicitud
+
+                $datos = $request->validated();
+                if (array_key_exists('responsabilidades_tributarias', $datos)) {
+                    $rut->responsabilidadesTributarias()->sync($datos['responsabilidades_tributarias']);
+                    unset($datos['responsabilidades_tributarias']);
+                }
+                $rut->update($datos); // Actualiza el registro con los datos validados de la solicitud
 
                 if ($request->hasFile('archivo')) { // Si el usuario proporciona un nuevo archivo, se actualiza
                     $this->archivoService->actualizarArchivoDocumento($request->file('archivo'), $rut, 'Rut');

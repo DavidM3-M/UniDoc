@@ -136,8 +136,21 @@ class UserController
             return response()->json(['message' => 'Usuario no encontrado'], 404);
         }
 
-        //Eliminar el usuario
-        $user->delete();
+        try {
+            //Eliminar el usuario
+            $user->delete();
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Código SQLSTATE 23503 = foreign_key_violation (Postgres y MySQL)
+            if ($e->getCode() === '23503') {
+                return response()->json([
+                    'message' => 'No se puede eliminar el usuario porque tiene registros asociados (postulaciones, contrataciones, estudios, documentos, etc.)',
+                ], 409);
+            }
+
+            return response()->json([
+                'message' => 'Error al eliminar el usuario',
+            ], 500);
+        }
 
         //Devolver respuesta con el usuario eliminado
         return response()->json(['message' => 'Usuario eliminado'], 200);

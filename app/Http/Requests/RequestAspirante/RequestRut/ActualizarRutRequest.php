@@ -3,7 +3,6 @@
 namespace App\Http\Requests\RequestAspirante\RequestRut;
 
 use Illuminate\Foundation\Http\FormRequest;
-use App\Constants\ConstRut\CodigoCiiu;
 use App\Constants\ConstRut\TipoPersona;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -22,6 +21,17 @@ class ActualizarRutRequest extends FormRequest
     }
 
     /**
+     * La razón social solo aplica a personas jurídicas. Si en esta solicitud
+     * se envía tipo_persona = "Natural", se fuerza a null antes de validar.
+     */
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('tipo_persona') && $this->input('tipo_persona') !== TipoPersona::JURIDICA) {
+            $this->merge(['razon_social' => null]);
+        }
+    }
+
+    /**
      * Get the validation rules that apply to the request.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
@@ -34,18 +44,16 @@ class ActualizarRutRequest extends FormRequest
                // El campo `numero_rut` es opcional (`sometimes`), pero si está presente, es obligatorio (`required`).
             // Debe ser una cadena (`string`) con un mínimo de 7 caracteres y un máximo de 100.
             // Además, debe cumplir con un patrón regex que permite letras, números, espacios y guiones.
-            'razon_social'                  => 'sometimes|required|string|min:7|max:100|regex:/^[\pL\pN\s\-]+$/u',
-              // El campo `razon_social` es opcional, pero si está presente, es obligatorio.
-            // Debe ser una cadena con un mínimo de 7 caracteres y un máximo de 100, y cumplir con el mismo patrón regex.
+            'razon_social'                  => 'sometimes|nullable|required_if:tipo_persona,' . TipoPersona::JURIDICA . '|string|min:7|max:100|regex:/^[\pL\pN\s\-]+$/u',
+              // Solo es obligatoria cuando `tipo_persona` es "Juridica"; para "Natural" se admite null (ver prepareForValidation).
             'tipo_persona'                  => ['sometimes','required','string', Rule::in(TipoPersona::all())],
              // El campo `tipo_persona` es opcional, pero si está presente, es obligatorio.
             // Su valor debe estar dentro de los valores definidos en `TipoPersona::all()`.
-            'codigo_ciiu'                   => ['sometimes','required','string', Rule::in(CodigoCiiu::all())],
-            // El campo `codigo_ciiu` es opcional, pero si está presente, es obligatorio.
-            // Su valor debe estar dentro de los valores definidos en `CodigoCiiu::all()`.
-            'responsabilidades_tributarias' => 'sometimes|required|string|min:7|max:100',
-             // El campo `responsabilidades_tributarias` es opcional, pero si está presente, es obligatorio.
-            // Debe ser una cadena con un mínimo de 7 caracteres y un máximo de 100.
+            'codigo_ciiu'                   => 'sometimes|required|string|exists:codigos_ciiu,codigo',
+            // El campo `codigo_ciiu` es opcional, pero si está presente, debe existir en el catálogo oficial.
+            'responsabilidades_tributarias'   => 'sometimes|required|array|min:1',
+            'responsabilidades_tributarias.*' => 'integer|exists:responsabilidades_tributarias,id',
+             // Un RUT puede tener varias responsabilidades tributarias (catálogo oficial de la DIAN).
             'archivo'                       => 'sometimes|nullable|file|mimes:pdf|max:2048', // Validación del archivo
               // El campo `archivo` es opcional, pero si está presente, debe ser un archivo (`file`) con extensiones permitidas
             // (`pdf`, `jpg`, `png`) y su tamaño no debe exceder los 2048 KB.
