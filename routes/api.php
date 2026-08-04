@@ -8,6 +8,8 @@ require __DIR__ . '/ubicaciones.php';
 require __DIR__ . '/constantes.php';
 // Incluye el archivo instituciones.php, contiene la ruta del catálogo de instituciones educativas (MEN)
 require __DIR__ . '/instituciones.php';
+// Incluye el archivo bancos.php, contiene la ruta del catálogo de bancos (datos.gov.co)
+require __DIR__ . '/bancos.php';
 // Incluye el archivo admin.php, contiene rutas relacionadas con la administración
 require __DIR__ . '/admin.php';
 // Incluye el archivo aspirante.php, contiene rutas relacionadas con los aspirantes

@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Models\Usuario\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Models\Aspirante\Documento;
+use App\Models\Rut\ResponsabilidadTributaria;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 
@@ -25,21 +27,30 @@ class Rut extends Model
         'razon_social',
         'tipo_persona',
         'codigo_ciiu',
-        'responsabilidades_tributarias',
     ];
-    
-    
+
+
     //relacion polimorfica con la tabla documentos
     public function documentosRut():MorphMany
     {
         return $this->morphMany(Documento::class, 'documentable');
     }
-    
+
     //relacion uno a uno con la tabla usuarios
     public function usuarioRut(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id', 'id');
     }
-    
+
+    // relacion muchos a muchos con la tabla responsabilidades_tributarias
+    public function responsabilidadesTributarias(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            ResponsabilidadTributaria::class,
+            'rut_responsabilidad_tributaria',
+            'rut_id',
+            'responsabilidad_tributaria_id'
+        );
+    }
 
 }

@@ -19,6 +19,7 @@ Route::group([
     // Constantes relacionadas con el RUT
     Route::get('tipo-persona', [ConstantesController::class, 'obtenerTipoPersona']);
     Route::get('codigo-ciiu', [ConstantesController::class, 'obtenerCodigoCiiu']);
+    Route::get('responsabilidades-tributarias', [ConstantesController::class, 'obtenerResponsabilidadesTributarias']);
 
     // Constantes relacionadas con EPS (Entidad Prestadora de Salud)
     Route::get('estado-afiliacion', [ConstantesController::class, 'obtenerEstadoAfiliacionEps']);

@@ -280,6 +280,21 @@ class AuthApiTest extends TestCase
                  ->assertJsonPath('errors.genero', fn($v) => !empty($v));
     }
 
+    /** POST /api/auth/actualizar-usuario con numero_identificacion de otro usuario debe retornar 422. */
+    public function test_actualizar_usuario_numero_identificacion_duplicado_retorna_422(): void
+    {
+        $otroUsuario = $this->crearDocente();
+        $user = $this->crearDocente();
+
+        $response = $this->actingAs($user, 'api')
+                         ->postJson('/api/auth/actualizar-usuario', [
+                             'numero_identificacion' => $otroUsuario->numero_identificacion,
+                         ]);
+
+        $response->assertStatus(422)
+                 ->assertJsonPath('errors.numero_identificacion.0', 'Este número de identificación ya ha sido registrado.');
+    }
+
     /** POST /api/auth/actualizar-usuario sin autenticación debe retornar 401. */
     public function test_actualizar_usuario_sin_autenticacion_retorna_401(): void
     {

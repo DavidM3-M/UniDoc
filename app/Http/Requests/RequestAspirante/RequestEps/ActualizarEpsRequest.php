@@ -48,9 +48,6 @@ class ActualizarEpsRequest extends FormRequest
             'tipo_afiliado'                 => ['sometimes','required','string', Rule::in(TipoAfiliado::all())],//llamo a la constante tipo afiliado para obtener los tipos de afiliado
             // Valida que `tipo_afiliado` sea opcional (`sometimes`), requerido si está presente y que su valor esté
             // dentro de los valores definidos en la constante `TipoAfiliado`.
-            'numero_afiliado'               => 'sometimes|nullable|string|max:100|regex:/^[\pL\pN\s\-]+$/u',
-             // Valida que `numero_afiliado` sea opcional (`sometimes`), puede ser nulo (`nullable`), de tipo `string`,
-            // con un máximo de 100 caracteres y que coincida con el patrón de letras, números, espacios y guiones.
             'archivo'                       => 'sometimes|nullable|file|mimes:pdf|max:2048', // Validación del archivo
              // Valida que `archivo` sea opcional (`sometimes`), puede ser nulo (`nullable`), de tipo `file`,
             // con extensiones permitidas `pdf`, `jpg`, `png` y un tamaño máximo de 2048 KB.

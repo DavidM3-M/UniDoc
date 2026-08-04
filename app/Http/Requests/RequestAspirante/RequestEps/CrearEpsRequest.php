@@ -34,7 +34,6 @@ class CrearEpsRequest extends FormRequest
             'fecha_afiliacion_efectiva'     => 'required|date',
             'fecha_finalizacion_afiliacion' => 'nullable|date',
             'tipo_afiliado'                 => ['required','string',  Rule::in(TipoAfiliado::all())],//llamo a la constante tipo afiliado para obtener los tipos de afiliado
-            'numero_afiliado'               => 'nullable|string|max:100|regex:/^[\pL\pN\s\-]+$/u',
             'archivo'                       => 'required|file|mimes:pdf|max:2048', // Validación del archivo
         ];
     }
