@@ -1,0 +1,83 @@
+id_ambito_divulgacion;producto_academico_id;nombre_ambito_divulgacion
+1;1;Revista tipo A1
+2;1;Revista tipo A2
+3;1;Revista tipo B
+4;1;Revista tipo C
+5;2;Carácter científico - Difusión internacional
+6;2;Carácter científico - Difusión nacional
+7;2;Carácter documental - Difusión internacional
+8;2;Carácter documental - Difusión nacional
+9;2;Carácter científico - Difusión regional o local
+10;2;Carácter documental - Difusión regional o local
+11;3;De investigación - Difusión internacional
+12;3;De investigación - Difusión nacional
+13;3;De investigación - Difusión regional
+14;3;De texto - Difusión internacional
+15;3;De texto - Difusión nacional
+16;3;De texto - Difusión regional
+17;3;De ensayo - Difusión internacional
+18;3;De ensayo - Difusión nacional
+19;3;De ensayo - Difusión regional
+20;4;Patente
+21;5;Estudio posdoctoral
+22;6;Reseña crítica
+23;7;De libro
+24;7;Publicada en artículo
+25;8;Obra de creación original artística internacional
+26;8;Obra de creación original artística nacional
+27;8;Obra de creación complementaria internacional
+28;8;Obra de creación complementaria nacional
+29;8;Interpretación impacto internacional
+30;8;Interpretación impacto nacional
+31;8;Publicada en artículo
+32;8;Publicada en artículo
+33;9;Premios
+34;9;Internacional
+35;9;Nacional
+36;9;Regional - Local
+37;10;Revista tipo A1
+38;10;Revista tipo A2
+39;10;Revista tipo B
+40;10;Revista tipo C
+41;11;Producción técnica de innovación tecnológica
+42;11;Producción técnica de adaptación tecnológica
+43;12;Producción software científica
+44;12;Producción software - Técnica
+45;13;Evaluación como par
+46;14;Revista tipo A1
+47;14;Revista tipo A2
+48;14;Revista tipo B
+49;14;Revista tipo C
+50;15;Revista tipo A1
+51;15;Revista tipo A2
+52;15;Revista tipo B
+53;15;Revista tipo C
+54;16;Revista tipo A1
+55;16;Revista tipo A2
+56;16;Revista tipo B
+57;16;Revista tipo C
+58;17;De pregrado laureado
+59;17;De pregrado - Mención honorífica
+60;17;De posgrado laureado
+61;17;De posgrado - Mención honorífica
+62;18;Congreso internacional
+63;18;Congreso nacional
+64;18;Congreso regional
+65;19;Libro de texto - Difusión internacional
+66;19;Libro de texto - Difusión nacional
+67;19;Libro de texto - Difusión regional
+68;20;Arreglo musical
+69;21;Por producto de impacto internacional
+70;21;Por producto de impacto nacional
+71;21;Por producto de impacto regional - local
+72;22;Solista
+73;23;Creación o composición musical
+74;24;Nivel internacional
+75;24;Nivel local
+76;24;Nivel nacional
+77;25;De impacto y circulación internacional
+78;25;De impacto y circulación nacional
+79;25;De impacto y circulación regional - local
+80;26;Obra de creación en diseño o comunicación visual
+81;27;Recital
+82;28;Residencia artística

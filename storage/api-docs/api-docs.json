@@ -1,0 +1,211 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "API de Gestión de EPS",
+        "description": "Endpoints para manejar información de EPS y documentos asociados.",
+        "version": "1.0.0"
+    },
+    "servers": [
+        {
+            "url": "http://localhost:8000/api"
+        }
+    ],
+    "paths": {
+        "/aspirante/crear-eps": {
+            "post": {
+                "tags": [
+                    "EPS"
+                ],
+                "summary": "Crear EPS",
+                "description": "Crea una nueva EPS y sube un archivo asociado (PDF, JPG, PNG). Requiere autenticación.",
+                "operationId": "dfd12d26544ca58eb4c6a89d7bbc0707",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "required": [
+                                    "nombre_eps",
+                                    "tipo_afiliacion",
+                                    "estado_afiliacion",
+                                    "fecha_afiliacion_efectiva",
+                                    "tipo_afiliado",
+                                    "archivo"
+                                ],
+                                "properties": {
+                                    "nombre_eps": {
+                                        "type": "string",
+                                        "maxLength": 100,
+                                        "minLength": 7,
+                                        "example": "Salud Total EPS"
+                                    },
+                                    "tipo_afiliacion": {
+                                        "type": "string",
+                                        "enum": [
+                                            "contributivo",
+                                            "subsidiado",
+                                            "especial"
+                                        ],
+                                        "example": "contributivo"
+                                    },
+                                    "estado_afiliacion": {
+                                        "type": "string",
+                                        "enum": [
+                                            "activo",
+                                            "inactivo",
+                                            "pendiente"
+                                        ],
+                                        "example": "activo"
+                                    },
+                                    "fecha_afiliacion_efectiva": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "example": "2023-01-15"
+                                    },
+                                    "fecha_finalizacion_afiliacion": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "example": "2025-01-15",
+                                        "nullable": true
+                                    },
+                                    "tipo_afiliado": {
+                                        "type": "string",
+                                        "enum": [
+                                            "titular",
+                                            "beneficiario"
+                                        ],
+                                        "example": "titular"
+                                    },
+                                    "numero_afiliado": {
+                                        "type": "string",
+                                        "maxLength": 100,
+                                        "example": "AF123456",
+                                        "nullable": true
+                                    },
+                                    "archivo": {
+                                        "description": "Archivo PDF, JPG o PNG (máx. 2MB)",
+                                        "type": "string",
+                                        "format": "binary"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "EPS creada exitosamente",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "EPS y documento creado exitosamente"
+                                        },
+                                        "data": {
+                                            "$ref": "#/components/schemas/EPS"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Error interno",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Error al crear la EPS"
+                                        },
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Detalles del error..."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "EPS": {
+                "properties": {
+                    "id_eps": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "nombre_eps": {
+                        "type": "string",
+                        "example": "Salud Total EPS"
+                    },
+                    "tipo_afiliacion": {
+                        "type": "string",
+                        "example": "contributivo"
+                    },
+                    "estado_afiliacion": {
+                        "type": "string",
+                        "example": "activo"
+                    },
+                    "fecha_afiliacion_efectiva": {
+                        "type": "string",
+                        "format": "date",
+                        "example": "2023-01-15"
+                    },
+                    "fecha_finalizacion_afiliacion": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    },
+                    "tipo_afiliado": {
+                        "type": "string",
+                        "example": "titular"
+                    },
+                    "numero_afiliado": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "Documento": {
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "archivo": {
+                        "type": "string",
+                        "example": "documentos/Eps/123456789_carnet.pdf"
+                    },
+                    "estado": {
+                        "type": "string",
+                        "example": "pendiente"
+                    }
+                },
+                "type": "object"
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "EPS",
+            "description": "EPS"
+        }
+    ]
+}
