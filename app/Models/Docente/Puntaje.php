@@ -16,8 +16,16 @@ class Puntaje extends Model
     protected $fillable = [
         'user_id',
         'puntaje_total',
+        'categoria_lograda',
+        'umbral_aplicado',
+        'categoria_otorgada_at',
     ];
     // Define los campos que se pueden asignar masivamente (mass assignment) en este modelo.
+
+    protected $casts = [
+        'umbral_aplicado' => 'float',
+        'categoria_otorgada_at' => 'datetime',
+    ];
 
     public function usuarioPuntaje(): BelongsTo
         // Define una relación entre el modelo `Puntaje` y el modelo `User`.

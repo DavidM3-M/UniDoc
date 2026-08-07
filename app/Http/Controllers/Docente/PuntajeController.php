@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Docente;
 
-use App\Services\CalculoPuntajeDocenteService;
+use App\Services\EscalafonDocenteService;
 use Illuminate\Http\Request;
 
 // Este controlador maneja la evaluación y el puntaje de los docentes.
@@ -10,19 +10,18 @@ use Illuminate\Http\Request;
 class PuntajeController
 {
     /**
-     * Evaluar al docente autenticado y guardar su puntaje total.
+     * Evaluar al docente autenticado y guardar su puntaje y categoría.
      *
-     * Este método utiliza el servicio `CalculoPuntajeDocenteService` para calcular el puntaje total
-     * del docente autenticado, basándose en la información relacionada cargada previamente
-     * (estudios, idiomas, experiencias, producción académica, evaluación docente, etc.).
-     * Luego, guarda o actualiza el puntaje total en la base de datos mediante la relación `puntajeUsuario`.
-     * Finalmente, retorna una respuesta JSON con el resultado de la evaluación.
+     * El cálculo usa el umbral de evaluación vigente, que configura el Administrador.
+     * `EscalafonDocenteService` aplica además la regla de no retroactividad: si el umbral
+     * subió después de que al docente se le otorgó su categoría, la conserva mientras
+     * siga cumpliendo los requisitos que regían en ese momento.
      *
      * @param Request $request Solicitud HTTP con el usuario autenticado.
-     * @param CalculoPuntajeDocenteService $servicio Servicio responsable de realizar el cálculo del puntaje docente.
-     * @return \Illuminate\Http\JsonResponse Respuesta JSON con mensaje de éxito y resultado de la evaluación.
+     * @param EscalafonDocenteService $escalafon Resuelve y persiste la categoría efectiva.
+     * @return \Illuminate\Http\JsonResponse Respuesta JSON con el resultado de la evaluación.
      */
-    public function evaluarYGuardarPuntaje(Request $request, CalculoPuntajeDocenteService $servicio)
+    public function evaluarYGuardarPuntaje(Request $request, EscalafonDocenteService $escalafon)
     {
         $user = $request->user(); // Obtener el usuario autenticado
         $user->load([ // Cargar relaciones necesarias para la evaluación
@@ -32,14 +31,10 @@ class PuntajeController
             'experienciasUsuario.documentosExperiencia',
             'produccionAcademicaUsuario.documentosProduccionAcademica',
             'evaluacionDocenteUsuario',
+            'puntajeUsuario', // Categoría ya otorgada, necesaria para la no retroactividad
         ]);
 
-        $resultado = $servicio->evaluar($user); // Evaluar el puntaje del docente utilizando el servicio
-
-        $user->puntajeUsuario()->updateOrCreate( // Actualizar o crear el puntaje del usuario
-            ['user_id' => $user->id],
-            ['puntaje_total' => $resultado['puntaje_total']]
-        );
+        $resultado = $escalafon->evaluarYPersistir($user); // Evaluar, proteger y guardar
 
         return response()->json([ // Retornar la respuesta JSON con el resultado de la evaluación
             'mensaje' => 'Evaluación completada.',

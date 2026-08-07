@@ -4,31 +4,31 @@ namespace App\Services;
 
 use App\Models\Usuario\User;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Log;
 
 // clase que se encarga de calcular el puntaje y categoría de un docente
 class CalculoPuntajeDocenteService
 {
-    // Constante que define los requisitos para cada categoría docente
+    // Constante que define los requisitos para cada categoría docente.
+    //
+    // El umbral mínimo de evaluación docente NO está aquí: lo configura el
+    // Administrador y se resuelve en tiempo de ejecución vía
+    // UmbralEvaluacionDocenteService. El resto de requisitos sigue fijo.
     const CATEGORIAS = [
         'Asistente' => [
             'formacion' => 'Maestría', // Formación mínima: Maestría
             'ingles' => 'B1',          // Nivel mínimo de inglés: B1
-            'evaluacion' => 4.0,       // Evaluación docente mínima: 4.0
             'puntaje' => 20,           // Puntaje mínimo de producción académica
             'anos' => 4                // Anos mínimos en categoría anterior
         ],
         'Asociado' => [
             'formacion' => 'Doctorado',
             'ingles' => 'B2',
-            'evaluacion' => 4.0,
             'puntaje' => 30,
             'anos' => 6
         ],
         'Titular' => [
             'formacion' => 'Doctorado',
             'ingles' => 'B2',
-            'evaluacion' => 4.0,
             'puntaje' => 60,
             'anos' => 8
         ],
@@ -44,9 +44,36 @@ class CalculoPuntajeDocenteService
         'C2' => 6,
     ];
 
-    // Método principal que evalúa el perfil de un usuario (docente)
-    public function evaluar(User $user): array
+    // Orden del escalafón, de menor a mayor. Permite comparar dos categorías
+    // para saber cuál es superior (lo usa la regla de no retroactividad).
+    const ORDEN_CATEGORIAS = ['Ninguna', 'Auxiliar', 'Asistente', 'Asociado', 'Titular'];
+
+    public function __construct(private UmbralEvaluacionDocenteService $umbrales)
     {
+    }
+
+    /**
+     * Posición de una categoría en el escalafón. Mayor número, categoría superior.
+     */
+    public static function rangoCategoria(?string $categoria): int
+    {
+        $posicion = array_search($categoria, self::ORDEN_CATEGORIAS, true);
+
+        return $posicion === false ? 0 : $posicion;
+    }
+
+    /**
+     * Evalúa el perfil de un usuario (docente).
+     *
+     * @param User $user
+     * @param float|null $umbralEvaluacion Umbral de evaluación a aplicar. Si se omite se
+     *        usa el vigente. Se pasa explícitamente para re-evaluar a un docente bajo el
+     *        umbral con el que se le otorgó su categoría (regla de no retroactividad).
+     */
+    public function evaluar(User $user, ?float $umbralEvaluacion = null): array
+    {
+        $umbral = $umbralEvaluacion ?? $this->umbrales->valorVigente();
+
         // Resultado inicial por defecto
         $resultado = [
             'valido' => false,
@@ -54,6 +81,7 @@ class CalculoPuntajeDocenteService
             'razon' => '',
             'puntaje_total' => 0,
             'faltantes_por_categoria' => [],
+            'umbral_evaluacion' => $umbral,
         ];
 
         // Obtener la contratación del docente
@@ -86,7 +114,7 @@ class CalculoPuntajeDocenteService
         $cumpleTitular = [
             'formacion' => $tieneDoctorado,
             'ingles' => $this->validarNivelIngles($user, $titular['ingles']),
-            'evaluacion' => optional($user->evaluacionDocenteUsuario)->promedio_evaluacion_docente >= $titular['evaluacion'],
+            'evaluacion' => optional($user->evaluacionDocenteUsuario)->promedio_evaluacion_docente >= $umbral,
             'puntaje' => $puntaje >= $titular['puntaje'],
             'anos' => $anios >= $titular['anos'],
             'produccion_academica' => $tieneProduccion,
@@ -100,10 +128,11 @@ class CalculoPuntajeDocenteService
                 'razon' => 'Cumple todos los requisitos para Titular.',
                 'puntaje_total' => $puntaje,
                 'faltantes_por_categoria' => [],
+                'umbral_evaluacion' => $umbral,
             ];
         // Si tiene Doctorado pero no cumple reuqisiatos para Titular, es Asociado
         } elseif ($tieneDoctorado) {
-            $faltantesDetalle = $this->detalleFaltantes($cumpleTitular, $titular, $user, $anios, $puntaje);
+            $faltantesDetalle = $this->detalleFaltantes($cumpleTitular, $titular, $user, $anios, $puntaje, $umbral);
             $faltantes = collect($faltantesDetalle)->pluck('campo')->toArray();
             $resultado = [
                 'valido' => true,
@@ -111,6 +140,7 @@ class CalculoPuntajeDocenteService
                 'razon' => 'Tiene Doctorado aprobado. Clasificado como Asociado. Para ascender a Titular le faltan: ' . implode(', ', $faltantes),
                 'puntaje_total' => $puntaje,
                 'faltantes_por_categoria' => ['Titular' => $faltantesDetalle],
+                'umbral_evaluacion' => $umbral,
             ];
         // Si no tiene doctorado, se evalúa para Asistente o Auxiliar
         } else {
@@ -122,7 +152,7 @@ class CalculoPuntajeDocenteService
                     strtoupper(trim($e->tipo_estudio)) === strtoupper(trim($asistente['formacion']))
                 ),
                 'ingles' => $this->validarNivelIngles($user, $asistente['ingles']),
-                'evaluacion' => optional($user->evaluacionDocenteUsuario)->promedio_evaluacion_docente >= $asistente['evaluacion'],
+                'evaluacion' => optional($user->evaluacionDocenteUsuario)->promedio_evaluacion_docente >= $umbral,
                 'puntaje' => $puntaje >= $asistente['puntaje'],
                 'anos' => $anios >= $asistente['anos'],
                 'produccion_academica' => $tieneProduccion,
@@ -136,10 +166,11 @@ class CalculoPuntajeDocenteService
                     'razon' => 'Cumple todos los requisitos para Asistente.',
                     'puntaje_total' => $puntaje,
                     'faltantes_por_categoria' => [],
+                    'umbral_evaluacion' => $umbral,
                 ];
             // Si no cumple requisitos, queda en Auxiliar
             } else {
-                $faltantesDetalle = $this->detalleFaltantes($cumpleAsistente, $asistente, $user, $anios, $puntaje);
+                $faltantesDetalle = $this->detalleFaltantes($cumpleAsistente, $asistente, $user, $anios, $puntaje, $umbral);
                 $faltantesAsistente = collect($faltantesDetalle)->pluck('campo')->toArray();
                 $resultado = [
                     'valido' => true,
@@ -147,6 +178,7 @@ class CalculoPuntajeDocenteService
                     'razon' => 'No cumple requisitos para categorías superiores. Le faltan para Asistente: ' . implode(', ', $faltantesAsistente),
                     'puntaje_total' => $puntaje,
                     'faltantes_por_categoria' => ['Asistente' => $faltantesDetalle],
+                    'umbral_evaluacion' => $umbral,
                 ];
             }
         }
@@ -155,7 +187,7 @@ class CalculoPuntajeDocenteService
     }
 
     // Construye, para cada criterio que no se cumple, un mensaje claro con el valor requerido y el actual del docente
-    protected function detalleFaltantes(array $cumple, array $requisitos, User $user, int $anios, int $puntaje): array
+    protected function detalleFaltantes(array $cumple, array $requisitos, User $user, int $anios, int $puntaje, float $umbral): array
     {
         $evaluacionActual = optional($user->evaluacionDocenteUsuario)->promedio_evaluacion_docente;
 
@@ -172,8 +204,8 @@ class CalculoPuntajeDocenteService
                 'actual' => null,
             ],
             'evaluacion' => [
-                'mensaje' => "La evaluación docente debe ser mínimo {$requisitos['evaluacion']}.",
-                'requerido' => $requisitos['evaluacion'],
+                'mensaje' => "La evaluación docente debe ser mínimo {$umbral}.",
+                'requerido' => $umbral,
                 'actual' => $evaluacionActual,
             ],
             'puntaje' => [

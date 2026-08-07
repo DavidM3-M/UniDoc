@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Aspirante\NormativaController;
 use App\Http\Controllers\Admin\ReporteController;
 use App\Http\Controllers\Admin\AspiranteAdminController;
+use App\Http\Controllers\Admin\UmbralEvaluacionController;
 
 Route::group([
     'middleware' => [ 'api','auth:api', 'role:Administrador'],
@@ -35,6 +36,12 @@ Route::group([
     Route::get('obtener-normativa/{id}', [NormativaController::class, 'obtenerNormativaPorId']);
     Route::put('actualizar-normativa/{id}', [NormativaController::class, 'actualizarNormativa']);
     Route::delete('eliminar-normativa/{id}', [NormativaController::class, 'eliminarNormativa']);
+
+    // Umbral minimo de evaluacion docente exigido para ascender de categoria.
+    // No se edita ni se borra: registrar uno nuevo cierra el anterior y conserva el historico.
+    Route::get('umbral-evaluacion', [UmbralEvaluacionController::class, 'obtenerUmbralVigente']);
+    Route::get('umbral-evaluacion/historico', [UmbralEvaluacionController::class, 'obtenerHistoricoUmbrales']);
+    Route::post('umbral-evaluacion', [UmbralEvaluacionController::class, 'crearUmbral']);
 
     // Rutas de reportes
     Route::get('usuarios-excel', [ReporteController::class, 'usuariosExcel']);

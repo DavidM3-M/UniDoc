@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Log;
 // Definición de la clase FiltrarDocentesController, que contiene métodos para filtrar y mostrar información de docentes.
 
 use Illuminate\Support\Facades\Storage;
-use App\Services\CalculoPuntajeDocenteService;
+use App\Services\EscalafonDocenteService;
 
 class FiltrarDocentesController
 {
@@ -515,10 +515,10 @@ class FiltrarDocentesController
     /**
      * Lista todos los docentes con su puntaje total y categoría (escalafón) calculados.
      *
-     * @param CalculoPuntajeDocenteService $servicio
+     * @param EscalafonDocenteService $escalafon
      * @return \Illuminate\Http\JsonResponse
      */
-    public function listarDocentesConPuntaje(CalculoPuntajeDocenteService $servicio)
+    public function listarDocentesConPuntaje(EscalafonDocenteService $escalafon)
     {
         try {
             // Carga los docentes junto con todas las relaciones que necesita
@@ -530,11 +530,13 @@ class FiltrarDocentesController
                     'idiomasUsuario.documentosIdioma',
                     'produccionAcademicaUsuario.documentosProduccionAcademica',
                     'evaluacionDocenteUsuario',
+                    'puntajeUsuario', // Categoría ya otorgada, para la regla de no retroactividad
                 ])
                 ->get();
 
-            $data = $docentes->map(function ($docente) use ($servicio) {
-                $resultado = $servicio->evaluar($docente);
+            $data = $docentes->map(function ($docente) use ($escalafon) {
+                // Solo resuelve: el listado no debe persistir ni otorgar categorías.
+                $resultado = $escalafon->resolver($docente);
 
                 return [
                     'id' => $docente->id,
@@ -548,6 +550,8 @@ class FiltrarDocentesController
                     'numero_identificacion' => $docente->numero_identificacion,
                     'puntaje_total' => $resultado['puntaje_total'],
                     'categoria_lograda' => $resultado['categoria_lograda'],
+                    'categoria_protegida' => $resultado['categoria_protegida'],
+                    'umbral_evaluacion' => $resultado['umbral_evaluacion'],
                     'razon' => $resultado['razon'],
                 ];
             })->values();

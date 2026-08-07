@@ -10,6 +10,7 @@ use App\Models\Docente\EvaluacionDocente;
 use App\Models\TalentoHumano\Contratacion;
 use App\Models\Usuario\User;
 use App\Services\CalculoPuntajeDocenteService;
+use App\Services\UmbralEvaluacionDocenteService;
 use Tests\TestCase;
 
 /**
@@ -30,7 +31,17 @@ class CalculoPuntajeDocenteServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->servicio = new CalculoPuntajeDocenteService();
+
+        // Doble del servicio de umbrales: devuelve 4.0 sin tocar base de datos ni caché,
+        // que es el valor que estuvo hardcodeado y el que siembra el seeder inicial.
+        $umbrales = new class extends UmbralEvaluacionDocenteService {
+            public function valorVigente(): float
+            {
+                return 4.0;
+            }
+        };
+
+        $this->servicio = new CalculoPuntajeDocenteService($umbrales);
     }
 
     // ---------------------------------------------------------------
@@ -387,9 +398,83 @@ class CalculoPuntajeDocenteServiceTest extends TestCase
         $resultado = $this->servicio->evaluar($this->docenteTitular());
 
         $this->assertSame(
-            ['valido', 'categoria_lograda', 'razon', 'puntaje_total', 'faltantes_por_categoria'],
+            ['valido', 'categoria_lograda', 'razon', 'puntaje_total', 'faltantes_por_categoria', 'umbral_evaluacion'],
             array_keys($resultado)
         );
+    }
+
+    // ---------------------------------------------------------------
+    // Umbral configurable (HU-2)
+    // ---------------------------------------------------------------
+
+    public function test_usa_el_umbral_vigente_cuando_no_se_indica_uno(): void
+    {
+        $resultado = $this->servicio->evaluar($this->docenteTitular());
+
+        $this->assertSame(4.0, $resultado['umbral_evaluacion']);
+    }
+
+    public function test_un_umbral_mas_alto_impide_alcanzar_la_categoria(): void
+    {
+        $docente = $this->docenteTitular(['evaluacion' => $this->evaluacion(4.2)]);
+
+        // Con el umbral vigente (4.0) alcanza Titular.
+        $this->assertSame('Titular', $this->servicio->evaluar($docente)['categoria_lograda']);
+
+        // Con un umbral de 4.5 ya no lo cumple.
+        $resultado = $this->servicio->evaluar($docente, 4.5);
+        $this->assertSame('Asociado', $resultado['categoria_lograda']);
+        $this->assertSame(4.5, $resultado['umbral_evaluacion']);
+    }
+
+    public function test_un_umbral_mas_bajo_permite_alcanzar_la_categoria(): void
+    {
+        $docente = $this->docenteTitular(['evaluacion' => $this->evaluacion(3.5)]);
+
+        // Con el umbral vigente (4.0) no llega.
+        $this->assertSame('Asociado', $this->servicio->evaluar($docente)['categoria_lograda']);
+
+        // Con un umbral de 3.0 sí.
+        $this->assertSame('Titular', $this->servicio->evaluar($docente, 3.0)['categoria_lograda']);
+    }
+
+    public function test_el_umbral_indicado_aparece_en_el_mensaje_de_faltantes(): void
+    {
+        $resultado = $this->servicio->evaluar(
+            $this->docenteTitular(['evaluacion' => $this->evaluacion(4.2)]),
+            4.8
+        );
+
+        $faltante = collect($resultado['faltantes_por_categoria']['Titular'])
+            ->firstWhere('campo', 'evaluacion');
+
+        $this->assertSame(4.8, $faltante['requerido']);
+        $this->assertSame('La evaluación docente debe ser mínimo 4.8.', $faltante['mensaje']);
+    }
+
+    public function test_el_umbral_exacto_cumple_tambien_cuando_es_configurado(): void
+    {
+        // La semántica >= debe conservarse sea cual sea el umbral, no solo con 4.0.
+        $resultado = $this->servicio->evaluar(
+            $this->docenteTitular(['evaluacion' => $this->evaluacion(4.5)]),
+            4.5
+        );
+
+        $this->assertSame('Titular', $resultado['categoria_lograda']);
+    }
+
+    public function test_rango_de_categoria_ordena_el_escalafon(): void
+    {
+        $this->assertGreaterThan(
+            CalculoPuntajeDocenteService::rangoCategoria('Asociado'),
+            CalculoPuntajeDocenteService::rangoCategoria('Titular')
+        );
+        $this->assertGreaterThan(
+            CalculoPuntajeDocenteService::rangoCategoria('Auxiliar'),
+            CalculoPuntajeDocenteService::rangoCategoria('Asistente')
+        );
+        $this->assertSame(0, CalculoPuntajeDocenteService::rangoCategoria(null));
+        $this->assertSame(0, CalculoPuntajeDocenteService::rangoCategoria('Inexistente'));
     }
 
     public function test_cada_faltante_describe_campo_mensaje_requerido_y_actual(): void

@@ -24,6 +24,7 @@ class DatabaseSeeder extends Seeder
         $this->call(EvaluadorProduccionSeeder::class);
         $this->call(ProductoAcademicoSeeder::class);
         $this->call(AmbitoDivulgacionSeeder::class);
+        $this->call(UmbralEvaluacionDocenteSeeder::class);
         $this->call(AspiranteSeeder::class);
         $this->call(CoordinadorSeeder::class);
         $this->call(DemoAspirantesSeeder::class);

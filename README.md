@@ -727,6 +727,38 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | PUT | `/admin/actualizar-normativa/{id}` | Actualiza normativa |
 | DELETE | `/admin/eliminar-normativa/{id}` | Elimina normativa |
 
+#### Umbral de evaluación docente
+
+Umbral mínimo de evaluación que un docente debe alcanzar para ascender de categoría. Antes
+estaba fijo en `4.0` dentro de `CalculoPuntajeDocenteService`; ahora lo configura el Administrador.
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| GET | `/admin/umbral-evaluacion` | Umbral vigente |
+| GET | `/admin/umbral-evaluacion/historico` | Histórico completo de umbrales |
+| POST | `/admin/umbral-evaluacion` | Registra un umbral nuevo y cierra el vigente |
+
+**Campos (JSON) de `POST /admin/umbral-evaluacion`:**
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `valor_minimo` | decimal | Sí | Entre `0` y `5`, máximo un decimal |
+| `vigencia_desde` | date | No | Desde cuándo rige. Por defecto hoy; no admite fechas pasadas |
+| `observaciones` | string | No | Justificación del cambio (máx. 500) |
+
+**Reglas de negocio:**
+
+- Los umbrales **no se editan ni se borran**: registrar uno nuevo cierra el anterior con
+  `vigencia_hasta`, conservando el histórico y quién lo registró.
+- **No retroactividad — reglas del momento del otorgamiento.** Subir el umbral no le baja la
+  categoría a quien ya la tenía: al recalcular se re-evalúa al docente con el umbral que regía
+  cuando la obtuvo (`puntajes.umbral_aplicado`). Si bajo aquellas reglas todavía la alcanza, la
+  conserva y la respuesta marca `categoria_protegida: true`. Si perdió un requisito real (por
+  ejemplo le rechazan el doctorado), sí desciende.
+- El umbral vigente se **cachea**; registrar uno nuevo invalida la caché de inmediato.
+- Solo el requisito de evaluación es configurable. Formación, nivel de inglés, puntaje mínimo
+  (20/30/60) y años de antigüedad (4/6/8) siguen fijos en `CalculoPuntajeDocenteService`.
+
 #### Otros
 
 | Método | URI | Descripción |
