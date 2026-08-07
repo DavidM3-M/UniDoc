@@ -172,7 +172,7 @@ La API usa **JWT (JSON Web Token)**. Pasos:
 | Rol | Descripción |
 |---|---|
 | `Aspirante` | Usuario recién registrado; puede completar su HV y postular a convocatorias |
-| `Docente` | Aspirante contratado; accede a sus evaluaciones y puntaje |
+| `Docente` | Aspirante contratado; consulta su evaluación (solo lectura) y su puntaje |
 | `Talento Humano` | Gestiona convocatorias, postulaciones, avales y contrataciones |
 | `Administrador` | Gestión completa de usuarios, roles y normativas |
 | `Coordinador` | Evalúa aspirantes en el proceso de aprobación |
@@ -526,10 +526,13 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | Método | URI | Descripción |
 |--------|-----|-------------|
 | GET | `/docente/ver-contratacion` | Obtiene la contratación del docente autenticado |
-| POST | `/docente/crear-evaluacion` | Crea la evaluación docente inicial |
-| GET | `/docente/ver-evaluaciones` | Ve su propia evaluación |
-| PUT | `/docente/actualizar-evaluacion` | Actualiza la evaluación docente |
+| GET | `/docente/ver-evaluaciones` | Consulta su propia evaluación (solo lectura) |
 | GET | `/docente/evaluar-puntaje` | Calcula y guarda el puntaje total del docente |
+
+> **La evaluación docente no es autoevaluación.** La asigna el rol `Apoyo Profesoral`; el docente
+> únicamente puede consultarla. El promedio asignado alimenta el requisito de ascenso de categoría
+> en `CalculoPuntajeDocenteService` (evaluación ≥ 4.0), por lo que la escritura está restringida a
+> ese rol. Ver [Apoyo Profesoral → Evaluación docente](#evaluación-docente).
 
 ---
 
@@ -893,7 +896,42 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | GET | `/apoyoProfesoral/mostrar-todas-experiencia` | Docentes con experiencias |
 | GET | `/apoyoProfesoral/filtrar-docentes-experiencia-id/{id}` | Experiencias de un docente |
 | GET | `/apoyoProfesoral/filtrar-docentes-tipo-experiencia/{tipo}` | Filtrar por tipo de experiencia |
+| GET | `/apoyoProfesoral/listar-docentes-puntaje` | Docentes con puntaje y categoría (escalafón) |
 | POST | `/apoyoProfesoral/crear-certificados-masivos` | Genera certificados en masa |
+
+#### Evaluación docente
+
+La evaluación docente **la asigna Apoyo Profesoral**, no el propio docente. El promedio asignado
+es uno de los requisitos obligatorios de ascenso de categoría en `CalculoPuntajeDocenteService`
+(evaluación **≥ 4.0**), por eso la escritura está restringida a este rol y el docente solo puede
+consultarla vía `GET /docente/ver-evaluaciones`.
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| GET | `/apoyoProfesoral/listar-evaluaciones` | Todos los docentes con su evaluación asignada (o `null`) |
+| GET | `/apoyoProfesoral/ver-evaluacion/{userId}` | Evaluación de un docente |
+| POST | `/apoyoProfesoral/asignar-evaluacion/{userId}` | Asigna la evaluación a un docente sin evaluación previa |
+| PUT | `/apoyoProfesoral/actualizar-evaluacion/{userId}` | Actualiza la evaluación ya asignada |
+
+**Campos (JSON) de `asignar-evaluacion` y `actualizar-evaluacion`:**
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `promedio_evaluacion_docente` | decimal | Sí al asignar | Entre `0` y `5`, máximo un decimal (`4.5`, `3.0`, `3.2`) |
+| `estado_evaluacion_docente` | string | No | `Pendiente` (por defecto), `Aprobado` o `Rechazado` |
+
+**Respuestas:**
+
+| Código | Situación |
+|--------|-----------|
+| `201` | Evaluación asignada |
+| `200` | Evaluación consultada o actualizada |
+| `404` | El `userId` no existe o no tiene rol `Docente`; o no tiene evaluación al actualizar |
+| `409` | El docente ya tiene evaluación asignada (use `actualizar-evaluacion`) |
+| `422` | Error de validación |
+
+Cada asignación registra en la propia evaluación quién la realizó (`asignado_por`) y cuándo
+(`fecha_asignacion`); al actualizar, ambos campos se reescriben con el último responsable.
 
 ---
 

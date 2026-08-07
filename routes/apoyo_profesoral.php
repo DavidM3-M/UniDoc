@@ -2,6 +2,7 @@
 
 // Importa la clase Route desde el espacio de nombres Illuminate\Support\Facades
 
+use App\Http\Controllers\ApoyoProfesoral\EvaluacionDocenteController;
 use App\Http\Controllers\ApoyoProfesoral\FiltrarDocentesController;
 use App\Http\Controllers\ApoyoProfesoral\VerificacionDocumentosController;
 use Illuminate\Support\Facades\Route;
@@ -37,6 +38,13 @@ Route::group([
 
     // Ruta para listar docentes con su puntaje total y categoría (escalafón)
     Route::get('listar-docentes-puntaje', [FiltrarDocentesController::class, 'listarDocentesConPuntaje']);
+
+    // Rutas para asignar y consultar la evaluación docente.
+    // Apoyo Profesoral es quien asigna la calificación; el docente solo puede consultarla.
+    Route::get('listar-evaluaciones', [EvaluacionDocenteController::class, 'listarEvaluaciones']);
+    Route::get('ver-evaluacion/{userId}', [EvaluacionDocenteController::class, 'verEvaluacionDocente']);
+    Route::post('asignar-evaluacion/{userId}', [EvaluacionDocenteController::class, 'asignarEvaluacionDocente']);
+    Route::put('actualizar-evaluacion/{userId}', [EvaluacionDocenteController::class, 'actualizarEvaluacionDocente']);
 
     // Rutas para generar certificados
     Route::post('crear-certificados-masivos', [GenerarCertificadosController::class, 'crearCertificadosMasivos']);
