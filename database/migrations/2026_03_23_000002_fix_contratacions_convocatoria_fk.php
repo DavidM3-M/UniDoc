@@ -28,19 +28,20 @@ return new class extends Migration
 
         // 3. Agregar unique si no existe
         if (DB::connection()->getDriverName() === 'pgsql') {
-            $indexes = collect(DB::select(
-                "SELECT indexname AS Key_name FROM pg_indexes WHERE tablename = 'contratacions' AND schemaname = current_schema()"
-            ))->pluck('Key_name');
+            $uniqueExists = collect(DB::select(
+                "SELECT 1 FROM pg_constraint WHERE conname = 'contratacion_user_convocatoria_unique'"
+            ));
         } else {
-            $indexes = collect(DB::select('SHOW INDEX FROM contratacions'))->pluck('Key_name');
+            $uniqueExists = collect(DB::select(
+                "SELECT 1 FROM information_schema.table_constraints
+                 WHERE constraint_type = 'UNIQUE'
+                   AND table_name = 'contratacions'
+                   AND constraint_name = 'contratacion_user_convocatoria_unique'"
+            ));
         }
 
-        if (! $indexes->contains('contratacion_user_convocatoria_unique')) {
-            if (DB::connection()->getDriverName() === 'pgsql') {
-                DB::statement('CREATE UNIQUE INDEX contratacion_user_convocatoria_unique ON contratacions (user_id, convocatoria_id)');
-            } else {
-                DB::statement('ALTER TABLE contratacions ADD UNIQUE KEY contratacion_user_convocatoria_unique (user_id, convocatoria_id)');
-            }
+        if ($uniqueExists->isEmpty()) {
+            DB::statement('ALTER TABLE contratacions ADD CONSTRAINT contratacion_user_convocatoria_unique UNIQUE (user_id, convocatoria_id)');
         }
     }
 
