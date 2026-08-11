@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Aspirante;
 
+use App\Constants\ClavePrimaria;
 use App\Http\Requests\RequestAspirante\RequestEstudio\ActualizarEstudioRequest;
 use App\Http\Requests\RequestAspirante\RequestEstudio\CrearEstudioRequest;
 use Illuminate\Http\Request;
@@ -128,6 +129,10 @@ class EstudioController
     public function obtenerEstudioPorId(Request $request, $id)
     {
         try {
+            if (ClavePrimaria::fueraDeRango($id)) { // Un ID que no cabe en la columna no identifica a ningún registro.
+                return response()->json(['message' => 'Estudio no encontrado.'], 404);
+            }
+
             $user = $request->user(); // Obtiene el usuario autenticado
 
             if (!$user) { // Verifica autenticación
@@ -172,6 +177,10 @@ class EstudioController
     public function actualizarEstudio(ActualizarEstudioRequest $request, $id)
     {
         try {
+            if (ClavePrimaria::fueraDeRango($id)) { // Un ID que no cabe en la columna no identifica a ningún registro.
+                return response()->json(['message' => 'Estudio no encontrado.'], 404);
+            }
+
             $user = $request->user(); // Usuario autenticado
 
             $estudio = Estudio::where('id_estudio', $id) // Busca el estudio del usuario
@@ -222,6 +231,10 @@ class EstudioController
     public function eliminarEstudio(Request $request, $id)
     {
         try {
+            if (ClavePrimaria::fueraDeRango($id)) { // Un ID que no cabe en la columna no identifica a ningún registro.
+                return response()->json(['message' => 'Estudio no encontrado.'], 404);
+            }
+
             $user = $request->user(); // Usuario autenticado
 
             $estudio = Estudio::where('id_estudio', $id) // Busca el estudio del usuario

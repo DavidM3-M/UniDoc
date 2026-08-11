@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Aspirante;
 
+use App\Constants\ClavePrimaria;
 use App\Http\Requests\RequestAspirante\RequestExperiencia\ActualizarExperienciaRequest;
 use Illuminate\Http\Request;
 use App\Models\Aspirante\Experiencia;
@@ -125,6 +126,10 @@ class ExperienciaController
     {
         try {
 
+            if (ClavePrimaria::fueraDeRango($id)) { // Un ID que no cabe en la columna no identifica a ninguna fila.
+                return response()->json(['message' => 'Experiencia no encontrada.'], 404);
+            }
+
             $user = $request->user(); // Se obtiene el usuario autenticado.
             $experiencia = Experiencia::where('id_experiencia', $id) // Se busca la experiencia por ID y usuario.
                 ->where('user_id', $user->id)
@@ -166,6 +171,10 @@ class ExperienciaController
     public function actualizarExperiencia(ActualizarExperienciaRequest $request, $id)
     {
         try {
+            if (ClavePrimaria::fueraDeRango($id)) { // Un ID que no cabe en la columna no identifica a ninguna fila.
+                return response()->json(['message' => 'Experiencia no encontrada.'], 404);
+            }
+
             DB::transaction(function () use ($request, $id) { // Se ejecuta una transacción para asegurar la integridad de los datos.
                 $user = $request->user(); // Se obtiene el usuario autenticado.
                 $experiencia = Experiencia::where('id_experiencia', $id) // Se busca la experiencia por ID y usuario.
@@ -183,6 +192,10 @@ class ExperienciaController
             return response()->json([ // Se retorna la experiencia actualizada y un mensaje de éxito.
                 'message' => 'Experiencia actualizada correctamente',
             ], 200);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            // Mismo criterio que obtener y eliminar: si la experiencia no existe (o no es del
+            // usuario autenticado) es un 404, no un fallo del servidor.
+            return response()->json(['message' => 'Experiencia no encontrada.'], 404);
         } catch (\Exception $e) {
             return response()->json([ // En caso de error, se retorna el mensaje correspondiente.
                 'message' => 'Error al actualizar la experiencia.',
@@ -207,6 +220,10 @@ class ExperienciaController
     public function eliminarExperiencia(Request $request, $id)
     {
         try {
+
+            if (ClavePrimaria::fueraDeRango($id)) { // Un ID que no cabe en la columna no identifica a ninguna fila.
+                return response()->json(['message' => 'Experiencia no encontrada.'], 404);
+            }
 
             $user = $request->user(); // Obtener el usuario autenticado desde la solicitud.
             $experiencia = Experiencia::where('id_experiencia', $id) // Buscar la experiencia por su ID y asegurarse de que pertenezca al usuario autenticado.

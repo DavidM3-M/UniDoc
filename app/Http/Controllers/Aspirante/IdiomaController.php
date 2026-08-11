@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Aspirante;
 
+use App\Constants\ClavePrimaria;
 use App\Http\Requests\RequestAspirante\RequestIdioma\ActualizarIdiomaRequest;
 use Illuminate\Http\Request;
 use App\Models\Aspirante\Idioma;
@@ -127,6 +128,10 @@ class IdiomaController
     public function obtenerIdiomaPorId(Request $request, $id)
     {
         try {
+            if (ClavePrimaria::fueraDeRango($id)) { // Un ID que no cabe en la columna no identifica a ningún registro.
+                return response()->json(['message' => 'Idioma no encontrado.'], 404);
+            }
+
             $user = $request->user();
 
             $idioma = Idioma::where('id_idioma', $id) // Busca el idioma por ID e ID del usuario
@@ -169,6 +174,10 @@ class IdiomaController
     {
         try {
 
+            if (ClavePrimaria::fueraDeRango($id)) { // Un ID que no cabe en la columna no identifica a ningún registro.
+                return response()->json(['message' => 'Idioma no encontrado.'], 404);
+            }
+
             DB::transaction(function () use ($request, $id) { // Ejecuta dentro de una transacción
                 $user = $request->user();
 
@@ -187,6 +196,10 @@ class IdiomaController
             return response()->json([
                 'mensaje' => 'Idioma actualizado correctamente',
             ], 200);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            // Mismo criterio que obtener y eliminar: si el idioma no existe (o no es del usuario
+            // autenticado) es un 404, no un fallo del servidor.
+            return response()->json(['message' => 'Idioma no encontrado.'], 404);
         } catch (\Exception $e) {
             return response()->json([ // Manejo de errores
                 'message' => 'Error al actualizar el idioma.',
@@ -211,6 +224,10 @@ class IdiomaController
     public function eliminarIdioma(Request $request, $id)
     {
         try {
+            if (ClavePrimaria::fueraDeRango($id)) { // Un ID que no cabe en la columna no identifica a ningún registro.
+                return response()->json(['message' => 'Idioma no encontrado.'], 404);
+            }
+
             $user = $request->user();
 
             $idioma = Idioma::where('id_idioma', $id) // Busca el idioma por ID e ID del usuario
