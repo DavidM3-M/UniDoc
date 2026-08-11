@@ -3,7 +3,6 @@
 namespace App\Http\Requests\RequestAspirante\RequestExperiencia;
 
 use Illuminate\Foundation\Http\FormRequest;
-use App\Constants\ConstAgregarExperiencia\TiposExperiencia;
 use App\Constants\ConstAgregarExperiencia\TrabajoActual;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Contracts\Validation\Validator;
@@ -31,9 +30,14 @@ class CrearExperienciaRequest extends FormRequest
     // Método que define las reglas de validación para los datos enviados en la solicitud.
     {
         return [
-            'tipo_experiencia'             => ['required','string', Rule::in(TiposExperiencia::all())],
+            'tipo_experiencia'             => [
+                'required',
+                'string',
+                Rule::exists('tipo_experiencias', 'nombre_tipo_experiencia')->where('activo', true),
+            ],
             // El campo `tipo_experiencia` es obligatorio (`required`), debe ser una cadena (`string`) y su valor
-            // debe estar dentro de los valores definidos en `TiposExperiencia::all()`.
+            // debe corresponder a un tipo **activo** del catálogo `tipo_experiencias`, que administra el
+            // rol Administrador. Se guarda el nombre, no el ID, por eso la validación es por nombre.
             'institucion_experiencia'      => 'required|string|min:3|max:100|regex:/^[\pL\pN\s\-]+$/u',
              // El campo `institucion_experiencia` es obligatorio, debe ser una cadena con un mínimo de 3 caracteres
             // y un máximo de 100. Además, debe coincidir con un patrón regex que permite letras, números, espacios y guiones.

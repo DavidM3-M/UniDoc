@@ -2,9 +2,11 @@
 
 namespace App\Http\Requests\RequestAspirante\RequestProduccionAcademica;
 
+use App\Constants\ClavePrimaria;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Validation\Rule;
 
 
 class CrearProduccionAcademicaRequest extends FormRequest
@@ -28,9 +30,21 @@ class CrearProduccionAcademicaRequest extends FormRequest
     // Método que define las reglas de validación para los datos enviados en la solicitud.
     {
         return [
-         'ambito_divulgacion_id' => 'required|integer|exists:ambito_divulgacions,id_ambito_divulgacion',
+         'ambito_divulgacion_id' => [
+             // `bail` + `max` antes del `exists`: `id_ambito_divulgacion` es un smallint y
+             // consultar un valor fuera de ese rango hace fallar la consulta en vez de no
+             // encontrar la fila, lo que devolvería un 500 en lugar de un 422.
+             'bail',
+             'required',
+             'integer',
+             'min:1',
+             'max:' . ClavePrimaria::SMALLINT_MAXIMO,
+             Rule::exists('ambito_divulgacions', 'id_ambito_divulgacion')->where('activo', true),
+         ],
           // El campo `ambito_divulgacion_id` es obligatorio (`required`), debe ser un número entero (`integer`)
-            // y debe existir en la tabla `ambito_divulgacions` en la columna `id_ambito_divulgacion`.
+            // y debe existir en la tabla `ambito_divulgacions` como ámbito **activo**. Un ámbito que el
+            // Administrador retiró del catálogo no se puede usar en producciones nuevas, aunque las
+            // producciones históricas que ya lo referencian siguen intactas.
          'titulo' => 'required|string|max:255|regex:/^[\pL\pN\s\-]+$/u',
           // El campo `titulo` es obligatorio, debe ser una cadena (`string`) con un máximo de 255 caracteres
             // y cumplir con un patrón regex que permite letras, números, espacios y guiones.

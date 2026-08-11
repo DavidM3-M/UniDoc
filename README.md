@@ -406,7 +406,7 @@ La API usa **JWT (JSON Web Token)**. Pasos:
 |-------|------|-----------|-------------|
 | `empresa` | string | Sí | Nombre de la empresa/institución |
 | `cargo` | string | Sí | Cargo desempeñado |
-| `tipo_experiencia` | string | Sí | Tipo (catálogo `/constantes/tipos-experiencia`) |
+| `tipo_experiencia` | string | Sí | Nombre de un tipo **activo** del catálogo `/constantes/tipos-experiencia`, administrable por el Administrador |
 | `fecha_inicio` | date (Y-m-d) | Sí | Fecha de inicio |
 | `fecha_fin` | date (Y-m-d) | No | Fecha de fin (vacío si trabajo actual) |
 | `municipio_id` | integer | Sí | ID del municipio |
@@ -759,6 +759,68 @@ estaba fijo en `4.0` dentro de `CalculoPuntajeDocenteService`; ahora lo configur
 - Solo el requisito de evaluación es configurable. Formación, nivel de inglés, puntaje mínimo
   (20/30/60) y años de antigüedad (4/6/8) siguen fijos en `CalculoPuntajeDocenteService`.
 
+#### Catálogos administrables
+
+Catálogos que antes solo se poblaban por seeder (`database/data/*.csv`) o por constantes PHP y
+que ahora administra el rol `Administrador`.
+
+**Tipos de producto académico**
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| GET | `/admin/productos-academicos` | Lista todos (activos e inactivos) con su número de ámbitos |
+| GET | `/admin/productos-academicos/{id}` | Detalle con sus ámbitos de divulgación |
+| POST | `/admin/productos-academicos` | Crea un tipo de producto académico |
+| PUT | `/admin/productos-academicos/{id}` | Actualiza nombre o estado |
+| DELETE | `/admin/productos-academicos/{id}` | Elimina; **409** si tiene ámbitos asociados |
+
+**Ámbitos de divulgación**
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| GET | `/admin/ambitos-divulgacion` | Lista todos; filtro opcional `?producto_academico_id=` |
+| GET | `/admin/ambitos-divulgacion/{id}` | Detalle con su producto académico |
+| POST | `/admin/ambitos-divulgacion` | Crea un ámbito bajo un producto académico |
+| PUT | `/admin/ambitos-divulgacion/{id}` | Actualiza nombre, producto o estado |
+| DELETE | `/admin/ambitos-divulgacion/{id}` | Elimina; **409** si hay producciones que lo usan |
+
+**Tipos de experiencia**
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| GET | `/admin/tipos-experiencia` | Lista todos con su número de usos |
+| GET | `/admin/tipos-experiencia/{id}` | Detalle |
+| POST | `/admin/tipos-experiencia` | Crea un tipo de experiencia |
+| PUT | `/admin/tipos-experiencia/{id}` | Actualiza nombre o estado (**propaga el renombrado**) |
+| DELETE | `/admin/tipos-experiencia/{id}` | Elimina; **409** si hay experiencias o convocatorias que lo usan |
+
+**Campos**
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `nombre_producto_academico` | string | Sí | Único. Máx. 255 |
+| `nombre_ambito_divulgacion` | string | Sí | Único **dentro de su producto académico**. Máx. 255 |
+| `producto_academico_id` | integer | Sí | Producto al que pertenece el ámbito |
+| `nombre_tipo_experiencia` | string | Sí | Único. Máx. 100 |
+| `activo` | boolean | No | Por defecto `true` |
+
+**Reglas de negocio:**
+
+- **No se borra lo que está en uso.** El `DELETE` responde `409` con el conteo de registros
+  dependientes en lugar de dejar que falle la llave foránea. Para retirar una opción de los
+  formularios sin perder el histórico se usa `activo = false`.
+- **`activo` controla los desplegables.** Los catálogos inactivos desaparecen de
+  `/tiposProduccionAcademica/*` y `/constantes/tipos-experiencia`, y dejan de aceptarse al crear
+  producciones o experiencias nuevas. Los registros históricos que ya los referencian no cambian.
+- **Renombrar un tipo de experiencia arrastra el histórico.** `experiencias.tipo_experiencia` y
+  `convocatorias.tipo_experiencia_requerida` guardan el **nombre**, no un ID, así que el `PUT`
+  propaga el cambio a ambas tablas dentro de una transacción y devuelve cuántas filas actualizó
+  en `registros_renombrados`.
+- **Los ámbitos nuevos no otorgan puntaje.** `CalculoPuntajeDocenteService::clasificacionPorAmbito()`
+  sigue mapeando IDs de ámbito hardcodeados a `top`/`a`/`b`. Un ámbito creado desde el CRUD cae en
+  el `default` y suma **0 puntos** hasta que se actualice ese servicio. Volverlo configurable
+  queda fuera del alcance de este CRUD.
+
 #### Otros
 
 | Método | URI | Descripción |
@@ -992,10 +1054,13 @@ Cada asignación registra en la propia evaluación quién la realizó (`asignado
 
 | Método | URI | Descripción |
 |--------|-----|-------------|
-| GET | `/tiposProduccionAcademica/productos-academicos` | Tipos de productos académicos |
-| GET | `/tiposProduccionAcademica/ambitos-divulgacion` | Todos los ámbitos de divulgación |
-| GET | `/tiposProduccionAcademica/ambitos_divulgacion/{id_producto_academico}` | Ámbitos para un tipo de producto |
-| GET | `/tiposProduccionAcademica/ambito-divulgacion-completo/{id_ambito_divulgacion}` | Info completa de ámbito + producto |
+| GET | `/tiposProduccionAcademica/productos-academicos` | Tipos de productos académicos **activos** |
+| GET | `/tiposProduccionAcademica/ambitos-divulgacion` | Ámbitos de divulgación **activos** |
+| GET | `/tiposProduccionAcademica/ambitos_divulgacion/{id_producto_academico}` | Ámbitos **activos** de un tipo de producto |
+| GET | `/tiposProduccionAcademica/ambito-divulgacion-completo/{id_ambito_divulgacion}` | Info completa de ámbito + producto (no filtra por estado: la usa el histórico) |
+
+> Estos listados alimentan los desplegables, por eso omiten los catálogos que el Administrador
+> marcó como inactivos. El CRUD completo está en [Catálogos administrables](#catálogos-administrables).
 
 ---
 

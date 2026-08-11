@@ -4,6 +4,12 @@ namespace App\Constants\ConstAgregarExperiencia;
 
 // Esta clase define constantes para representar los diferentes tipos de **experiencia laboral o profesional**
 // que un aspirante puede registrar, especialmente en el contexto académico o educativo.
+//
+// OJO: esta clase ya NO se usa para validar. El catálogo de tipos de experiencia vive ahora en la
+// tabla `tipo_experiencias` (modelo `App\Models\TipoExperiencia`), administrable por el rol
+// Administrador. Lo único que queda aquí es la lista inicial que `TipoExperienciaSeeder` siembra en
+// esa tabla, y se conserva justamente porque los registros históricos de `experiencias` guardan
+// estos strings exactos.
 class TiposExperiencia
 {
     // Constante para experiencia en **proyectos de investigación**

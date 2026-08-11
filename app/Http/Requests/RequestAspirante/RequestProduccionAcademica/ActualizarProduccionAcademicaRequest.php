@@ -2,9 +2,11 @@
 
 namespace App\Http\Requests\RequestAspirante\RequestProduccionAcademica;
 
+use App\Constants\ClavePrimaria;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Validation\Rule;
 
 class ActualizarProduccionAcademicaRequest extends FormRequest
 {
@@ -27,9 +29,21 @@ class ActualizarProduccionAcademicaRequest extends FormRequest
     // Método que define las reglas de validación para los datos enviados en la solicitud.
     {
         return [
-            'ambito_divulgacion_id' => 'sometimes|required|integer|exists:ambito_divulgacions,id_ambito_divulgacion',
+            'ambito_divulgacion_id' => [
+                // `bail` + `max` antes del `exists`: `id_ambito_divulgacion` es un smallint y un
+                // valor fuera de rango haría fallar la consulta en vez de no encontrar la fila.
+                'bail',
+                'sometimes',
+                'required',
+                'integer',
+                'min:1',
+                'max:' . ClavePrimaria::SMALLINT_MAXIMO,
+                Rule::exists('ambito_divulgacions', 'id_ambito_divulgacion')->where('activo', true),
+            ],
             // El campo `ambito_divulgacion_id` es opcional (`sometimes`), pero si está presente, es obligatorio (`required`).
-            // Debe ser un número entero (`integer`) y debe existir en la tabla `ambito_divulgacions` en la columna `id_ambito_divulgacion`.
+            // Debe ser un número entero (`integer`) y debe existir en la tabla `ambito_divulgacions` como ámbito
+            // **activo**: un ámbito retirado del catálogo no se puede asignar, aunque las producciones que ya
+            // lo referencian conservan su valor mientras no se edite ese campo.
             'titulo' => 'sometimes|required|string|max:255|regex:/^[\pL\pN\s\-]+$/u',
               // El campo `titulo` es opcional, pero si está presente, es obligatorio. Debe ser una cadena (`string`)
             // con un máximo de 255 caracteres y cumplir con un patrón regex que permite letras, números, espacios y guiones.

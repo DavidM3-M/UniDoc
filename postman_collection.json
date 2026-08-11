@@ -2280,7 +2280,7 @@
                                                                                                 "mi-puntaje"
                                                                                             ]
                                                                                },
-                                                                       "description":  "Calcula y retorna el puntaje de aptitud del aspirante autenticado.\n\n**Middleware:** `auth:api`, `role:Aspirante`\n\n**Respuesta 200:**\n```json\n{\n  \"total\": 155,\n  \"estudios\": 80,\n  \"idiomas\": 25,\n  \"experiencia\": 50,\n  \"desglose\": {\n    \"estudios\": [{\"titulo\": \"Maestr\\u00eda en Educaci\\u00f3n\", \"puntaje\": 80}],\n    \"idiomas\": [{\"idioma\": \"Ingl\\u00e9s\", \"nivel\": \"B2\", \"puntaje\": 25}],\n    \"experiencia\": [{\"tipo\": \"Docencia Universitaria\", \"anios\": 5, \"puntaje\": 50}]\n  }\n}\n```\n\n**Errores posibles:**\n- `401` â€" Token invÃ¡lido\n- `403` â€" Sin rol Aspirante"
+                                                                       "description":  "Calcula y retorna el puntaje de aptitud del aspirante autenticado.\n\n**Middleware:** `auth:api`, `role:Aspirante`\n\n**Respuesta 200:**\n```json\n{\n  \"total\": 155,\n  \"estudios\": 80,\n  \"idiomas\": 25,\n  \"experiencia\": 50,\n  \"desglose\": {\n    \"estudios\": [{\"titulo\": \"Maestr\\u00eda en Educaci\\u00f3n\", \"puntaje\": 80}],\n    \"idiomas\": [{\"idioma\": \"Ingl\\u00e9s\", \"nivel\": \"B2\", \"puntaje\": 25}],\n    \"experiencia\": [{\"tipo\": \"Docencia Universitaria\", \"anios\": 5, \"puntaje\": 50}]\n  }\n}\n```\n\n**Errores posibles:**\n- `401` — Token invÃ¡lido\n- `403` — Sin rol Aspirante"
                                                                    }
                                                    },
                                                    {
@@ -2304,7 +2304,7 @@
                                                                                                 "puntaje"
                                                                                             ]
                                                                                },
-                                                                       "description":  "Calcula y retorna el puntaje de aptitud de un aspirante especÃ­fico. Accesible por los roles de panel.\n\n**Middleware:** `auth:api`, `role:Talento Humano|Coordinador|Vicerrectoria|Rectoria`\n\n**ParÃ¡metro de ruta:** `userId` â€" ID del usuario aspirante\n\n**Respuesta 200:**\n```json\n{\n  \"total\": 155,\n  \"estudios\": 80,\n  \"idiomas\": 25,\n  \"experiencia\": 50,\n  \"desglose\": { \"...\" }\n}\n```\n\n**Errores posibles:**\n- `401` â€" Token invÃ¡lido\n- `403` â€" Sin rol de panel\n- `404` â€" Usuario no encontrado"
+                                                                       "description":  "Calcula y retorna el puntaje de aptitud de un aspirante especÃ­fico. Accesible por los roles de panel.\n\n**Middleware:** `auth:api`, `role:Talento Humano|Coordinador|Vicerrectoria|Rectoria`\n\n**ParÃ¡metro de ruta:** `userId` — ID del usuario aspirante\n\n**Respuesta 200:**\n```json\n{\n  \"total\": 155,\n  \"estudios\": 80,\n  \"idiomas\": 25,\n  \"experiencia\": 50,\n  \"desglose\": { \"...\" }\n}\n```\n\n**Errores posibles:**\n- `401` — Token invÃ¡lido\n- `403` — Sin rol de panel\n- `404` — Usuario no encontrado"
                                                                    }
                                                    }
                                                ]
@@ -3565,6 +3565,438 @@
                                                                },
                                                       "description":  "Otorga el aval administrativo al aspirante identificado por su ID.\n\n**Content-Type:** `application/json`\n\n**Respuesta 200:**\n```json\n{ \"message\": \"Aval otorgado exitosamente\" }\n```\n\n**Errores posibles:**\n- `401` â€” Token invÃ¡lido\n- `403` â€” Sin rol Administrador\n- `404` â€” Aspirante no encontrado\n- `422` â€” El aspirante ya tiene aval otorgado"
                                                   }
+                                  },
+                                  {
+                                      "name":  "Listar tipos de producto académico",
+                                      "request":  {
+                                          "method":  "GET",
+                                          "header":  [
+                                              {
+                                                  "key":  "Authorization",
+                                                  "value":  "Bearer {{token}}"
+                                              }
+                                          ],
+                                          "url":  {
+                                              "raw":  "{{base_url}}/admin/productos-academicos",
+                                              "host":  [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path":  [
+                                                  "admin",
+                                                  "productos-academicos"
+                                              ]
+                                          },
+                                          "description":  "Lista todos los tipos de producto académico, activos e inactivos, con el número de ámbitos de divulgación asociados a cada uno (ese conteo es lo que determina si se puede eliminar).\n\n**Respuesta 200:**\n```json\n{\n  \"status\": \"success\",\n  \"data\": [\n    { \"id_producto_academico\": 1, \"nombre_producto_academico\": \"Ensayo o artículo\", \"activo\": true, \"ambito_divulgacions_producto_academico_count\": 4 }\n  ]\n}\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador"
+                                      }
+                                  },
+                                  {
+                                      "name":  "Ver tipo de producto académico",
+                                      "request":  {
+                                          "method":  "GET",
+                                          "header":  [
+                                              {
+                                                  "key":  "Authorization",
+                                                  "value":  "Bearer {{token}}"
+                                              }
+                                          ],
+                                          "url":  {
+                                              "raw":  "{{base_url}}/admin/productos-academicos/1",
+                                              "host":  [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path":  [
+                                                  "admin",
+                                                  "productos-academicos",
+                                                  "1"
+                                              ]
+                                          },
+                                          "description":  "Detalle de un tipo de producto académico junto con sus ámbitos de divulgación.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `404` — Tipo de producto académico no encontrado"
+                                      }
+                                  },
+                                  {
+                                      "name":  "Crear tipo de producto académico",
+                                      "request":  {
+                                          "method":  "POST",
+                                          "header":  [
+                                              {
+                                                  "key":  "Authorization",
+                                                  "value":  "Bearer {{token}}"
+                                              },
+                                              {
+                                                  "key":  "Content-Type",
+                                                  "value":  "application/json"
+                                              }
+                                          ],
+                                          "url":  {
+                                              "raw":  "{{base_url}}/admin/productos-academicos",
+                                              "host":  [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path":  [
+                                                  "admin",
+                                                  "productos-academicos"
+                                              ]
+                                          },
+                                          "body":  {
+                                              "mode":  "raw",
+                                              "raw":  "{ \"nombre_producto_academico\": \"Podcast académico\" }",
+                                              "options":  {
+                                                  "raw":  {
+                                                      "language":  "json"
+                                                  }
+                                              }
+                                          },
+                                          "description":  "Crea un tipo de producto académico. Antes este catálogo solo se poblaba desde `database/data/tipo_producto_academico.csv`.\n\n**Content-Type:** `application/json`\n\n**Respuesta 201:**\n```json\n{\n  \"status\": \"success\",\n  \"message\": \"Tipo de producto académico creado correctamente.\",\n  \"data\": { \"id_producto_academico\": 30, \"nombre_producto_academico\": \"Podcast académico\", \"activo\": true }\n}\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `422` — Nombre vacío o ya existente"
+                                      }
+                                  },
+                                  {
+                                      "name":  "Actualizar tipo de producto académico",
+                                      "request":  {
+                                          "method":  "PUT",
+                                          "header":  [
+                                              {
+                                                  "key":  "Authorization",
+                                                  "value":  "Bearer {{token}}"
+                                              },
+                                              {
+                                                  "key":  "Content-Type",
+                                                  "value":  "application/json"
+                                              }
+                                          ],
+                                          "url":  {
+                                              "raw":  "{{base_url}}/admin/productos-academicos/1",
+                                              "host":  [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path":  [
+                                                  "admin",
+                                                  "productos-academicos",
+                                                  "1"
+                                              ]
+                                          },
+                                          "body":  {
+                                              "mode":  "raw",
+                                              "raw":  "{ \"nombre_producto_academico\": \"Podcast académico\", \"activo\": false }",
+                                              "options":  {
+                                                  "raw":  {
+                                                      "language":  "json"
+                                                  }
+                                              }
+                                          },
+                                          "description":  "Actualiza el nombre o el estado. Marcarlo con `activo: false` lo retira de los desplegables del aspirante sin borrarlo, conservando las producciones ya registradas.\n\n**Content-Type:** `application/json`\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `404` — Tipo de producto académico no encontrado\n- `422` — Nombre ya existente"
+                                      }
+                                  },
+                                  {
+                                      "name":  "Eliminar tipo de producto académico",
+                                      "request":  {
+                                          "method":  "DELETE",
+                                          "header":  [
+                                              {
+                                                  "key":  "Authorization",
+                                                  "value":  "Bearer {{token}}"
+                                              }
+                                          ],
+                                          "url":  {
+                                              "raw":  "{{base_url}}/admin/productos-academicos/1",
+                                              "host":  [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path":  [
+                                                  "admin",
+                                                  "productos-academicos",
+                                                  "1"
+                                              ]
+                                          },
+                                          "description":  "Elimina un tipo de producto académico. **Solo se puede borrar si no tiene ámbitos de divulgación asociados**: borrarlo arrastraría ámbitos que a su vez pueden estar referenciados por producciones académicas de docentes. Para retirarlo de los formularios use `activo: false`.\n\n**Respuesta 409:**\n```json\n{\n  \"status\": \"error\",\n  \"message\": \"No se puede eliminar: hay 4 ámbito(s) de divulgación asociados...\",\n  \"ambitos_asociados\": 4\n}\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `404` — Tipo de producto académico no encontrado\n- `409` — Tiene ámbitos asociados"
+                                      }
+                                  },
+                                  {
+                                      "name":  "Listar ámbitos de divulgación",
+                                      "request":  {
+                                          "method":  "GET",
+                                          "header":  [
+                                              {
+                                                  "key":  "Authorization",
+                                                  "value":  "Bearer {{token}}"
+                                              }
+                                          ],
+                                          "url":  {
+                                              "raw":  "{{base_url}}/admin/ambitos-divulgacion?producto_academico_id=1",
+                                              "host":  [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path":  [
+                                                  "admin",
+                                                  "ambitos-divulgacion"
+                                              ]
+                                          },
+                                          "description":  "Lista los ámbitos de divulgación, activos e inactivos, con su producto académico y el número de producciones que los usan.\n\n**Query opcional:** `producto_academico_id` para ver solo los de un producto.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador"
+                                      }
+                                  },
+                                  {
+                                      "name":  "Ver ámbito de divulgación",
+                                      "request":  {
+                                          "method":  "GET",
+                                          "header":  [
+                                              {
+                                                  "key":  "Authorization",
+                                                  "value":  "Bearer {{token}}"
+                                              }
+                                          ],
+                                          "url":  {
+                                              "raw":  "{{base_url}}/admin/ambitos-divulgacion/1",
+                                              "host":  [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path":  [
+                                                  "admin",
+                                                  "ambitos-divulgacion",
+                                                  "1"
+                                              ]
+                                          },
+                                          "description":  "Detalle de un ámbito de divulgación junto con su producto académico.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `404` — Ámbito de divulgación no encontrado"
+                                      }
+                                  },
+                                  {
+                                      "name":  "Crear ámbito de divulgación",
+                                      "request":  {
+                                          "method":  "POST",
+                                          "header":  [
+                                              {
+                                                  "key":  "Authorization",
+                                                  "value":  "Bearer {{token}}"
+                                              },
+                                              {
+                                                  "key":  "Content-Type",
+                                                  "value":  "application/json"
+                                              }
+                                          ],
+                                          "url":  {
+                                              "raw":  "{{base_url}}/admin/ambitos-divulgacion",
+                                              "host":  [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path":  [
+                                                  "admin",
+                                                  "ambitos-divulgacion"
+                                              ]
+                                          },
+                                          "body":  {
+                                              "mode":  "raw",
+                                              "raw":  "{ \"producto_academico_id\": 1, \"nombre_ambito_divulgacion\": \"Revista tipo D\" }",
+                                              "options":  {
+                                                  "raw":  {
+                                                      "language":  "json"
+                                                  }
+                                              }
+                                          },
+                                          "description":  "Crea un ámbito de divulgación bajo un tipo de producto académico. El nombre solo tiene que ser único **dentro de su producto**.\n\n> **Ojo:** `CalculoPuntajeDocenteService::clasificacionPorAmbito()` mapea IDs de ámbito hardcodeados a puntaje, así que un ámbito creado aquí suma **0 puntos** hasta que se actualice ese servicio.\n\n**Content-Type:** `application/json`\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `422` — Producto inexistente, o nombre repetido dentro del mismo producto"
+                                      }
+                                  },
+                                  {
+                                      "name":  "Actualizar ámbito de divulgación",
+                                      "request":  {
+                                          "method":  "PUT",
+                                          "header":  [
+                                              {
+                                                  "key":  "Authorization",
+                                                  "value":  "Bearer {{token}}"
+                                              },
+                                              {
+                                                  "key":  "Content-Type",
+                                                  "value":  "application/json"
+                                              }
+                                          ],
+                                          "url":  {
+                                              "raw":  "{{base_url}}/admin/ambitos-divulgacion/1",
+                                              "host":  [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path":  [
+                                                  "admin",
+                                                  "ambitos-divulgacion",
+                                                  "1"
+                                              ]
+                                          },
+                                          "body":  {
+                                              "mode":  "raw",
+                                              "raw":  "{ \"nombre_ambito_divulgacion\": \"Revista tipo D\", \"activo\": false }",
+                                              "options":  {
+                                                  "raw":  {
+                                                      "language":  "json"
+                                                  }
+                                              }
+                                          },
+                                          "description":  "Actualiza el nombre, el producto académico o el estado. Con `activo: false` el ámbito desaparece de los desplegables y deja de aceptarse en producciones nuevas, pero las producciones históricas que lo referencian no cambian.\n\n**Content-Type:** `application/json`\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `404` — Ámbito de divulgación no encontrado\n- `422` — Datos inválidos"
+                                      }
+                                  },
+                                  {
+                                      "name":  "Eliminar ámbito de divulgación",
+                                      "request":  {
+                                          "method":  "DELETE",
+                                          "header":  [
+                                              {
+                                                  "key":  "Authorization",
+                                                  "value":  "Bearer {{token}}"
+                                              }
+                                          ],
+                                          "url":  {
+                                              "raw":  "{{base_url}}/admin/ambitos-divulgacion/1",
+                                              "host":  [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path":  [
+                                                  "admin",
+                                                  "ambitos-divulgacion",
+                                                  "1"
+                                              ]
+                                          },
+                                          "description":  "Elimina un ámbito de divulgación. **Solo se puede borrar si ninguna producción académica lo referencia.**\n\n**Respuesta 409:**\n```json\n{\n  \"status\": \"error\",\n  \"message\": \"No se puede eliminar: hay 12 producción(es) académica(s) que usan este ámbito...\",\n  \"producciones_asociadas\": 12\n}\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `404` — Ámbito de divulgación no encontrado\n- `409` — Está en uso por producciones académicas"
+                                      }
+                                  },
+                                  {
+                                      "name":  "Listar tipos de experiencia",
+                                      "request":  {
+                                          "method":  "GET",
+                                          "header":  [
+                                              {
+                                                  "key":  "Authorization",
+                                                  "value":  "Bearer {{token}}"
+                                              }
+                                          ],
+                                          "url":  {
+                                              "raw":  "{{base_url}}/admin/tipos-experiencia",
+                                              "host":  [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path":  [
+                                                  "admin",
+                                                  "tipos-experiencia"
+                                              ]
+                                          },
+                                          "description":  "Lista los tipos de experiencia, activos e inactivos, con cuántas experiencias usan cada uno. Antes esta lista era la constante PHP `TiposExperiencia`.\n\n**Respuesta 200:**\n```json\n{\n  \"status\": \"success\",\n  \"data\": [\n    { \"id_tipo_experiencia\": 1, \"nombre_tipo_experiencia\": \"Investigación\", \"activo\": true, \"experiencias_count\": 37 }\n  ]\n}\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador"
+                                      }
+                                  },
+                                  {
+                                      "name":  "Ver tipo de experiencia",
+                                      "request":  {
+                                          "method":  "GET",
+                                          "header":  [
+                                              {
+                                                  "key":  "Authorization",
+                                                  "value":  "Bearer {{token}}"
+                                              }
+                                          ],
+                                          "url":  {
+                                              "raw":  "{{base_url}}/admin/tipos-experiencia/1",
+                                              "host":  [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path":  [
+                                                  "admin",
+                                                  "tipos-experiencia",
+                                                  "1"
+                                              ]
+                                          },
+                                          "description":  "Detalle de un tipo de experiencia.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `404` — Tipo de experiencia no encontrado"
+                                      }
+                                  },
+                                  {
+                                      "name":  "Crear tipo de experiencia",
+                                      "request":  {
+                                          "method":  "POST",
+                                          "header":  [
+                                              {
+                                                  "key":  "Authorization",
+                                                  "value":  "Bearer {{token}}"
+                                              },
+                                              {
+                                                  "key":  "Content-Type",
+                                                  "value":  "application/json"
+                                              }
+                                          ],
+                                          "url":  {
+                                              "raw":  "{{base_url}}/admin/tipos-experiencia",
+                                              "host":  [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path":  [
+                                                  "admin",
+                                                  "tipos-experiencia"
+                                              ]
+                                          },
+                                          "body":  {
+                                              "mode":  "raw",
+                                              "raw":  "{ \"nombre_tipo_experiencia\": \"Consultoría\" }",
+                                              "options":  {
+                                                  "raw":  {
+                                                      "language":  "json"
+                                                  }
+                                              }
+                                          },
+                                          "description":  "Crea un tipo de experiencia. Queda disponible de inmediato en `GET /constantes/tipos-experiencia` y por tanto en el formulario de experiencia del docente y del aspirante.\n\n**Content-Type:** `application/json`\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `422` — Nombre vacío o ya existente"
+                                      }
+                                  },
+                                  {
+                                      "name":  "Actualizar tipo de experiencia",
+                                      "request":  {
+                                          "method":  "PUT",
+                                          "header":  [
+                                              {
+                                                  "key":  "Authorization",
+                                                  "value":  "Bearer {{token}}"
+                                              },
+                                              {
+                                                  "key":  "Content-Type",
+                                                  "value":  "application/json"
+                                              }
+                                          ],
+                                          "url":  {
+                                              "raw":  "{{base_url}}/admin/tipos-experiencia/1",
+                                              "host":  [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path":  [
+                                                  "admin",
+                                                  "tipos-experiencia",
+                                                  "1"
+                                              ]
+                                          },
+                                          "body":  {
+                                              "mode":  "raw",
+                                              "raw":  "{ \"nombre_tipo_experiencia\": \"Consultoría externa\" }",
+                                              "options":  {
+                                                  "raw":  {
+                                                      "language":  "json"
+                                                  }
+                                              }
+                                          },
+                                          "description":  "Actualiza el nombre o el estado.\n\n> **Renombrar propaga el cambio al histórico.** `experiencias.tipo_experiencia` y `convocatorias.tipo_experiencia_requerida` guardan el **nombre**, no un ID, así que el rename se replica a ambas tablas dentro de una transacción. La respuesta informa cuántas filas se actualizaron.\n\n**Content-Type:** `application/json`\n\n**Respuesta 200:**\n```json\n{\n  \"status\": \"success\",\n  \"data\": { \"id_tipo_experiencia\": 1, \"nombre_tipo_experiencia\": \"Consultoría externa\", \"activo\": true },\n  \"registros_renombrados\": { \"experiencias\": 12, \"convocatorias\": 2 }\n}\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `404` — Tipo de experiencia no encontrado\n- `422` — Nombre ya existente"
+                                      }
+                                  },
+                                  {
+                                      "name":  "Eliminar tipo de experiencia",
+                                      "request":  {
+                                          "method":  "DELETE",
+                                          "header":  [
+                                              {
+                                                  "key":  "Authorization",
+                                                  "value":  "Bearer {{token}}"
+                                              }
+                                          ],
+                                          "url":  {
+                                              "raw":  "{{base_url}}/admin/tipos-experiencia/1",
+                                              "host":  [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path":  [
+                                                  "admin",
+                                                  "tipos-experiencia",
+                                                  "1"
+                                              ]
+                                          },
+                                          "description":  "Elimina un tipo de experiencia. **Solo se puede borrar si ninguna experiencia ni convocatoria lo usa.** Como no hay llave foránea, el uso se comprueba por nombre. Para retirarlo del formulario sin perder el histórico use `activo: false`.\n\n**Respuesta 409:**\n```json\n{\n  \"status\": \"error\",\n  \"message\": \"No se puede eliminar: 12 experiencia(s) y 2 convocatoria(s) usan este tipo...\",\n  \"experiencias_asociadas\": 12,\n  \"convocatorias_asociadas\": 2\n}\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `404` — Tipo de experiencia no encontrado\n- `409` — Está en uso"
+                                      }
                                   }
                               ]
                  },

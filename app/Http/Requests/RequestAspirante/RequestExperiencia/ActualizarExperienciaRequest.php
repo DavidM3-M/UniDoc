@@ -3,7 +3,6 @@
 namespace App\Http\Requests\RequestAspirante\RequestExperiencia;
 
 use Illuminate\Foundation\Http\FormRequest;
-use App\Constants\ConstAgregarExperiencia\TiposExperiencia;
 use App\Constants\ConstAgregarExperiencia\TrabajoActual;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -28,9 +27,15 @@ class ActualizarExperienciaRequest extends FormRequest
     {
         return [
 
-            'tipo_experiencia'             => ['sometimes','required','string', Rule::in(TiposExperiencia::all())],
+            'tipo_experiencia'             => [
+                'sometimes',
+                'required',
+                'string',
+                Rule::exists('tipo_experiencias', 'nombre_tipo_experiencia')->where('activo', true),
+            ],
              // Valida que `tipo_experiencia` sea opcional (`sometimes`), requerido si está presente, de tipo `string`,
-            // y que su valor esté dentro de los valores definidos en `TiposExperiencia`.
+            // y que corresponda a un tipo **activo** del catálogo `tipo_experiencias`, que administra el
+            // rol Administrador. Se guarda el nombre, no el ID, por eso la validación es por nombre.
             'institucion_experiencia'      => 'sometimes|required|string|min:3|max:100|regex:/^[\pL\pN\s\-]+$/u',
               // Valida que `institucion_experiencia` sea opcional (`sometimes`), requerido si está presente, de tipo `string`,
             // con un mínimo de 3 caracteres, un máximo de 100 caracteres y que coincida con el patrón de letras, números, espacios y guiones.

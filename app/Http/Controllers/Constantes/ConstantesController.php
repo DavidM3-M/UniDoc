@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Constantes;
 
 use App\Constants\ConstAgregarEstudio\TiposEstudio;
-use App\Constants\ConstAgregarExperiencia\TiposExperiencia;
 use App\Constants\ConstAgregarIdioma\NivelIdioma;
 use App\Constants\ConstCertificacionBancaria\TipoCuenta as ConstCertificacionBancariaTipoCuenta;
 use App\Constants\ConstEps\EstadoAfiliacion;
@@ -17,6 +16,7 @@ use App\Constants\ConstUsuario\Genero;
 use App\Constants\ConstUsuario\TipoIdentificacion;
 use App\Constants\ConstCertificacionBancaria\TipoCuenta;
 use App\Constants\ConstPension\RegimenPensional;
+use App\Models\TipoExperiencia;
 
 
 class ConstantesController
@@ -110,10 +110,15 @@ class ConstantesController
     }
 
     //const agregar experiencia
+    // Ya no sale de una constante: el catálogo vive en la tabla `tipo_experiencias` y lo
+    // administra el rol Administrador. Se devuelve un array plano de nombres para conservar
+    // exactamente el mismo formato de respuesta que cuando era constante.
     public function obtenerTipoExperiencia()
     {
         return response()->json([
-            'tipo_experiencia' => TiposExperiencia::all()
+            'tipo_experiencia' => TipoExperiencia::activos()
+                ->orderBy('nombre_tipo_experiencia')
+                ->pluck('nombre_tipo_experiencia')
         ]);
     }
 

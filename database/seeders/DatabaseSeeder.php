@@ -24,6 +24,9 @@ class DatabaseSeeder extends Seeder
         $this->call(EvaluadorProduccionSeeder::class);
         $this->call(ProductoAcademicoSeeder::class);
         $this->call(AmbitoDivulgacionSeeder::class);
+        // Debe ir antes de DemoAspirantesSeeder: ese seeder inserta experiencias
+        // cuyo tipo se valida contra este catálogo.
+        $this->call(TipoExperienciaSeeder::class);
         $this->call(UmbralEvaluacionDocenteSeeder::class);
         $this->call(AspiranteSeeder::class);
         $this->call(CoordinadorSeeder::class);

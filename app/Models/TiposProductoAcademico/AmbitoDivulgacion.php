@@ -37,9 +37,21 @@ class AmbitoDivulgacion extends Model
 
         'nombre_ambito_divulgacion',
         'producto_academico_id',
-        
+        'activo',
+
     ];
 // Define los campos que se pueden asignar masivamente (mass assignment).
+
+    protected $casts = [
+        'activo' => 'boolean',
+    ];
+    // Convierte `activo` a booleano al leerlo, para que el JSON devuelva true/false y no 1/0.
+
+    public function scopeActivos($query)
+    // Filtra solo los ámbitos vigentes, los que deben aparecer en los desplegables.
+    {
+        return $query->where('activo', true);
+    }
 
     // Relación uno a muchos inversa con ProductoAcademico.
     public function productoAcademicoAmbitoDivulgacion():BelongsTo
