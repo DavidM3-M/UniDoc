@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Aspirante;
 
+use Illuminate\Support\Facades\Log;
+
 use App\Models\Aspirante\Normativa;
 use App\Services\ArchivoService;
 use Illuminate\Support\Facades\DB;
@@ -57,9 +59,9 @@ class NormativaController
                 'message' => 'Normativa y documento guardados correctamente',
             ], 201);
         } catch (\Exception $e) {
+            Log::error('NormativaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([ // En caso de error, devuelve mensaje de fallo y el detalle del error
                 'message' => 'Error al crear la normativa.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -100,9 +102,9 @@ class NormativaController
             return response()->json(['normativas' => $normativas], 200); // Devuelve las normativas encontradas
 
         } catch (\Exception $e) {
+            Log::error('NormativaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([ // Manejo de errores
                 'message' => 'Error al obtener las normativas.',
-                'error' => $e->getMessage(),
             ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
@@ -136,6 +138,7 @@ class NormativaController
             return response()->json(['normativa' => $normativa], 200); // Devuelve la normativa encontrada
 
         } catch (\Exception $e) {
+            Log::error('NormativaController: ' . $e->getMessage(), ['excepcion' => $e]);
             $codigo = (is_int($e->getCode()) && $e->getCode() !== 0) ? $e->getCode() : 500; // Manejo de errores
             return response()->json([
                 'message' => 'Error al obtener la normativa',
@@ -175,9 +178,9 @@ class NormativaController
                 'mensaje' => 'Normativa actualizada correctamente',
             ], 200);
         } catch (\Exception $e) {
+            Log::error('NormativaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([ // Manejo de errores en la actualización
                 'message' => 'Error al actualizar la normativa.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -208,9 +211,9 @@ class NormativaController
             return response()->json(['mensaje' => 'Normativa eliminada correctamente'], 200); // Devuelve mensaje de éxito
 
         } catch (\Exception $e) {
+            Log::error('NormativaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([ // Manejo de errores en la eliminación
                 'message' => 'Error al eliminar la normativa.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }

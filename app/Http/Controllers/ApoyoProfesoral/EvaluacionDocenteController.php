@@ -15,8 +15,9 @@ use Illuminate\Support\Facades\Log;
  *
  * La evaluación docente dejó de ser una autoevaluación: es Apoyo Profesoral quien la
  * asigna a cada docente. El docente solo puede consultarla (ver `Docente\EvaluacionDocenteController`).
- * El promedio asignado alimenta el requisito de categoría de `CalculoPuntajeDocenteService`
- * (evaluación >= umbral, hoy 4.0), por lo que la escritura queda restringida a este rol.
+ * El promedio asignado alimenta el requisito de categoría de `MotorEscalafonDocenteService`
+ * (evaluación >= `EscalonDocente.evaluacion_minima` de cada escalón), por lo que la escritura
+ * queda restringida a este rol.
  */
 class EvaluacionDocenteController
 {
@@ -61,7 +62,6 @@ class EvaluacionDocenteController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al listar las evaluaciones docentes.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -102,7 +102,6 @@ class EvaluacionDocenteController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al obtener la evaluación docente.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -157,7 +156,6 @@ class EvaluacionDocenteController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al asignar la evaluación docente.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -209,7 +207,6 @@ class EvaluacionDocenteController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al actualizar la evaluación docente.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }

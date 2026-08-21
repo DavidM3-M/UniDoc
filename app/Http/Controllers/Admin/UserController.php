@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Admin;
 
+use Illuminate\Support\Facades\Log;
+
 use Illuminate\Http\Request;
 use App\Models\Usuario\User;
 use Maatwebsite\Excel\Facades\Excel;
@@ -38,9 +40,9 @@ class UserController
                 'usuarios' => $usuarios
             ], 200);
         } catch (\Exception $e) {
+            Log::error('UserController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([
                 'message' => 'Error al obtener usuarios',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -67,14 +69,15 @@ class UserController
                 ]
             ], 200);
         } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('UserController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([
                 'message' => 'Error de validación',
                 'errors'  => $e->errors(),
             ], 422);
         } catch (\Exception $e) {
+            Log::error('UserController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([
                 'message' => 'Error al cambiar el rol',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -85,9 +88,9 @@ class UserController
         try {
             return Excel::download(new UsuariosExport, 'usuarios_' . date('Y-m-d_H-i-s') . '.xlsx');
         } catch (\Exception $e) {
+            Log::error('UserController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([
                 'message' => 'Error al exportar usuarios',
-                'error' => $e->getMessage()
             ], 500);
         }
     }

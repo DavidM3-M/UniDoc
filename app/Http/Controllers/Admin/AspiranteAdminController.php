@@ -200,7 +200,6 @@ class AspiranteAdminController extends Controller
             Log::error('Error al obtener aspirantes: ' . $e->getMessage());
             return response()->json([
                 'mensaje' => 'Error al obtener la lista de aspirantes',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -403,7 +402,6 @@ class AspiranteAdminController extends Controller
             Log::error('Error al obtener aspirante: ' . $e->getMessage());
             return response()->json([
                 'mensaje' => 'Error al obtener información del aspirante',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -472,7 +470,6 @@ class AspiranteAdminController extends Controller
             Log::error('Error al obtener aspirante (talento humano): ' . $e->getMessage());
             return response()->json([
                 'mensaje' => 'Error al obtener información del aspirante',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -538,7 +535,6 @@ class AspiranteAdminController extends Controller
             Log::error('Error al dar aval: ' . $e->getMessage());
             return response()->json([
                 'mensaje' => 'Error al registrar el aval',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -556,7 +552,6 @@ class AspiranteAdminController extends Controller
             Log::error('Error al generar PDF: ' . $e->getMessage());
             return response()->json([
                 'mensaje' => 'Error al generar la hoja de vida',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -594,7 +589,6 @@ class AspiranteAdminController extends Controller
             Log::error('Error al obtener estadísticas: ' . $e->getMessage());
             return response()->json([
                 'mensaje' => 'Error al obtener estadísticas',
-                'error' => $e->getMessage()
             ], 500);
         }
     }

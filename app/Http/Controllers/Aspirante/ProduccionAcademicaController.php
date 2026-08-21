@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Aspirante;
 
+use Illuminate\Support\Facades\Log;
+
 use Illuminate\Http\Request;
 use App\Models\Aspirante\ProduccionAcademica;
 use App\Http\Requests\RequestAspirante\RequestProduccionAcademica\ActualizarProduccionAcademicaRequest;
@@ -57,10 +59,10 @@ class ProduccionAcademicaController
             'message' => 'Producción académica y documento guardados correctamente',
          ], 201);
       } catch (\Exception $e) {
+          Log::error('ProduccionAcademicaController: ' . $e->getMessage(), ['excepcion' => $e]);
 
          return response()->json([ // Manejo de errores
             'message' => 'Error al crear la producción académica.',
-            'error' => $e->getMessage()
          ], 500);
       }
    }
@@ -82,7 +84,13 @@ class ProduccionAcademicaController
          $user = $request->user(); // Obtiene el usuario actual
 
          $producciones = ProduccionAcademica::where('user_id', $user->id) // Consulta las producciones académicas del usuario con sus documentos
-            ->with(['documentosProduccionAcademica:id_documento,documentable_id,archivo,estado,motivo_rechazo'])
+            ->with([
+               'documentosProduccionAcademica:id_documento,documentable_id,archivo,estado,motivo_rechazo',
+               // El ámbito es el valor del catálogo (y el que otorga el puntaje). Sin este
+               // eager-load la tarjeta solo podía mostrar `medio_divulgacion`, texto libre.
+               'ambitoDivulgacionProduccionAcademica:id_ambito_divulgacion,nombre_ambito_divulgacion,producto_academico_id,puntaje',
+               'ambitoDivulgacionProduccionAcademica.productoAcademicoAmbitoDivulgacion:id_producto_academico,nombre_producto_academico',
+            ])
             ->orderBy('created_at')
             ->get();
 
@@ -104,9 +112,9 @@ class ProduccionAcademicaController
          return response()->json(['producciones' => $producciones], 200); // Devuelve las producciones en una respuesta JSON
 
       } catch (\Exception $e) {
+          Log::error('ProduccionAcademicaController: ' . $e->getMessage(), ['excepcion' => $e]);
          return response()->json([ // Manejo de errores
             'message' => 'Error al obtener las producciones académicas.',
-            'error' => $e->getMessage()
          ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
       }
    }
@@ -129,7 +137,13 @@ class ProduccionAcademicaController
 
          $produccion = ProduccionAcademica::where('id_produccion_academica', $id) // Busca la producción académica del usuario por ID
             ->where('user_id', $user->id)
-            ->with(['documentosProduccionAcademica:id_documento,documentable_id,archivo,estado,motivo_rechazo'])
+            ->with([
+               'documentosProduccionAcademica:id_documento,documentable_id,archivo,estado,motivo_rechazo',
+               // Mismo motivo que en el listado: evita que el detalle tenga que pedir el ámbito
+               // por HTTP cada vez que se abre.
+               'ambitoDivulgacionProduccionAcademica:id_ambito_divulgacion,nombre_ambito_divulgacion,producto_academico_id,puntaje',
+               'ambitoDivulgacionProduccionAcademica.productoAcademicoAmbitoDivulgacion:id_producto_academico,nombre_producto_academico',
+            ])
             ->firstOrFail();
 
          $produccion->documentosProduccionAcademica->each(function ($documento) { // Agrega URL pública del archivo a cada documento
@@ -141,9 +155,9 @@ class ProduccionAcademicaController
          return response()->json(['produccion' => $produccion], 200); // Devuelve la producción en JSON
 
       } catch (\Exception $e) {
+          Log::error('ProduccionAcademicaController: ' . $e->getMessage(), ['excepcion' => $e]);
          return response()->json([ // Error al buscar
             'message' => 'Error al obtener la producción académica.',
-            'error' => $e->getMessage()
          ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
       }
    }
@@ -184,9 +198,9 @@ class ProduccionAcademicaController
             'message' => 'Producción académica actualizada correctamente',
          ], 200);
       } catch (\Exception $e) {
+          Log::error('ProduccionAcademicaController: ' . $e->getMessage(), ['excepcion' => $e]);
          return response()->json([ // Error al actualizar
             'message' => 'Error al actualizar la producción académica.',
-            'error' => $e->getMessage()
          ], 500);
       }
    }
@@ -221,9 +235,9 @@ class ProduccionAcademicaController
          return response()->json(['message' => 'Producción académica eliminada correctamente'], 200); // Respuesta exitosa
 
       } catch (\Exception $e) {
+          Log::error('ProduccionAcademicaController: ' . $e->getMessage(), ['excepcion' => $e]);
          return response()->json([ // Error al eliminar
             'message' => 'Error al eliminar la producción académica.',
-            'error' => $e->getMessage()
          ], 500);
       }
    }

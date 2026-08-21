@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Docente;
 
+use Illuminate\Support\Facades\Log;
+
 use App\Models\Docente\EvaluacionDocente;
 use Illuminate\Http\Request;
 
@@ -11,7 +13,7 @@ use Illuminate\Http\Request;
  * La evaluación docente la asigna el rol "Apoyo Profesoral"
  * (ver `App\Http\Controllers\ApoyoProfesoral\EvaluacionDocenteController`).
  * El docente no puede crearla ni modificarla, porque el promedio alimenta directamente
- * el requisito de ascenso de categoría en `CalculoPuntajeDocenteService`.
+ * el requisito de ascenso de categoría en `MotorEscalafonDocenteService`.
  */
 class EvaluacionDocenteController
 {
@@ -39,9 +41,9 @@ class EvaluacionDocenteController
 
             return response()->json(['data' => $evaluacion]);
         } catch (\Exception $e) {
+            Log::error('EvaluacionDocenteController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([
                 'message' => 'Error al obtener la evaluación.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Aspirante;
 
+use Illuminate\Support\Facades\Log;
+
 use App\Http\Requests\RequestAspirante\RequestRut\ActualizarRutRequest;
 use Illuminate\Http\Request;
 use App\Models\Aspirante\Rut;
@@ -69,9 +71,9 @@ class RutController
                 'message' => 'RUT creado exitosamente',
             ], 201);
         } catch (\Exception $e) {
+            Log::error('RutController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([ // Captura errores y devuelve respuesta con código 500
                 'message' => 'Error al crear el RUT',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -111,9 +113,9 @@ class RutController
             return response()->json(['rut' => $rut], 200); // Devuelve el RUT encontrado junto con sus archivos
 
         } catch (\Exception $e) {
+            Log::error('RutController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([ // Captura errores y responde con código 500
                 'message' => 'Error al obtener el RUT',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -146,9 +148,9 @@ class RutController
                 'message' => 'RUT actualizado exitosamente',
             ], 200);
         } catch (\Exception $e) {
+            Log::error('RutController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([ // Manejo de errores con respuesta 500
                 'message' => 'Error al actualizar el RUT',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }

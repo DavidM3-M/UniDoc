@@ -145,7 +145,7 @@ class GoogleAuthController
             // Redirige al frontend con el token; el frontend lo captura y guarda en cookie
             return redirect("{$frontendUrl}/auth/google/callback?token={$token}");
         } catch (\Exception $e) {
-            Log::error('Google OAuth error', ['error' => $e->getMessage()]);
+            Log::error('Google OAuth error', []);
             $frontendUrl = $this->resolveFrontendUrl();
             return redirect("{$frontendUrl}/inicio-sesion?error=google_auth_failed");
         }

@@ -42,6 +42,8 @@ class ActualizarAmbitoDivulgacionRequest extends FormRequest
             ],
 
             'activo' => 'sometimes|boolean',
+
+            'puntaje' => 'sometimes|integer|min:0|max:9999',
         ];
     }
 

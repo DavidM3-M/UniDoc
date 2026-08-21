@@ -12,10 +12,10 @@ class PuntajeController
     /**
      * Evaluar al docente autenticado y guardar su puntaje y categoría.
      *
-     * El cálculo usa el umbral de evaluación vigente, que configura el Administrador.
-     * `EscalafonDocenteService` aplica además la regla de no retroactividad: si el umbral
-     * subió después de que al docente se le otorgó su categoría, la conserva mientras
-     * siga cumpliendo los requisitos que regían en ese momento.
+     * El cálculo usa la evaluación mínima que exige cada escalón, configurada por el
+     * Administrador (ver `EscalonDocente`). `EscalafonDocenteService` aplica además la regla
+     * de no retroactividad: si esa exigencia subió después de que al docente se le otorgó su
+     * categoría, la conserva mientras siga cumpliendo los requisitos que regían en ese momento.
      *
      * @param Request $request Solicitud HTTP con el usuario autenticado.
      * @param EscalafonDocenteService $escalafon Resuelve y persiste la categoría efectiva.
@@ -28,7 +28,7 @@ class PuntajeController
             'contratacionUsuario',
             'estudiosUsuario.documentosEstudio',
             'idiomasUsuario.documentosIdioma',
-            'experienciasUsuario.documentosExperiencia',
+            'experienciasUsuario.documentosExperiencia', // Antigüedad Uniautónoma
             'produccionAcademicaUsuario.documentosProduccionAcademica',
             'evaluacionDocenteUsuario',
             'puntajeUsuario', // Categoría ya otorgada, necesaria para la no retroactividad

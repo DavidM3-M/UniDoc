@@ -33,10 +33,15 @@ class ProduccionAcademica extends Model
          return $this->morphMany(Documento::class, 'documentable');
      }
 
-    // Relación con el modelo AmbitoDivulgacion
+    /**
+     * Ámbito de divulgación del catálogo que administra el rol Administrador.
+     *
+     * La llave foránea es `ambito_divulgacion_id`. Antes apuntaba a `medio_divulgacion`, que es
+     * el texto libre que escribe el docente ("Revista UNAM"): la relación nunca resolvía.
+     */
     public function ambitoDivulgacionProduccionAcademica():BelongsTo
     {
-        return $this->belongsTo(AmbitoDivulgacion::class, 'medio_divulgacion', 'id_ambito_divulgacion');
+        return $this->belongsTo(AmbitoDivulgacion::class, 'ambito_divulgacion_id', 'id_ambito_divulgacion');
     }
 
     // Relación uno a uno con la tabla usuarios

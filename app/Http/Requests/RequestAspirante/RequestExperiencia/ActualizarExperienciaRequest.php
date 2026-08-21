@@ -3,6 +3,9 @@
 namespace App\Http\Requests\RequestAspirante\RequestExperiencia;
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\Concerns\ConservaValorDelCatalogo;
+use App\Models\Aspirante\Experiencia;
+use App\Constants\TextoLibre;
 use App\Constants\ConstAgregarExperiencia\TrabajoActual;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -10,6 +13,8 @@ use Illuminate\Validation\Rule;
 
 class ActualizarExperienciaRequest extends FormRequest
 {
+    use ConservaValorDelCatalogo;
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -31,23 +36,31 @@ class ActualizarExperienciaRequest extends FormRequest
                 'sometimes',
                 'required',
                 'string',
-                Rule::exists('tipo_experiencias', 'nombre_tipo_experiencia')->where('activo', true),
+                $this->reglaCatalogoVigente(
+                    'tipo_experiencias',
+                    'nombre_tipo_experiencia',
+                    $this->valorGuardado(Experiencia::class, 'id_experiencia', 'tipo_experiencia')
+                ),
             ],
              // Valida que `tipo_experiencia` sea opcional (`sometimes`), requerido si está presente, de tipo `string`,
             // y que corresponda a un tipo **activo** del catálogo `tipo_experiencias`, que administra el
             // rol Administrador. Se guarda el nombre, no el ID, por eso la validación es por nombre.
-            'institucion_experiencia'      => 'sometimes|required|string|min:3|max:100|regex:/^[\pL\pN\s\-]+$/u',
+            'institucion_experiencia'      => 'sometimes|required|string|min:3|max:100|' . TextoLibre::SIN_EMOJIS,
               // Valida que `institucion_experiencia` sea opcional (`sometimes`), requerido si está presente, de tipo `string`,
             // con un mínimo de 3 caracteres, un máximo de 100 caracteres y que coincida con el patrón de letras, números, espacios y guiones.
-            'cargo'                        => 'sometimes|required|string|min:3|max:100|regex:/^[\pL\pN\s\-]+$/u',
+            'es_uniautonoma'               => 'sometimes|boolean',
+            'cargo'                        => 'sometimes|required|string|min:3|max:100|' . TextoLibre::SIN_EMOJIS,
               // Valida que `cargo` sea opcional (`sometimes`), requerido si está presente, de tipo `string`,
             // con un mínimo de 3 caracteres, un máximo de 100 caracteres y que coincida con el patrón de letras, números, espacios y guiones.
             'trabajo_actual'               => ['sometimes','required','string', Rule::in(TrabajoActual::all())],
              // Valida que `trabajo_actual` sea opcional (`sometimes`), requerido si está presente y que su valor esté
             // dentro de los valores definidos en `TrabajoActual`.
-            'intensidad_horaria'           => 'sometimes|nullable|integer|min:1|max:168',
+            'intensidad_horaria'           => 'sometimes|nullable|integer|min:1|max:127',
              // Valida que `intensidad_horaria` sea opcional (`sometimes`), puede ser nulo (`nullable`), de tipo `integer`,
             // con un valor mínimo de 1 y un máximo de 168 (horas en una semana).
+            // Mismo criterio que en `CrearExperienciaRequest`: los meses declarados pueden no
+            // coincidir con el cálculo por fechas y eso es legítimo.
+            'meses_trabajados'             => 'sometimes|nullable|integer|min:1|max:1200',
             'fecha_inicio'                 => 'sometimes|required|date',
             // Valida que `fecha_inicio` sea opcional (`sometimes`), requerido si está presente y de tipo `date`.
             'fecha_finalizacion'           => 'sometimes|nullable|date|after_or_equal:fecha_inicio',

@@ -147,7 +147,6 @@ class PostulacionController
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Ocurrió un error al crear la postulación.',
-                'error' => $e->getMessage()
             ], $e->getCode() ?: 500);
         }
     }
@@ -189,7 +188,6 @@ class PostulacionController
         } catch (\Exception $e) {
             return response()->json([ // Manejar excepciones
                 'message' => 'Ocurrió un error al obtener las postulaciones.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -217,7 +215,7 @@ class PostulacionController
     //     } catch (\Exception $e) { // Manejar excepciones
     //         return response()->json([
     //             'message' => 'Ocurrió un error al obtener las postulaciones por convocatoria.', // Retornar un mensaje de error
-    //             'error' => $e->getMessage()
+    //             
     //         ], 500);
     //     }
     // }
@@ -245,7 +243,6 @@ class PostulacionController
         } catch (\Exception $e) { // Manejar excepciones
             return response()->json([ // Retornar un mensaje de error
                 'message' => 'Ocurrió un error al obtener las postulaciones del usuario.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -281,7 +278,6 @@ class PostulacionController
         } catch (\Exception $e) { // Manejar excepciones
             return response()->json([
                 'message' => 'Ocurrió un error al generar la hoja de vida.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -362,7 +358,6 @@ class PostulacionController
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Ocurrió un error al actualizar el estado de la postulación.',
-                'error' => $e->getMessage()
             ], $e->getCode() ?: 500);
         }
     }
@@ -399,7 +394,6 @@ class PostulacionController
         } catch (\Exception $e) { // Manejar excepciones
             return response()->json([ // Retornar un mensaje de error
                 'message' => 'Ocurrió un error al eliminar la postulación.',
-                'error' => $e->getMessage()
             ], $e->getCode() ?: 500);
         }
     }
@@ -437,7 +431,6 @@ class PostulacionController
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Ocurrió un error al eliminar la postulación del usuario.',
-                'error' => $e->getMessage()
             ], $e->getCode() ?: 500);
         }
     }
@@ -458,7 +451,6 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
     } catch (\Exception $e) {
         return response()->json([
             'message' => 'Ocurrió un error al generar la hoja de vida.',
-            'error' => $e->getMessage()
         ], 500);
     }
 }

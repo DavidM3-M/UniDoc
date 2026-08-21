@@ -70,7 +70,6 @@ class GenerarCertificadosController
         // El código de estado HTTP es 500 (Internal Server Error).
             return response()->json([
                 'message' => 'Error al obtener los docentes.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Aspirante;
 
+use Illuminate\Support\Facades\Log;
+
 use App\Http\Requests\RequestAspirante\RequestPension\CrearPensionRequest;
 use App\Http\Requests\RequestAspirante\RequestPension\ActualizarPensionRequest;
 use App\Services\ArchivoService;
@@ -48,9 +50,9 @@ class PensionController
             ], 201);
 
         } catch (\Exception $e) {
+            Log::error('PensionController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([
                 'message' => 'Error al crear la Pension.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -77,9 +79,9 @@ class PensionController
             }
             return response()->json(['pension' => $pension], 200);
         } catch (\Exception $e) {
+            Log::error('PensionController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([
                 'message' => 'Error al obtener la Pension.',
-                'error' => $e->getMessage(),
             ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
@@ -105,9 +107,9 @@ class PensionController
             ], 200);
 
         } catch (\Exception $e) {
+            Log::error('PensionController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([
                 'message' => 'Error al actualizar la Pension.',
-                'error' => $e->getMessage(),
             ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }

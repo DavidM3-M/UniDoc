@@ -4,6 +4,7 @@ namespace App\Http\Requests\RequestAspirante\RequestAptitud;
 // Importa la clase `Route` para definir rutas en la API.
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Constants\TextoLibre;
 // Importa la clase base `FormRequest` para manejar solicitudes HTTP con validación.
 
 use Illuminate\Contracts\Validation\Validator;
@@ -39,11 +40,11 @@ class ActualizarAptitudRequest extends FormRequest
 
     {
         return [
-            'nombre_aptitud' => 'sometimes|required|string|max:50|regex:/^[\pL\pN\s\-,]+$/u',
+            'nombre_aptitud' => 'sometimes|required|string|max:50|' . TextoLibre::SIN_EMOJIS,
              // Valida que `nombre_aptitud` sea opcional (`sometimes`), requerido si está presente, de tipo `string`,
             // con un máximo de 50 caracteres y que coincida con el patrón de letras, números, espacios y guiones.
 
-            'descripcion_aptitud'    => 'sometimes|required|string|max:500|regex:/^[\pL\pN\s\-,]+$/u',
+            'descripcion_aptitud'    => 'sometimes|required|string|max:500|' . TextoLibre::SIN_EMOJIS,
         ];
     }
 

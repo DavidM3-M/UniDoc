@@ -18,9 +18,8 @@ use Illuminate\Support\Facades\Log;
  * (ver `AmbitoDivulgacionController`), que son los que el aspirante escoge al registrar
  * una producción académica.
  *
- * **Limitación conocida:** `CalculoPuntajeDocenteService::clasificacionPorAmbito()` mapea IDs de
- * ámbito hardcodeados a puntaje. Los ámbitos creados desde aquí suman 0 puntos hasta que se
- * actualice ese servicio.
+ * El puntaje que cada ámbito otorga en el escalafón docente se administra en
+ * `AmbitoDivulgacionController` (campo `puntaje`), no aquí.
  */
 class ProductoAcademicoController
 {
@@ -67,7 +66,6 @@ class ProductoAcademicoController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al listar los tipos de producto académico.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -100,7 +98,6 @@ class ProductoAcademicoController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al obtener el tipo de producto académico.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -127,7 +124,6 @@ class ProductoAcademicoController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al crear el tipo de producto académico.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -167,7 +163,6 @@ class ProductoAcademicoController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al actualizar el tipo de producto académico.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -217,7 +212,6 @@ class ProductoAcademicoController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al eliminar el tipo de producto académico.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }

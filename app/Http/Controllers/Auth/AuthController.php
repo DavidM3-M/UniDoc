@@ -66,7 +66,6 @@ class AuthController
             ], 201);
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error('Error al crear usuario', [
-                'error' => $e->getMessage(),
                 'file'  => $e->getFile(),
                 'line'  => $e->getLine(),
             ]);
@@ -268,7 +267,6 @@ class AuthController
         } catch (\Exception $e) { // Manejo de excepciones
             return response()->json([
                 'message' => 'Error al actualizar la contraseña.',
-                'error' => $e->getMessage()
             ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
@@ -325,7 +323,7 @@ class AuthController
             return response()->json(['message' => 'Si el correo está registrado, recibirás un enlace de restablecimiento.'], 200); // Devolver respuesta
 
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Error al enviar correo de restablecimiento', ['error' => $e->getMessage()]);
+            \Illuminate\Support\Facades\Log::error('Error al enviar correo de restablecimiento', []);
             return response()->json([
                 'message' => 'Error al enviar el correo de restablecimiento.',
             ], 500);
@@ -377,7 +375,6 @@ class AuthController
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al actualizar la contraseña.',
-                'error' => $e->getMessage(),
             ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }

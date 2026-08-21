@@ -321,7 +321,6 @@ class ContratacionController
         } catch (\Exception $e) { // Manejo de excepciones
             return response()->json([
                 'message' => 'Error al obtener las contrataciones.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -350,7 +349,6 @@ class ContratacionController
         } catch (\Exception $e) { // Manejo de excepciones
             return response()->json([
                 'message' => 'Error al obtener la información de la contratación.',
-                'error' => $e->getMessage()
             ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
@@ -377,7 +375,7 @@ class ContratacionController
     //     } catch (\Exception $e) {
     //         return response()->json([
     //             'message' => 'Error al obtener las contrataciones del usuario.',
-    //             'error' => $e->getMessage()
+    //             
     //         ], 500);
     //     }
     // }
@@ -413,7 +411,6 @@ class ContratacionController
         } catch (\Exception $e) { // Manejo de excepciones
             return response()->json([
                 'message' => 'Error al obtener las contrataciones del usuario autenticado.',
-                'error' => $e->getMessage()
             ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }

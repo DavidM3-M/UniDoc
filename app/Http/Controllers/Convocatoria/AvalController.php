@@ -168,7 +168,7 @@ class AvalController extends Controller
 
             return response()->json(['data' => $this->appendPuntajes($usuarios)]);
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Error al obtener usuarios.', 'error' => $e->getMessage()], 500);
+            return response()->json(['message' => 'Error al obtener usuarios.'], 500);
         }
     }
 
@@ -298,7 +298,7 @@ class AvalController extends Controller
             if ($status < 400 || $status > 499) {
                 $status = 500;
             }
-            return response()->json(['message' => $e->getMessage() ?: 'Error al registrar aval.', 'error' => $e->getMessage()], $status);
+            return response()->json(['message' => $e->getMessage() ?: 'Error al registrar aval.'], $status);
         }
     }
 
@@ -344,7 +344,7 @@ class AvalController extends Controller
                 ]
             ]);
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Error al obtener avales.', 'error' => $e->getMessage()], 500);
+            return response()->json(['message' => 'Error al obtener avales.'], 500);
         }
     }
 
@@ -445,7 +445,7 @@ class AvalController extends Controller
             if ($status < 400 || $status > 499) {
                 $status = 500;
             }
-            return response()->json(['message' => $e->getMessage() ?: 'Error al registrar el rechazo.', 'error' => $e->getMessage()], $status);
+            return response()->json(['message' => $e->getMessage() ?: 'Error al registrar el rechazo.'], $status);
         }
     }
 }

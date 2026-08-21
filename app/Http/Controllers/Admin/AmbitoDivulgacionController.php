@@ -16,9 +16,9 @@ use Illuminate\Support\Facades\Log;
  * que el aspirante escoge realmente al registrar una producción académica
  * (`produccion_academicas.ambito_divulgacion_id`).
  *
- * **Limitación conocida:** `CalculoPuntajeDocenteService::clasificacionPorAmbito()` decide el
- * puntaje con un `match` de IDs hardcodeados. Un ámbito creado desde aquí cae en el `default`
- * y **suma 0 puntos** hasta que se actualice ese servicio.
+ * El campo `puntaje` es lo que suma `MotorEscalafonDocenteService::calcularPuntaje()` por cada
+ * producción académica aprobada que use este ámbito — un ámbito nuevo puntúa desde el día uno,
+ * con el valor que se le asigne aquí (o desde la pestaña "Puntajes" de Escalafón docente).
  */
 class AmbitoDivulgacionController
 {
@@ -74,7 +74,6 @@ class AmbitoDivulgacionController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al listar los ámbitos de divulgación.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -107,7 +106,6 @@ class AmbitoDivulgacionController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al obtener el ámbito de divulgación.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -125,7 +123,7 @@ class AmbitoDivulgacionController
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Ámbito de divulgación creado correctamente. Recuerde que los ámbitos nuevos no otorgan puntaje hasta que se actualice la tabla de clasificación.',
+                'message' => 'Ámbito de divulgación creado correctamente.',
                 'data' => $ambito->load('productoAcademicoAmbitoDivulgacion:id_producto_academico,nombre_producto_academico'),
             ], 201);
         } catch (\Exception $e) {
@@ -134,7 +132,6 @@ class AmbitoDivulgacionController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al crear el ámbito de divulgación.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -174,7 +171,6 @@ class AmbitoDivulgacionController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al actualizar el ámbito de divulgación.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -223,7 +219,6 @@ class AmbitoDivulgacionController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al eliminar el ámbito de divulgación.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }

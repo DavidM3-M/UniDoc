@@ -18,12 +18,23 @@ class Experiencia extends Model
         'user_id',
         'tipo_experiencia',
         'institucion_experiencia',
+        'es_uniautonoma',
         'cargo',
         'trabajo_actual',
         'intensidad_horaria',
+        'meses_trabajados',
         'fecha_inicio',
         'fecha_finalizacion',
         'fecha_expedicion_certificado',
+    ];
+
+    protected $casts = [
+        'es_uniautonoma' => 'boolean',
+        'intensidad_horaria' => 'integer',
+        // Meses declarados por el docente y respaldados por el certificado. No confundir con el
+        // cálculo por fechas de `MotorEscalafonDocenteService::calcularMesesUniautonoma()`, que
+        // sigue siendo el que alimenta el escalafón.
+        'meses_trabajados' => 'integer',
     ];
 
     // Relación polimórfica con documentos

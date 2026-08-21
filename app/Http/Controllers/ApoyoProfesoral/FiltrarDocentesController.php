@@ -48,7 +48,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al obtener los estudios.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -84,7 +83,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'No se pudieron obtener los estudios del docente.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -125,7 +123,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al filtrar los estudios.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -157,7 +154,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al obtener los idiomas.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -195,7 +191,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'No se pudieron obtener los idiomas del docente.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -233,7 +228,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al filtrar los idiomas.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -268,7 +262,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al obtener las experiencias.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -306,7 +299,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al filtrar las experiencias.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -343,7 +335,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'No se pudieron obtener las experiencias del docente.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -399,7 +390,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al obtener la producción académica.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -449,7 +439,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'No se pudo obtener la producción académica del docente.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -507,7 +496,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al filtrar la producción académica.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -522,12 +510,13 @@ class FiltrarDocentesController
     {
         try {
             // Carga los docentes junto con todas las relaciones que necesita
-            // CalculoPuntajeDocenteService::evaluar() para evitar consultas N+1.
+            // MotorEscalafonDocenteService::evaluar() para evitar consultas N+1.
             $docentes = User::role('Docente')
                 ->with([
                     'contratacionUsuario',
                     'estudiosUsuario.documentosEstudio',
                     'idiomasUsuario.documentosIdioma',
+                    'experienciasUsuario.documentosExperiencia',
                     'produccionAcademicaUsuario.documentosProduccionAcademica',
                     'evaluacionDocenteUsuario',
                     'puntajeUsuario', // Categoría ya otorgada, para la regla de no retroactividad
@@ -551,7 +540,6 @@ class FiltrarDocentesController
                     'puntaje_total' => $resultado['puntaje_total'],
                     'categoria_lograda' => $resultado['categoria_lograda'],
                     'categoria_protegida' => $resultado['categoria_protegida'],
-                    'umbral_evaluacion' => $resultado['umbral_evaluacion'],
                     'razon' => $resultado['razon'],
                 ];
             })->values();
@@ -566,7 +554,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al listar los docentes con su puntaje.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }

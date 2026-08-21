@@ -3,9 +3,10 @@
 namespace App\Http\Requests\RequestAspirante\RequestEstudio;
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Constants\ClavePrimaria;
 use App\Constants\ConstAgregarEstudio\Graduado;
-use App\Constants\ConstAgregarEstudio\TiposEstudio;
 use App\Constants\ConstAgregarEstudio\TituloConvalidado;
+use App\Constants\TextoLibre;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Validation\Rule;
@@ -31,25 +32,34 @@ class CrearEstudioRequest extends FormRequest
     // Método que define las reglas de validación que se aplican a los datos de la solicitud.
     {
         return [
-            'tipo_estudio'              => ['required','string', Rule::in(TiposEstudio::all())],
-            // Valida que `tipo_estudio` sea requerido y que su valor esté dentro de los valores definidos en `TiposEstudio`.
+            // Ya no valida contra la constante `TiposEstudio`: valida contra el catálogo real
+            // `niveles_formacion_academica` (ver `nivel_formacion_academica_id` abajo). El
+            // controlador sobreescribe este valor con el del catálogo cuando se manda el id, así
+            // que aquí basta con exigir que sea un nombre de nivel vigente.
+            'tipo_estudio'              => ['required','string', Rule::exists('niveles_formacion_academica', 'nivel_formacion')->where('activo', true)],
+            // Id del nivel de formación elegido en el select (opcional: si no se manda, el
+            // aspirante sigue pudiendo llenar `tipo_estudio` desde el listado de nombres).
+            'nivel_formacion_academica_id' => 'bail|nullable|integer|min:1|max:' . ClavePrimaria::SMALLINT_MAXIMO . '|exists:niveles_formacion_academica,id_nivel_formacion_academica',
             'graduado'                  => ['required','string', Rule::in(Graduado::all())],
             // Valida que `graduado` sea requerido y que su valor esté dentro de los valores definidos en `Graduado`.
-            'institucion'               => 'required|string|min:7|max:100|regex:/^[\pL\pN\s\-]+$/u',
+            'institucion'               => 'required|string|min:7|max:100|' . TextoLibre::SIN_EMOJIS,
              // Valida que `institucion` sea requerido, de tipo `string`, con un mínimo de 7 caracteres, un máximo de 100 caracteres,
             // y que coincida con el patrón de letras, números, espacios y guiones.
+            // Id del programa SNIES elegido en la cascada Institución → Programa (opcional:
+            // fallback a institución/título manuales si el programa no está en el catálogo).
+            'programa_formacion_educativa_id' => 'bail|nullable|integer|min:1|exists:programas_formacion_educativa,id_programa',
             'fecha_graduacion'          => 'nullable|date',
             // Valida que `fecha_graduacion` sea opcional (`nullable`) y de tipo `date`.
             'titulo_convalidado'        => ['required','string', Rule::in(TituloConvalidado::all())],
             // Valida que `titulo_convalidado` sea requerido y que su valor esté dentro de los valores definidos en `TituloConvalidado`.
             'fecha_convalidacion'       => 'nullable|date',
             // Valida que `fecha_convalidacion` sea opcional (`nullable`) y de tipo `date`.
-            'resolucion_convalidacion'  => 'nullable|string|min:7|max:100|regex:/^[\pL\pN\s\-]+$/u',
+            'resolucion_convalidacion'  => 'nullable|string|min:7|max:100|' . TextoLibre::SIN_EMOJIS,
              // Valida que `resolucion_convalidacion` sea opcional (`nullable`), de tipo `string`, con un mínimo de 7 caracteres,
             // un máximo de 100 caracteres y que coincida con el patrón de letras, números, espacios y guiones.
             'posible_fecha_graduacion'  => 'nullable|date',
             // Valida que `posible_fecha_graduacion` sea opcional (`nullable`) y de tipo `date`.
-            'titulo_estudio'            => 'required|string|min:7|max:100|regex:/^[\pL\pN\s\-]+$/u',
+            'titulo_estudio'            => 'required|string|min:7|max:100|' . TextoLibre::SIN_EMOJIS,
              // Valida que `titulo_estudio` sea opcional (`nullable`), de tipo `string`, con un mínimo de 7 caracteres,
             // un máximo de 100 caracteres y que coincida con el patrón de letras, números, espacios y guiones.
             'fecha_inicio'              => 'required|date',

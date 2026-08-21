@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Constantes;
 
-use App\Constants\ConstAgregarEstudio\TiposEstudio;
 use App\Constants\ConstAgregarIdioma\NivelIdioma;
 use App\Constants\ConstCertificacionBancaria\TipoCuenta as ConstCertificacionBancariaTipoCuenta;
 use App\Constants\ConstEps\EstadoAfiliacion;
@@ -16,6 +15,9 @@ use App\Constants\ConstUsuario\Genero;
 use App\Constants\ConstUsuario\TipoIdentificacion;
 use App\Constants\ConstCertificacionBancaria\TipoCuenta;
 use App\Constants\ConstPension\RegimenPensional;
+use App\Models\ExamenIdioma;
+use App\Models\Idioma;
+use App\Models\NivelFormacionAcademica;
 use App\Models\TipoExperiencia;
 
 
@@ -123,12 +125,6 @@ class ConstantesController
     }
 
      // constantes de estudio
-    public function obtenerTipoEstudio()
-    {
-        return response()->json([
-            'tipo_estudio' =>TiposEstudio::all()
-        ]);
-    }
 
     // Obtener perfiles profesionales para desplegable
     public function obtenerPerfilesProfesionales()
@@ -136,6 +132,75 @@ class ConstantesController
         return response()->json([
             'perfiles_profesionales' => \App\Constants\ConstTalentoHumano\PerfilesProfesionales\PerfilesProfesionales::all()
         ], 200);
+    }
+
+    /**
+     * Niveles de formación académica (catálogo administrable), para la cascada Nivel académico
+     * → Nivel de formación → Institución → Programa del formulario de Estudio. Reemplaza a la
+     * constante fija `TiposEstudio`.
+     *
+     * Se devuelve `id` + `nombre` + `nivel_academico` + `orden` (no solo `id`+`nombre` como el
+     * resto de catálogos de este controlador): con pocas filas, el frontend arma el primer
+     * nivel de la cascada (Pregrado/Posgrado/Formación complementaria) agrupando client-side
+     * por `nivel_academico`, sin necesidad de un endpoint aparte. `orden` nulo le permite avisar
+     * que ese nivel no cuenta para el escalafón.
+     */
+    public function obtenerNivelFormacionAcademica()
+    {
+        return response()->json([
+            'opciones' => NivelFormacionAcademica::activos()
+                ->orderBy('nivel_academico')
+                ->orderBy('orden')
+                ->orderBy('nivel_formacion')
+                ->get(['id_nivel_formacion_academica as id', 'nivel_formacion as nombre', 'nivel_academico', 'orden']),
+        ]);
+    }
+
+    /**
+     * Catálogo de idiomas (`App\Models\Idioma`, no confundir con el registro del
+     * aspirante/docente), para el select de "Idioma" en el formulario de certificación.
+     */
+    public function obtenerIdiomas()
+    {
+        return response()->json([
+            'opciones' => Idioma::activos()
+                ->orderBy('nombre_idioma')
+                ->get(['id_idioma_catalogo as id', 'nombre_idioma as nombre']),
+        ]);
+    }
+
+    /**
+     * Exámenes de certificación de un idioma del catálogo (IELTS, TOEFL, Cambridge...), para el
+     * select en cascada de "Examen / Certificación" que depende del idioma elegido.
+     *
+     * Devuelve además `vigencia_meses` y los `rangos` de puntaje de cada examen. Son pocos
+     * registros y evitan dos viajes extra al servidor: con eso el formulario puede mostrar de
+     * inmediato el rango válido, calcular la vista previa del nivel MCER mientras se escribe el
+     * puntaje, y avisar cuándo vence el certificado. El valor que se guarda igual lo recalcula
+     * el servidor (ver `Aspirante\IdiomaController::resolverCatalogos()`).
+     */
+    public function obtenerExamenesIdioma(\Illuminate\Http\Request $request)
+    {
+        $idiomaCatalogoId = $request->query('idioma_catalogo_id');
+
+        $examenes = ExamenIdioma::activos()
+            ->when($idiomaCatalogoId, fn ($q) => $q->where('idioma_catalogo_id', $idiomaCatalogoId))
+            ->with('rangos:id_rango_examen_idioma,examen_idioma_id,puntaje_min,puntaje_max,nivel_mcer')
+            ->orderBy('nombre_examen')
+            ->get(['id_examen_idioma', 'nombre_examen', 'vigencia_meses']);
+
+        return response()->json([
+            'opciones' => $examenes->map(fn ($examen) => [
+                'id' => $examen->id_examen_idioma,
+                'nombre' => $examen->nombre_examen,
+                'vigencia_meses' => $examen->vigencia_meses,
+                'rangos' => $examen->rangos->map(fn ($rango) => [
+                    'puntaje_min' => (float) $rango->puntaje_min,
+                    'puntaje_max' => (float) $rango->puntaje_max,
+                    'nivel_mcer' => $rango->nivel_mcer,
+                ])->values(),
+            ]),
+        ]);
     }
 
     //constantes cuenta bancaria
@@ -151,6 +216,23 @@ class ConstantesController
     {
         return response()->json([
             'regimen_pensional' =>RegimenPensional::all()
+        ]);
+    }
+
+    /**
+     * Escalones del escalafón docente con sus requisitos, para mostrárselos al docente en su
+     * hoja de vida (`CategoriasEscalafon.tsx`). Misma fuente de verdad que usa
+     * `MotorEscalafonDocenteService` para evaluar — nada hardcodeado ni duplicado aquí.
+     */
+    public function obtenerEscalonesDocente()
+    {
+        $escalones = \App\Models\EscalonDocente::activos()
+            ->with('idioma:id_idioma_catalogo,nombre_idioma')
+            ->ordenados()
+            ->get(['id_escalon', 'nombre', 'orden', 'formacion_minima', 'idioma_catalogo_id', 'nivel_mcer_minimo', 'puntaje_minimo', 'meses_minimos', 'evaluacion_minima']);
+
+        return response()->json([
+            'escalones_docente' => $escalones,
         ]);
     }
 }

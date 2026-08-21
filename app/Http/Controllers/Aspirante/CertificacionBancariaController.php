@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Aspirante;
 
+use Illuminate\Support\Facades\Log;
+
 use App\Http\Requests\RequestAspirante\RequestCertificacionBancaria\ActualizarCertificacionBancariaRequest;
 use App\Http\Requests\RequestAspirante\RequestCertificacionBancaria\CrearCertificacionBancariaRequest;
 use App\Services\ArchivoService;
@@ -48,9 +50,9 @@ class CertificacionBancariaController
             ], 201);
 
         } catch (\Exception $e) {
+            Log::error('CertificacionBancariaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([
                 'message' => 'Error al crear la Certificacion Bancaria.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -78,9 +80,9 @@ class CertificacionBancariaController
             return response()->json(['certificacion_bancaria' => $certificacionBancaria,], 200);
 
         } catch (\Exception $e) {
+            Log::error('CertificacionBancariaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([
                 'message' => 'Error al obtener la Certificación Bancaria.',
-                'error' => $e->getMessage(),
             ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
@@ -109,9 +111,9 @@ class CertificacionBancariaController
             ], 200);
 
         } catch (\Exception $e) {
+            Log::error('CertificacionBancariaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([
                 'message' => 'Error al actualizar la Certificación Bancaria.',
-                'error' => $e->getMessage(),
             ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }

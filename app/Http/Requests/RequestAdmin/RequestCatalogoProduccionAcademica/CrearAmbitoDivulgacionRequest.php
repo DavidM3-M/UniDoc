@@ -43,6 +43,10 @@ class CrearAmbitoDivulgacionRequest extends FormRequest
             ],
 
             'activo' => 'sometimes|boolean',
+
+            // Lo que suma MotorEscalafonDocenteService::calcularPuntaje() por cada producción
+            // académica aprobada que use este ámbito.
+            'puntaje' => 'sometimes|integer|min:0|max:9999',
         ];
     }
 

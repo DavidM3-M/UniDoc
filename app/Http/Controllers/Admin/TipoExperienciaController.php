@@ -71,7 +71,6 @@ class TipoExperienciaController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al listar los tipos de experiencia.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -104,7 +103,6 @@ class TipoExperienciaController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al obtener el tipo de experiencia.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -134,7 +132,6 @@ class TipoExperienciaController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al crear el tipo de experiencia.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -201,7 +198,6 @@ class TipoExperienciaController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al actualizar el tipo de experiencia.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -258,7 +254,6 @@ class TipoExperienciaController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al eliminar el tipo de experiencia.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }

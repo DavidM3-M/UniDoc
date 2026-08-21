@@ -219,7 +219,6 @@ class VerificacionDocumentosController
         } catch (\Exception $e) {
             return response()->json([ // Si ocurre cualquier excepción, retorna un mensaje de error y el detalle de la excepción.
                 'message' => 'Error al obtener documentos.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -257,7 +256,6 @@ class VerificacionDocumentosController
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al obtener los docentes.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -295,7 +293,6 @@ class VerificacionDocumentosController
         } catch (\Exception $e) {
             return response()->json([    // Si ocurre cualquier excepción, retorna un mensaje de error y el detalle de la excepción.
                 'message' => 'Error al obtener los documentos del usuario.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -358,7 +355,6 @@ class VerificacionDocumentosController
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al obtener los documentos por categoría.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -415,7 +411,6 @@ class VerificacionDocumentosController
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al actualizar el estado del documento.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -475,7 +470,6 @@ class VerificacionDocumentosController
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al obtener el documento.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }

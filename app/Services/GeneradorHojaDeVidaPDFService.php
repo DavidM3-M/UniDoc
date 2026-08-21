@@ -105,7 +105,6 @@ class GeneradorHojaDeVidaPDFService
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Ocurrió un error al generar el PDF.',
-                'error' => $e->getMessage()
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }

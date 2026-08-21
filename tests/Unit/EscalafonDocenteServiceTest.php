@@ -4,44 +4,68 @@ namespace Tests\Unit;
 
 use App\Models\Aspirante\Documento;
 use App\Models\Aspirante\Estudio;
+use App\Models\Aspirante\Experiencia;
 use App\Models\Aspirante\Idioma;
 use App\Models\Aspirante\ProduccionAcademica;
 use App\Models\Docente\EvaluacionDocente;
 use App\Models\Docente\Puntaje;
+use App\Models\EscalonDocente;
 use App\Models\TalentoHumano\Contratacion;
+use App\Models\TiposProductoAcademico\AmbitoDivulgacion;
+use App\Models\TiposProductoAcademico\ProductoAcademico;
 use App\Models\Usuario\User;
-use App\Services\CalculoPuntajeDocenteService;
 use App\Services\EscalafonDocenteService;
-use App\Services\UmbralEvaluacionDocenteService;
+use App\Services\MotorEscalafonDocenteService;
+use Database\Seeders\EscalonDocenteSeeder;
+use Database\Seeders\ReglaExcepcionEscalonSeeder;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
 /**
  * Pruebas de la regla de no retroactividad del escalafón docente.
  *
- * La regla acordada es «reglas del momento del otorgamiento»: subir el umbral de
- * evaluación no puede bajarle la categoría a quien ya la tenía, pero perder un
+ * La regla acordada es «reglas del momento del otorgamiento»: que un escalón exija una
+ * evaluación más alta no puede bajarle la categoría a quien ya la tenía, pero perder un
  * requisito real (que le rechacen el doctorado, por ejemplo) sí debe bajarla.
  *
- * Solo se prueba `resolver()`, que no toca base de datos. La persistencia
- * (`evaluarYPersistir`) se ejerce en las pruebas de integración del endpoint.
+ * `MotorEscalafonDocenteService` lee sus reglas de base de datos, así que aquí se siembran los
+ * escalones estándar (todos con `evaluacion_minima` = 4.0, ver `EscalonDocenteSeeder`) y se usa
+ * `DatabaseTransactions` para no dejar rastro. Para simular que la evaluación mínima de un
+ * escalón cambió después de otorgada una categoría, las pruebas actualizan directamente la fila
+ * de `EscalonDocente` correspondiente —ya no existe un umbral global inyectable. Solo se prueba
+ * `resolver()`; la persistencia (`evaluarYPersistir`) se ejerce en las pruebas de integración
+ * del endpoint.
  */
 class EscalafonDocenteServiceTest extends TestCase
 {
-    /** Construye el servicio con un umbral vigente fijo. */
-    private function escalafon(float $umbralVigente): EscalafonDocenteService
+    use DatabaseTransactions;
+
+    private AmbitoDivulgacion $ambitoTop;
+
+    protected function setUp(): void
     {
-        $umbrales = new class($umbralVigente) extends UmbralEvaluacionDocenteService {
-            public function __construct(private float $valor)
-            {
-            }
+        parent::setUp();
 
-            public function valorVigente(): float
-            {
-                return $this->valor;
-            }
-        };
+        $this->seed(EscalonDocenteSeeder::class);
+        $this->seed(ReglaExcepcionEscalonSeeder::class);
 
-        return new EscalafonDocenteService(new CalculoPuntajeDocenteService($umbrales));
+        $producto = ProductoAcademico::create(['nombre_producto_academico' => 'Producto de prueba ' . uniqid()]);
+        $this->ambitoTop = AmbitoDivulgacion::create([
+            'producto_academico_id' => $producto->id_producto_academico,
+            'nombre_ambito_divulgacion' => 'Ámbito de prueba ' . uniqid(),
+            'puntaje' => 10,
+        ]);
+    }
+
+    private function escalafon(): EscalafonDocenteService
+    {
+        return new EscalafonDocenteService(new MotorEscalafonDocenteService());
+    }
+
+    /** Cambia la evaluación mínima que exige un escalón, simulando un ajuste administrativo. */
+    private function fijarEvaluacionMinima(string $nombreEscalon, float $valor): void
+    {
+        EscalonDocente::where('nombre', $nombreEscalon)->update(['evaluacion_minima' => $valor]);
     }
 
     // ---------------------------------------------------------------
@@ -69,6 +93,19 @@ class EscalafonDocenteServiceTest extends TestCase
         return $produccion;
     }
 
+    /** Experiencia Uniautónoma aprobada, generosa en meses para no ser la limitante de estas pruebas. */
+    private function experienciaUniautonoma(int $meses = 300): Experiencia
+    {
+        $experiencia = (new Experiencia())->forceFill([
+            'es_uniautonoma' => true,
+            'fecha_inicio' => now()->subMonths($meses)->toDateString(),
+            'fecha_finalizacion' => null,
+        ]);
+        $experiencia->setRelation('documentosExperiencia', collect([$this->documento()]));
+
+        return $experiencia;
+    }
+
     /**
      * Docente que cumple todos los requisitos de Titular salvo por el umbral,
      * con la categoría indicada ya otorgada bajo `$umbralOtorgado`.
@@ -87,13 +124,14 @@ class EscalafonDocenteServiceTest extends TestCase
             'fecha_fin'     => null,
         ]);
 
-        $idioma = (new Idioma())->forceFill(['nivel' => 'C1']);
+        $idioma = (new Idioma())->forceFill(['idioma' => 'Inglés', 'nivel' => 'C1']);
         $idioma->setRelation('documentosIdioma', collect([$this->documento()]));
 
         $user->setRelation('contratacionUsuario', $contrato);
         $user->setRelation('estudiosUsuario', collect([$this->estudio($formacion)]));
         $user->setRelation('idiomasUsuario', collect([$idioma]));
-        $user->setRelation('produccionAcademicaUsuario', collect(array_fill(0, 6, null))->map(fn() => $this->produccion(1)));
+        $user->setRelation('produccionAcademicaUsuario', collect(array_fill(0, 6, null))->map(fn() => $this->produccion($this->ambitoTop->id_ambito_divulgacion)));
+        $user->setRelation('experienciasUsuario', collect([$this->experienciaUniautonoma()]));
         $user->setRelation('evaluacionDocenteUsuario', (new EvaluacionDocente())->forceFill([
             'promedio_evaluacion_docente' => $evaluacion,
         ]));
@@ -113,23 +151,24 @@ class EscalafonDocenteServiceTest extends TestCase
 
     public function test_sin_categoria_previa_devuelve_la_categoria_calculada(): void
     {
-        $resultado = $this->escalafon(4.0)->resolver($this->docente(4.5));
+        $resultado = $this->escalafon()->resolver($this->docente(4.5));
 
         $this->assertSame('Titular', $resultado['categoria_lograda']);
         $this->assertFalse($resultado['categoria_protegida']);
     }
 
     // ---------------------------------------------------------------
-    // Protección frente a un cambio de umbral
+    // Protección frente a un cambio en la evaluación mínima del escalón
     // ---------------------------------------------------------------
 
-    public function test_subir_el_umbral_no_degrada_una_categoria_ya_otorgada(): void
+    public function test_subir_la_evaluacion_minima_no_degrada_una_categoria_ya_otorgada(): void
     {
-        // Titular otorgado cuando el umbral era 4.0; su evaluación es 4.2.
-        // El umbral sube a 4.5: sin protección pasaría a Asociado.
+        // Titular otorgado cuando su escalón exigía evaluación 4.0; la del docente es 4.2.
+        // La exigencia de Titular sube a 4.5: sin protección pasaría a Asociado.
         $docente = $this->docente(evaluacion: 4.2, categoriaOtorgada: 'Titular', umbralOtorgado: 4.0);
+        $this->fijarEvaluacionMinima('Titular', 4.5);
 
-        $resultado = $this->escalafon(4.5)->resolver($docente);
+        $resultado = $this->escalafon()->resolver($docente);
 
         $this->assertSame('Titular', $resultado['categoria_lograda']);
         $this->assertTrue($resultado['categoria_protegida']);
@@ -137,11 +176,12 @@ class EscalafonDocenteServiceTest extends TestCase
         $this->assertStringContainsString('Conserva la categoría Titular', $resultado['razon']);
     }
 
-    public function test_la_razon_explica_el_umbral_de_otorgamiento_y_el_vigente(): void
+    public function test_la_razon_explica_la_evaluacion_de_otorgamiento_y_la_vigente(): void
     {
         $docente = $this->docente(evaluacion: 4.2, categoriaOtorgada: 'Titular', umbralOtorgado: 4.0);
+        $this->fijarEvaluacionMinima('Titular', 4.5);
 
-        $razon = $this->escalafon(4.5)->resolver($docente)['razon'];
+        $razon = $this->escalafon()->resolver($docente)['razon'];
 
         $this->assertStringContainsString('4', $razon);
         $this->assertStringContainsString('4.5', $razon);
@@ -154,7 +194,7 @@ class EscalafonDocenteServiceTest extends TestCase
 
     public function test_perder_un_requisito_real_si_degrada_aunque_haya_categoria_otorgada(): void
     {
-        // Titular otorgado con umbral 4.0, pero ahora no tiene doctorado aprobado:
+        // Titular otorgado con evaluación mínima 4.0, pero ahora no tiene doctorado aprobado:
         // ni con las reglas de su momento alcanzaría Titular.
         $docente = $this->docente(
             evaluacion: 4.5,
@@ -163,18 +203,18 @@ class EscalafonDocenteServiceTest extends TestCase
             formacion: 'Maestría'
         );
 
-        $resultado = $this->escalafon(4.0)->resolver($docente);
+        $resultado = $this->escalafon()->resolver($docente);
 
         $this->assertSame('Asistente', $resultado['categoria_lograda']);
         $this->assertFalse($resultado['categoria_protegida']);
     }
 
-    public function test_bajar_la_propia_evaluacion_degrada_aunque_el_umbral_no_cambie(): void
+    public function test_bajar_la_propia_evaluacion_degrada_aunque_la_evaluacion_minima_no_cambie(): void
     {
-        // Le reasignaron la evaluación a 3.0: no cumple ni con el umbral de su momento.
+        // Le reasignaron la evaluación a 3.0: no cumple ni con la exigencia de su momento.
         $docente = $this->docente(evaluacion: 3.0, categoriaOtorgada: 'Titular', umbralOtorgado: 4.0);
 
-        $resultado = $this->escalafon(4.0)->resolver($docente);
+        $resultado = $this->escalafon()->resolver($docente);
 
         $this->assertSame('Asociado', $resultado['categoria_lograda']);
         $this->assertFalse($resultado['categoria_protegida']);
@@ -189,17 +229,18 @@ class EscalafonDocenteServiceTest extends TestCase
         // Tenía Asociado y ahora cumple Titular: la protección no debe frenarlo.
         $docente = $this->docente(evaluacion: 4.5, categoriaOtorgada: 'Asociado', umbralOtorgado: 4.0);
 
-        $resultado = $this->escalafon(4.0)->resolver($docente);
+        $resultado = $this->escalafon()->resolver($docente);
 
         $this->assertSame('Titular', $resultado['categoria_lograda']);
         $this->assertFalse($resultado['categoria_protegida']);
     }
 
-    public function test_bajar_el_umbral_permite_ascender(): void
+    public function test_bajar_la_evaluacion_minima_permite_ascender(): void
     {
         $docente = $this->docente(evaluacion: 3.5, categoriaOtorgada: 'Asociado', umbralOtorgado: 4.0);
+        $this->fijarEvaluacionMinima('Titular', 3.0);
 
-        $resultado = $this->escalafon(3.0)->resolver($docente);
+        $resultado = $this->escalafon()->resolver($docente);
 
         $this->assertSame('Titular', $resultado['categoria_lograda']);
         $this->assertFalse($resultado['categoria_protegida']);
@@ -209,13 +250,15 @@ class EscalafonDocenteServiceTest extends TestCase
     // Casos borde
     // ---------------------------------------------------------------
 
-    public function test_categoria_otorgada_sin_umbral_registrado_no_protege(): void
+    public function test_categoria_otorgada_sin_evaluacion_minima_registrada_no_protege(): void
     {
-        // Registros anteriores a HU-2 no tienen umbral_aplicado: sin ancla no se puede
-        // saber bajo qué reglas se otorgó, así que no se protege.
+        // Registros sin umbral_aplicado (el escalón otorgado no exigía evaluación en su
+        // momento, o el dato es anterior a este ajuste): sin ancla no se puede saber bajo
+        // qué reglas se otorgó, así que no se protege.
         $docente = $this->docente(evaluacion: 4.2, categoriaOtorgada: 'Titular', umbralOtorgado: null);
+        $this->fijarEvaluacionMinima('Titular', 4.5);
 
-        $resultado = $this->escalafon(4.5)->resolver($docente);
+        $resultado = $this->escalafon()->resolver($docente);
 
         $this->assertSame('Asociado', $resultado['categoria_lograda']);
         $this->assertFalse($resultado['categoria_protegida']);
@@ -225,7 +268,7 @@ class EscalafonDocenteServiceTest extends TestCase
     {
         $docente = $this->docente(evaluacion: 4.5, categoriaOtorgada: 'Titular', umbralOtorgado: 4.0);
 
-        $resultado = $this->escalafon(4.0)->resolver($docente);
+        $resultado = $this->escalafon()->resolver($docente);
 
         $this->assertSame('Titular', $resultado['categoria_lograda']);
         $this->assertFalse($resultado['categoria_protegida']);

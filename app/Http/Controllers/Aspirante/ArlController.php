@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Aspirante;
 
+use Illuminate\Support\Facades\Log;
+
 use App\Http\Requests\RequestAspirante\RequestArl\ActualizarArlRequest;
 use App\Http\Requests\RequestAspirante\RequestArl\CrearArlRequest;
 use App\Models\Aspirante\Arl;
@@ -46,9 +48,9 @@ class ArlController
             ], 201);
 
         } catch (\Exception $e) {
+            Log::error('ArlController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([
                 'message' => 'Error al crear la ARL.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -76,9 +78,9 @@ class ArlController
             return response()->json(['arl' => $arl,], 200);
 
         } catch (\Exception $e) {
+            Log::error('ArlController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([
                 'message' => 'Error al obtener la ARL.',
-                'error' => $e->getMessage(),
             ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
 
         }
@@ -108,9 +110,9 @@ class ArlController
             ], 200);
 
         } catch (\Exception $e) {
+            Log::error('ArlController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([
                 'message' => 'Error al actualizar la ARL.',
-                'error' => $e->getMessage(),
             ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }

@@ -4,6 +4,7 @@ namespace App\Http\Requests\RequestAspirante\RequestProduccionAcademica;
 
 use App\Constants\ClavePrimaria;
 use Illuminate\Foundation\Http\FormRequest;
+use App\Constants\TextoLibre;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Validation\Rule;
@@ -45,12 +46,12 @@ class CrearProduccionAcademicaRequest extends FormRequest
             // y debe existir en la tabla `ambito_divulgacions` como ámbito **activo**. Un ámbito que el
             // Administrador retiró del catálogo no se puede usar en producciones nuevas, aunque las
             // producciones históricas que ya lo referencian siguen intactas.
-         'titulo' => 'required|string|max:255|regex:/^[\pL\pN\s\-]+$/u',
+         'titulo' => 'required|string|max:255|' . TextoLibre::SIN_EMOJIS,
           // El campo `titulo` es obligatorio, debe ser una cadena (`string`) con un máximo de 255 caracteres
             // y cumplir con un patrón regex que permite letras, números, espacios y guiones.
-         'numero_autores' => 'required|integer',
+         'numero_autores' => 'required|integer|min:1|max:127',
         // El campo `numero_autores` es obligatorio y debe ser un número entero (`integer`).
-         'medio_divulgacion' => 'required|string|max:255|regex:/^[\pL\pN\s\-]+$/u',
+         'medio_divulgacion' => 'required|string|max:255|' . TextoLibre::SIN_EMOJIS,
          // El campo `medio_divulgacion` es obligatorio, debe ser una cadena con un máximo de 255 caracteres
             // y cumplir con un patrón regex que permite letras, números, espacios y guiones.
 

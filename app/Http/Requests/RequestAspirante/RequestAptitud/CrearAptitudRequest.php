@@ -3,6 +3,7 @@
 namespace App\Http\Requests\RequestAspirante\RequestAptitud;
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Constants\TextoLibre;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Exceptions\HttpResponseException;
 
@@ -26,12 +27,12 @@ class CrearAptitudRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'nombre_aptitud' => 'required|string|max:50|regex:/^[\pL\pN\s\-,]+$/u',
+            'nombre_aptitud' => 'required|string|max:50|' . TextoLibre::SIN_EMOJIS,
              // La regla para `nombre_aptitud` indica que es obligatorio (`required`), debe ser una cadena (`string`),
             // tiene un máximo de 50 caracteres (`max:50`) y debe coincidir con un patrón regex que permite letras,
             // números, espacios y guiones.
 
-            'descripcion_aptitud'    => 'required|string|max:500|regex:/^[\pL\pN\s\-,.]+$/u',
+            'descripcion_aptitud'    => 'required|string|max:500|' . TextoLibre::SIN_EMOJIS,
              // La regla para `descripcion_aptitud` es similar, pero no tiene un límite de longitud.
             // También es obligatorio, debe ser una cadena y cumplir con el mismo patrón regex.
       

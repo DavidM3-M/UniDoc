@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Aspirante;
 
+use Illuminate\Support\Facades\Log;
+
 use App\Constants\ClavePrimaria;
 use App\Http\Requests\RequestAspirante\RequestExperiencia\ActualizarExperienciaRequest;
 use Illuminate\Http\Request;
@@ -58,9 +60,9 @@ class ExperienciaController
                 'message' => 'Experiencia creada exitosamente',
             ], 201);
         } catch (\Exception $e) {
+            Log::error('ExperienciaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([ // En caso de error, se retorna un mensaje con el detalle.
                 'message' => 'Error al crear la experiencia.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -103,9 +105,9 @@ class ExperienciaController
             return response()->json(['experiencias' => $experiencias], 200); // Se retorna la lista de experiencias.
 
         } catch (\Exception $e) {
+            Log::error('ExperienciaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([ // En caso de error, se retorna una respuesta con el mensaje.
                 'message' => 'Error al obtener las experiencias.',
-                'error' => $e->getMessage()
             ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
@@ -145,11 +147,12 @@ class ExperienciaController
             return response()->json(['experiencia' => $experiencia], 200); // Se retorna la experiencia encontrada.
 
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            Log::error('ExperienciaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json(['message' => 'Experiencia no encontrada.'], 404);
         } catch (\Exception $e) {
+            Log::error('ExperienciaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([ // En caso de error, se retorna un mensaje detallado.
                 'message' => 'Error al obtener la experiencia.',
-                'error' => $e->getMessage()
             ], is_numeric($e->getCode()) && $e->getCode() >= 400 ? (int) $e->getCode() : 500);
         }
     }
@@ -193,13 +196,14 @@ class ExperienciaController
                 'message' => 'Experiencia actualizada correctamente',
             ], 200);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            Log::error('ExperienciaController: ' . $e->getMessage(), ['excepcion' => $e]);
             // Mismo criterio que obtener y eliminar: si la experiencia no existe (o no es del
             // usuario autenticado) es un 404, no un fallo del servidor.
             return response()->json(['message' => 'Experiencia no encontrada.'], 404);
         } catch (\Exception $e) {
+            Log::error('ExperienciaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([ // En caso de error, se retorna el mensaje correspondiente.
                 'message' => 'Error al actualizar la experiencia.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -238,11 +242,12 @@ class ExperienciaController
             return response()->json(['message' => 'Experiencia eliminada correctamente'], 200); // Retornar una respuesta JSON indicando que la experiencia fue eliminada correctamente.
 
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            Log::error('ExperienciaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json(['message' => 'Experiencia no encontrada.'], 404);
         } catch (\Exception $e) {
+            Log::error('ExperienciaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([ // Manejo de errores: retornar una respuesta JSON con el mensaje de error y el código 500.
                 'message' => 'Error al eliminar la experiencia.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }

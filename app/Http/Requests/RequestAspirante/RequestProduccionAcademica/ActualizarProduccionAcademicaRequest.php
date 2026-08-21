@@ -4,12 +4,17 @@ namespace App\Http\Requests\RequestAspirante\RequestProduccionAcademica;
 
 use App\Constants\ClavePrimaria;
 use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\Concerns\ConservaValorDelCatalogo;
+use App\Models\Aspirante\ProduccionAcademica;
+use App\Constants\TextoLibre;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Validation\Rule;
 
 class ActualizarProduccionAcademicaRequest extends FormRequest
 {
+    use ConservaValorDelCatalogo;
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -38,18 +43,26 @@ class ActualizarProduccionAcademicaRequest extends FormRequest
                 'integer',
                 'min:1',
                 'max:' . ClavePrimaria::SMALLINT_MAXIMO,
-                Rule::exists('ambito_divulgacions', 'id_ambito_divulgacion')->where('activo', true),
+                $this->reglaCatalogoVigente(
+                    'ambito_divulgacions',
+                    'id_ambito_divulgacion',
+                    $this->valorGuardado(
+                        ProduccionAcademica::class,
+                        'id_produccion_academica',
+                        'ambito_divulgacion_id'
+                    )
+                ),
             ],
             // El campo `ambito_divulgacion_id` es opcional (`sometimes`), pero si está presente, es obligatorio (`required`).
             // Debe ser un número entero (`integer`) y debe existir en la tabla `ambito_divulgacions` como ámbito
             // **activo**: un ámbito retirado del catálogo no se puede asignar, aunque las producciones que ya
             // lo referencian conservan su valor mientras no se edite ese campo.
-            'titulo' => 'sometimes|required|string|max:255|regex:/^[\pL\pN\s\-]+$/u',
+            'titulo' => 'sometimes|required|string|max:255|' . TextoLibre::SIN_EMOJIS,
               // El campo `titulo` es opcional, pero si está presente, es obligatorio. Debe ser una cadena (`string`)
             // con un máximo de 255 caracteres y cumplir con un patrón regex que permite letras, números, espacios y guiones.
-            'numero_autores' => 'sometimes|required|integer',
+            'numero_autores' => 'sometimes|required|integer|min:1|max:127',
             // El campo `numero_autores` es opcional, pero si está presente, es obligatorio. Debe ser un número entero (`integer`).
-            'medio_divulgacion' => 'sometimes|required|string|max:255|regex:/^[\pL\pN\s\-]+$/u',
+            'medio_divulgacion' => 'sometimes|required|string|max:255|' . TextoLibre::SIN_EMOJIS,
             // El campo `medio_divulgacion` es opcional, pero si está presente, es obligatorio. Debe ser una cadena
             // con un máximo de 255 caracteres y cumplir con un patrón regex que permite letras, números, espacios y guiones.
             'fecha_divulgacion' => 'sometimes|nullable|date',// volver este campo a requerido

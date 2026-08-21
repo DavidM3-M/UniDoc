@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\EvaluadorProduccion;
 
+use Illuminate\Support\Facades\Log;
+
 use App\Constants\ConstDocumentos\EstadoDocumentos;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -46,10 +48,10 @@ class EvaluadorProduccionController
             return response()->json([ // Aquí se devuelve la respuesta
                 'data' => $usuarios,
             ], 200);
-        } catch (\Exception $e) { // Aquí se maneja la excepción
+        } catch (\Exception $e) {
+            Log::error('EvaluadorProduccionController: ' . $e->getMessage(), ['excepcion' => $e]); // Aquí se maneja la excepción
             return response()->json([
                 'message' => 'Error al obtener las producciones académicas pendientes.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -81,10 +83,10 @@ class EvaluadorProduccionController
             return response()->json([
                 'data' => $user,
             ], 200);
-        } catch (\Exception $e) { // Aquí se maneja la excepción
+        } catch (\Exception $e) {
+            Log::error('EvaluadorProduccionController: ' . $e->getMessage(), ['excepcion' => $e]); // Aquí se maneja la excepción
             return response()->json([
                 'message' => 'Error al obtener las producciones académicas del usuario.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -125,10 +127,10 @@ class EvaluadorProduccionController
             return response()->json([ // Aquí se devuelve la respuesta
                 'message' => "El documento actualizado de estado exitosamente.",
             ]);
-        } catch (\Exception $e) { // Aquí se maneja la excepción
+        } catch (\Exception $e) {
+            Log::error('EvaluadorProduccionController: ' . $e->getMessage(), ['excepcion' => $e]); // Aquí se maneja la excepción
             return response()->json([
                 'message' => 'Error al actualizar el estado del documento.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }

@@ -4,7 +4,6 @@ namespace App\Http\Requests\RequestSecretaria;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use App\Constants\ConstAgregarEstudio\TiposEstudio;
 use App\Constants\ConstAgregarEstudio\Graduado;
 use App\Constants\ConstAgregarEstudio\TituloConvalidado;
 use Illuminate\Contracts\Validation\Validator;
@@ -32,7 +31,13 @@ class ActualizarCertificadoRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'tipo_estudio'              => ['sometimes', 'required', 'string', Rule::in(TiposEstudio::all())],
+            // Escribe en la MISMA tabla `estudios` que el formulario del docente, así que tiene
+            // que validar contra el mismo catálogo. Antes usaba la constante fija `TiposEstudio`,
+            // cuyos 12 valores ya no coinciden con los 17 del catálogo administrable: un
+            // certificado generado con "Pregrado en medicina humana o composición musical" no
+            // existía en `niveles_formacion_academica`, así que el motor del escalafón nunca lo
+            // contaba y el docente no podía editarlo.
+            'tipo_estudio'              => ['sometimes', 'required', 'string', Rule::exists('niveles_formacion_academica', 'nivel_formacion')],
             'graduado'                  => ['sometimes', 'required', 'string', Rule::in(Graduado::all())],
             'institucion'               => 'sometimes|required|string|min:7|max:100|regex:/^[\pL\pN\s\-]+$/u',
             'fecha_graduacion'          => 'sometimes|nullable|date',

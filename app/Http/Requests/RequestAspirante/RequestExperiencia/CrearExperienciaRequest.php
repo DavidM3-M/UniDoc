@@ -3,6 +3,7 @@
 namespace App\Http\Requests\RequestAspirante\RequestExperiencia;
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Constants\TextoLibre;
 use App\Constants\ConstAgregarExperiencia\TrabajoActual;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Contracts\Validation\Validator;
@@ -38,18 +39,26 @@ class CrearExperienciaRequest extends FormRequest
             // El campo `tipo_experiencia` es obligatorio (`required`), debe ser una cadena (`string`) y su valor
             // debe corresponder a un tipo **activo** del catálogo `tipo_experiencias`, que administra el
             // rol Administrador. Se guarda el nombre, no el ID, por eso la validación es por nombre.
-            'institucion_experiencia'      => 'required|string|min:3|max:100|regex:/^[\pL\pN\s\-]+$/u',
+            'institucion_experiencia'      => 'required|string|min:3|max:100|' . TextoLibre::SIN_EMOJIS,
              // El campo `institucion_experiencia` es obligatorio, debe ser una cadena con un mínimo de 3 caracteres
             // y un máximo de 100. Además, debe coincidir con un patrón regex que permite letras, números, espacios y guiones.
 
-            'cargo'                        => 'required|string|min:3|max:100|regex:/^[\pL\pN\s\-]+$/u',
+            // Autodeclarado por quien registra la experiencia; Apoyo Profesoral lo verifica junto
+            // con el documento al aprobarla o rechazarla (ver VerificacionDocumentosController).
+            'es_uniautonoma'               => 'sometimes|boolean',
+
+            'cargo'                        => 'required|string|min:3|max:100|' . TextoLibre::SIN_EMOJIS,
               // El campo `cargo` es obligatorio, debe ser una cadena con un mínimo de 3 caracteres y un máximo de 100.
             // También debe coincidir con el mismo patrón regex.
             'trabajo_actual'               => ['required','string', Rule::in(TrabajoActual::all())],
             // El campo `trabajo_actual` es obligatorio y su valor debe estar dentro de los valores definidos en `TrabajoActual::all()`.
-            'intensidad_horaria'           => 'nullable|integer|min:1|max:168',
+            'intensidad_horaria'           => 'nullable|integer|min:1|max:127',
               // El campo `intensidad_horaria` es opcional (`nullable`), pero si se proporciona, debe ser un número entero
             // entre 1 y 168 (máximo número de horas en una semana).
+            // Meses efectivamente trabajados según el certificado. El formulario lo prellena con
+            // el cálculo por fechas, pero puede diferir a propósito: contratos por horas,
+            // semestres sueltos o vinculaciones con interrupciones. Tope de 1200 = 100 años.
+            'meses_trabajados'             => 'nullable|integer|min:1|max:1200',
             'fecha_inicio'                 => 'required|date', // volver este campo a requerido
             // El campo `fecha_inicio` es obligatorio y debe ser una fecha válida.
             'fecha_finalizacion'           => 'nullable|date|after_or_equal:fecha_inicio',
