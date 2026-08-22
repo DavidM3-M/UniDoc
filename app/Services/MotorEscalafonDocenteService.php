@@ -72,12 +72,15 @@ class MotorEscalafonDocenteService
             'evaluacion_minima_aplicada' => null,
         ];
 
-        $contrato = $user->contratacionUsuario;
-        if (!$contrato || strtolower(trim($contrato->tipo_contrato)) !== 'planta') {
-            $resultado['razon'] = 'Solo aplica para docentes de planta.';
-            return $resultado;
-        }
-
+        // El escalafon ya no depende del tipo de contratacion. Antes habia aqui una guarda que
+        // cortaba la evaluacion si `contratacions.tipo_contrato` no era 'planta', y con eso
+        // cualquier docente sin contrato registrado -o con contrato de catedra u ocasional-
+        // salia con categoria "Ninguna" y puntaje 0 sin que se mirara un solo requisito.
+        //
+        // La antiguedad ya no se lee del contrato: `calcularMesesUniautonoma()` la deriva de las
+        // experiencias marcadas `es_uniautonoma` con documento aprobado, que es el dato que la
+        // Universidad verifica. Quien no cumpla los requisitos cae al escalon base con el detalle
+        // de lo que le falta, en vez de quedarse sin evaluar.
         $meses = $this->calcularMesesUniautonoma($user);
         $puntaje = $this->calcularPuntaje($user);
         $tieneProduccion = $this->tieneProduccionAprobada($user);

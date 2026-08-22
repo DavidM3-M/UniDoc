@@ -154,15 +154,35 @@ class MotorEscalafonDocenteServiceTest extends TestCase
     }
 
     // ---------------------------------------------------------------
-    // Guarda: solo aplica a docentes de planta
+    // El escalafon no depende del tipo de contratacion
     // ---------------------------------------------------------------
 
-    public function test_sin_contratacion_no_aplica_evaluacion(): void
+    /**
+     * Un docente sin contrato registrado se evalua igual que cualquier otro.
+     *
+     * Antes una guarda cortaba aqui y devolvia categoria "Ninguna" sin mirar un solo requisito,
+     * asi que quien no tuviera contrato de planta aparecia con puntaje 0 aunque cumpliera todo.
+     */
+    public function test_sin_contratacion_igual_se_evalua(): void
+    {
+        $ambito = $this->ambitoConPuntaje(10);
+
+        $resultado = $this->servicio->evaluar(
+            $this->docenteTitular($ambito, ['contrato' => null])
+        );
+
+        $this->assertTrue($resultado['valido']);
+        $this->assertSame('Titular', $resultado['categoria_lograda']);
+        $this->assertSame(60, $resultado['puntaje_total']);
+    }
+
+    /** Sin cumplir requisitos cae al escalon base, no a "Ninguna". */
+    public function test_sin_contratacion_y_sin_requisitos_cae_al_escalon_base(): void
     {
         $resultado = $this->servicio->evaluar($this->docente(['contrato' => null]));
 
-        $this->assertFalse($resultado['valido']);
-        $this->assertSame('Ninguna', $resultado['categoria_lograda']);
+        $this->assertTrue($resultado['valido']);
+        $this->assertNotSame('Ninguna', $resultado['categoria_lograda']);
     }
 
     // ---------------------------------------------------------------
