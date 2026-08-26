@@ -3,6 +3,7 @@
 namespace App\Http\Requests\RequestAspirante\RequestProduccionAcademica;
 
 use App\Constants\ClavePrimaria;
+use App\Http\Requests\Concerns\NormalizaIdentificadoresProduccion;
 use Illuminate\Foundation\Http\FormRequest;
 use App\Constants\TextoLibre;
 use Illuminate\Contracts\Validation\Validator;
@@ -12,6 +13,16 @@ use Illuminate\Validation\Rule;
 
 class CrearProduccionAcademicaRequest extends FormRequest
 {
+    use NormalizaIdentificadoresProduccion;
+
+    /**
+     * Deja el DOI sin el resolvedor y los campos vacíos en null antes de validar.
+     */
+    protected function prepareForValidation(): void
+    {
+        $this->merge($this->normalizarIdentificadores());
+    }
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -30,7 +41,7 @@ class CrearProduccionAcademicaRequest extends FormRequest
     public function rules(): array
     // Método que define las reglas de validación para los datos enviados en la solicitud.
     {
-        return [
+        return array_merge($this->reglasIdentificadores(), [
          'ambito_divulgacion_id' => [
              // `bail` + `max` antes del `exists`: `id_ambito_divulgacion` es un smallint y
              // consultar un valor fuera de ese rango hace fallar la consulta en vez de no
@@ -60,8 +71,20 @@ class CrearProduccionAcademicaRequest extends FormRequest
          'archivo' => 'required|file|mimes:pdf|max:2048',
           // El campo `archivo` es obligatorio, debe ser un archivo (`file`) con extensiones permitidas
             // (`pdf`, `doc`, `docx`) y su tamaño no debe exceder los 2048 KB.
-        ];
+
+         // `doi`, `issn_isbn` y `url_publicacion` los aporta reglasIdentificadores(): son los
+         // datos con los que el Evaluador de Producción verifica la publicación. Opcionales.
+        ]);
     }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return $this->mensajesIdentificadores();
+    }
+
     protected function failedValidation(Validator $validator)
     // Método que se ejecuta cuando la validación falla.
     {

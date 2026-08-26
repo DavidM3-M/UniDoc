@@ -1,6 +1,11 @@
 vendor/
 node_modules/
 .git/
+# El symlink de storage no viaja: docker-entrypoint.sh lo recrea con `storage:link --force`
+# en cada arranque, con la ruta de Linux que corresponde dentro del contenedor. Si se incluye,
+# el build falla con "invalid file request public/storage" en cuanto el symlink del host apunta
+# a una ruta que Docker no puede resolver desde el contexto.
+public/storage
 .gitignore
 .gitattributes
 storage/logs/*

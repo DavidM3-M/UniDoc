@@ -5,6 +5,7 @@ namespace App\Http\Requests\RequestAspirante\RequestProduccionAcademica;
 use App\Constants\ClavePrimaria;
 use Illuminate\Foundation\Http\FormRequest;
 use App\Http\Requests\Concerns\ConservaValorDelCatalogo;
+use App\Http\Requests\Concerns\NormalizaIdentificadoresProduccion;
 use App\Models\Aspirante\ProduccionAcademica;
 use App\Constants\TextoLibre;
 use Illuminate\Contracts\Validation\Validator;
@@ -14,6 +15,15 @@ use Illuminate\Validation\Rule;
 class ActualizarProduccionAcademicaRequest extends FormRequest
 {
     use ConservaValorDelCatalogo;
+    use NormalizaIdentificadoresProduccion;
+
+    /**
+     * Deja el DOI sin el resolvedor y los campos vacíos en null antes de validar.
+     */
+    protected function prepareForValidation(): void
+    {
+        $this->merge($this->normalizarIdentificadores());
+    }
 
     /**
      * Determine if the user is authorized to make this request.
@@ -33,7 +43,7 @@ class ActualizarProduccionAcademicaRequest extends FormRequest
     public function rules(): array
     // Método que define las reglas de validación para los datos enviados en la solicitud.
     {
-        return [
+        return array_merge($this->reglasIdentificadores(parcial: true), [
             'ambito_divulgacion_id' => [
                 // `bail` + `max` antes del `exists`: `id_ambito_divulgacion` es un smallint y un
                 // valor fuera de rango haría fallar la consulta en vez de no encontrar la fila.
@@ -71,8 +81,20 @@ class ActualizarProduccionAcademicaRequest extends FormRequest
             'archivo' => 'sometimes|nullable|file|mimes:pdf|max:2048',
             // El campo `archivo` es opcional, pero si está presente, debe ser un archivo (`file`) con extensiones permitidas
             // (`pdf`, `doc`, `docx`) y su tamaño no debe exceder los 2048 KB.
-        ];
+
+            // `doi`, `issn_isbn` y `url_publicacion` los aporta reglasIdentificadores(parcial: true):
+            // el docente puede completarlos después, sin volver a enviar el resto del formulario.
+        ]);
     }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return $this->mensajesIdentificadores();
+    }
+
     protected function failedValidation(Validator $validator)
     // Método que se ejecuta cuando la validación falla.
     {

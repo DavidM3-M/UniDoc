@@ -364,6 +364,9 @@ class VerificacionDocumentosController
      *
      * Este método recibe una solicitud HTTP para actualizar el estado de un documento identificado por su ID.
      * Valida la entrada, realiza la actualización y responde en formato JSON.
+     *
+     * No atiende documentos de producción académica: esa decisión pasó al rol Evaluador de
+     * Producción. Ver el 403 más abajo.
      */
 
     public function actualizarEstadoDocumento(Request $request, $documento_id)
@@ -382,6 +385,19 @@ class VerificacionDocumentosController
             }
 
             $documento = Documento::findOrFail($documento_id);
+
+            // La producción académica la avala el Evaluador de Producción, no Apoyo Profesoral.
+            // El bloqueo tiene que estar acá y no solo en la pantalla: esconder los botones de
+            // VerProduccionAcademicaDocente.tsx deja el endpoint abierto a una petición directa, y
+            // aprobar una producción otorga puntos de escalafón
+            // (MotorEscalafonDocenteService::calcularPuntaje). La lectura sigue permitida: Apoyo
+            // Profesoral necesita la producción para filtros, certificados y hoja de vida.
+            if (str_contains((string) $documento->documentable_type, 'ProduccionAcademica')) {
+                return response()->json([
+                    'message' => 'La producción académica la avala el rol Evaluador de Producción.',
+                ], 403);
+            }
+
             $documento->estado = $request->estado;
 
             if ($request->estado === EstadoDocumentos::RECHAZADO) {
@@ -389,6 +405,11 @@ class VerificacionDocumentosController
             } else {
                 $documento->motivo_rechazo = null;
             }
+
+            // Quién decidió y cuándo. `documentos` es polimórfica, así que esto da trazabilidad a
+            // estudios, idiomas y experiencia igual que al aval de producción académica.
+            $documento->revisado_por = $request->user()?->id;
+            $documento->revisado_en  = now();
 
             $documento->save();
 
