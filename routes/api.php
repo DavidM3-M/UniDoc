@@ -10,6 +10,8 @@ require __DIR__ . '/constantes.php';
 require __DIR__ . '/instituciones.php';
 // Incluye el archivo formacion_educativa_publico.php, cascada Institución/Programa (SNIES) para Aspirante/Docente
 require __DIR__ . '/formacion_educativa_publico.php';
+// Incluye el archivo bancos.php, contiene la ruta del catálogo de bancos (datos.gov.co)
+require __DIR__ . '/bancos.php';
 // Incluye el archivo admin.php, contiene rutas relacionadas con la administración
 require __DIR__ . '/admin.php';
 // Incluye el archivo aspirante.php, contiene rutas relacionadas con los aspirantes

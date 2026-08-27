@@ -282,7 +282,6 @@ class AspiranteAdminController extends Controller
                     'tipo_afiliacion' => $aspirante->epsUsuario->tipo_afiliacion,
                     'estado_afiliacion' => $aspirante->epsUsuario->estado_afiliacion,
                     'tipo_afiliado' => $aspirante->epsUsuario->tipo_afiliado,
-                    'numero_afiliado' => $aspirante->epsUsuario->numero_afiliado,
                     'documentosEps' => $aspirante->epsUsuario->documentosEps->map(fn($doc) => [
                         'id_documento' => $doc->id,
                         'archivo' => $doc->archivo,

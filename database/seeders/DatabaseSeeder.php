@@ -42,6 +42,9 @@ class DatabaseSeeder extends Seeder
         // con TODOS los documentos aprobados, para poder ver puntaje y categoría del escalafón.
         // Va después de los escalones y de los puntajes de ámbito: depende de ambos.
         $this->call(DemoTrayectoriaDocenteSeeder::class);
+        $this->call(CodigoCiiuSeeder::class);
+        $this->call(ResponsabilidadTributariaSeeder::class);
+        $this->call(BancoSeeder::class);
         $this->call(AspiranteSeeder::class);
         $this->call(CoordinadorSeeder::class);
         // Los tres roles que tenían pantalla propia pero ningún usuario con el que entrar:

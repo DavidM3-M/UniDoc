@@ -18,6 +18,7 @@ use App\Http\Controllers\Admin\ExamenIdiomaController;
 use App\Http\Controllers\Admin\RangoExamenIdiomaController;
 use App\Http\Controllers\Admin\EscalonDocenteController;
 use App\Http\Controllers\Admin\ReglaExcepcionEscalonController;
+use App\Http\Controllers\TalentoHumano\ContratacionController;
 
 Route::group([
     'middleware' => [ 'api','auth:api', 'role:Administrador'],
@@ -136,6 +137,15 @@ Route::group([
 
     // Rutas de reportes
     Route::get('usuarios-excel', [ReporteController::class, 'usuariosExcel']);
+
+    // CRUD de contrataciones para Admin (reutiliza ContratacionController de Talento Humano).
+    // Al crear, el controlador omite la validación de avales cuando el actor tiene rol Administrador.
+    Route::post('crear-contratacion/{user_id}', [ContratacionController::class, 'crearContratacion']);
+    Route::put('actualizar-contratacion/{id_contratacion}', [ContratacionController::class, 'actualizarContratacion']);
+    Route::delete('eliminar-contratacion/{id}', [ContratacionController::class, 'eliminarContratacion']);
+    Route::get('obtener-contratacion/{id_contratacion}', [ContratacionController::class, 'obtenerContratacionPorId']);
+    Route::get('obtener-contrataciones', [ContratacionController::class, 'obtenerTodasLasContrataciones']);
+    Route::get('obtener-contratacion/{id_contratacion}/bitacora', [ContratacionController::class, 'obtenerBitacora']);
 });
 Route::group([
     'middleware' => ['api', 'auth:api', 'role:Vicerrectoria|Rectoria|Talento Humano'],

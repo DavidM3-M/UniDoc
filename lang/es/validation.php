@@ -160,7 +160,9 @@ return [
     |--------------------------------------------------------------------------
     */
     'custom' => [
-        // 'attribute-name' => ['rule-name' => 'custom-message'],
+        'numero_identificacion' => [
+            'unique' => 'Este número de identificación ya ha sido registrado.',
+        ],
     ],
 
     /*

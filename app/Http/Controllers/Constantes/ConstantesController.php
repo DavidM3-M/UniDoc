@@ -8,7 +8,8 @@ use App\Constants\ConstEps\EstadoAfiliacion;
 use App\Constants\ConstEps\TipoAfiliacion;
 use App\Constants\ConstEps\TipoAfiliado;
 use App\Constants\ConstInformacionContacto\CategoriaLibretaMilitar;
-use App\Constants\ConstRut\CodigoCiiu;
+use App\Models\Rut\CodigoCiiu;
+use App\Models\Rut\ResponsabilidadTributaria;
 use App\Constants\ConstRut\TipoPersona;
 use App\Constants\ConstUsuario\EstadoCivil;
 use App\Constants\ConstUsuario\Genero;
@@ -63,7 +64,15 @@ class ConstantesController
     public function obtenerCodigoCiiu()
     {
         return response()->json([
-            'codigo_ciiu' => CodigoCiiu::all()
+            'codigo_ciiu' => CodigoCiiu::orderBy('codigo')->get(['codigo', 'descripcion', 'seccion_titulo'])
+        ]);
+    }
+
+    // Metodo para obtener las responsabilidades tributarias
+    public function obtenerResponsabilidadesTributarias()
+    {
+        return response()->json([
+            'responsabilidades_tributarias' => ResponsabilidadTributaria::orderBy('codigo')->get(['id', 'codigo', 'descripcion'])
         ]);
     }
 

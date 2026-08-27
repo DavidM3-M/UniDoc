@@ -1,0 +1,174 @@
+[
+  {
+    "codigo": "01",
+    "descripcion": "Aporte especial para la administración de justicia"
+  },
+  {
+    "codigo": "02",
+    "descripcion": "Gravamen a los movimientos financieros (GMF)"
+  },
+  {
+    "codigo": "03",
+    "descripcion": "Impuesto al patrimonio"
+  },
+  {
+    "codigo": "04",
+    "descripcion": "Impuesto de renta y complementario - régimen especial"
+  },
+  {
+    "codigo": "05",
+    "descripcion": "Impuesto de renta y complementario - régimen ordinario"
+  },
+  {
+    "codigo": "06",
+    "descripcion": "Ingresos y patrimonio"
+  },
+  {
+    "codigo": "07",
+    "descripcion": "Retención en la fuente a título de renta"
+  },
+  {
+    "codigo": "08",
+    "descripcion": "Retención de timbre nacional"
+  },
+  {
+    "codigo": "09",
+    "descripcion": "Retención en la fuente en el impuesto sobre las ventas"
+  },
+  {
+    "codigo": "10",
+    "descripcion": "Obligado aduanero"
+  },
+  {
+    "codigo": "13",
+    "descripcion": "Gran contribuyente"
+  },
+  {
+    "codigo": "14",
+    "descripcion": "Informante de exógena"
+  },
+  {
+    "codigo": "15",
+    "descripcion": "Autorretenedor"
+  },
+  {
+    "codigo": "16",
+    "descripcion": "Obligación de facturar por ingresos de bienes y/o servicios excluidos"
+  },
+  {
+    "codigo": "17",
+    "descripcion": "Profesionales de compra y venta de divisas"
+  },
+  {
+    "codigo": "18",
+    "descripcion": "Precios de transferencia"
+  },
+  {
+    "codigo": "19",
+    "descripcion": "Productor de bienes y/o servicios exentos"
+  },
+  {
+    "codigo": "20",
+    "descripcion": "Obtención de NIT"
+  },
+  {
+    "codigo": "21",
+    "descripcion": "Declarar ingreso o salida del país de divisas o moneda legal"
+  },
+  {
+    "codigo": "22",
+    "descripcion": "Obligado a cumplir deberes formales a nombre de terceros"
+  },
+  {
+    "codigo": "23",
+    "descripcion": "Agente de retención en ventas"
+  },
+  {
+    "codigo": "24",
+    "descripcion": "Declaración consolidada de precios de transferencia"
+  },
+  {
+    "codigo": "26",
+    "descripcion": "Declaración individual de precios de transferencia"
+  },
+  {
+    "codigo": "32",
+    "descripcion": "Impuesto nacional a la gasolina y al ACPM"
+  },
+  {
+    "codigo": "33",
+    "descripcion": "Impuesto nacional al consumo"
+  },
+  {
+    "codigo": "36",
+    "descripcion": "Establecimiento permanente"
+  },
+  {
+    "codigo": "37",
+    "descripcion": "Obligado a facturar electrónicamente"
+  },
+  {
+    "codigo": "38",
+    "descripcion": "Facturación electrónica voluntaria"
+  },
+  {
+    "codigo": "39",
+    "descripcion": "Proveedor de servicios tecnológicos (PST)"
+  },
+  {
+    "codigo": "41",
+    "descripcion": "Declaración anual de activos en el exterior"
+  },
+  {
+    "codigo": "42",
+    "descripcion": "Obligado a llevar contabilidad"
+  },
+  {
+    "codigo": "45",
+    "descripcion": "Autorretenedor de rendimientos financieros"
+  },
+  {
+    "codigo": "46",
+    "descripcion": "IVA prestadores de servicios desde el exterior"
+  },
+  {
+    "codigo": "47",
+    "descripcion": "Régimen Simple de Tributación - SIMPLE"
+  },
+  {
+    "codigo": "48",
+    "descripcion": "Impuesto sobre las ventas - IVA"
+  },
+  {
+    "codigo": "49",
+    "descripcion": "No responsable de IVA"
+  },
+  {
+    "codigo": "50",
+    "descripcion": "No responsable de consumo (restaurantes y bares)"
+  },
+  {
+    "codigo": "51",
+    "descripcion": "Agente de retención impoconsumo de bienes inmuebles"
+  },
+  {
+    "codigo": "52",
+    "descripcion": "Facturador electrónico"
+  },
+  {
+    "codigo": "53",
+    "descripcion": "Persona jurídica no responsable de IVA"
+  },
+  {
+    "codigo": "54",
+    "descripcion": "Intercambio automático de información (CRS)"
+  },
+  {
+    "codigo": "55",
+    "descripcion": "Informante de beneficiarios finales"
+  },
+  {
+    "codigo": "56",
+    "descripcion": "Impuesto al carbono"
+  }
+]
