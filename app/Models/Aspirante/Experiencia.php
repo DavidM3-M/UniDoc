@@ -32,8 +32,8 @@ class Experiencia extends Model
         'es_uniautonoma' => 'boolean',
         'intensidad_horaria' => 'integer',
         // Meses declarados por el docente y respaldados por el certificado. No confundir con el
-        // cálculo por fechas de `MotorEscalafonDocenteService::calcularMesesUniautonoma()`, que
-        // sigue siendo el que alimenta el escalafón.
+        // cálculo por fechas de `MotorEscalafonDocenteService::mesesEnEscalon()`, que sigue siendo
+        // el que alimenta el escalafón: este campo todavía no lo consume nadie.
         'meses_trabajados' => 'integer',
     ];
 

@@ -3,33 +3,41 @@
 namespace App\Services;
 
 use App\Models\EscalonDocente;
+use App\Models\HistorialEscalonDocente;
 use App\Models\NivelFormacionAcademica;
+use App\Models\PeriodoAscenso;
 use App\Models\ReglaExcepcionEscalon;
 use App\Models\TiposProductoAcademico\AmbitoDivulgacion;
 use App\Models\Usuario\User;
 use Carbon\Carbon;
 
 /**
- * Motor de evaluación del escalafón docente, data-driven: lee los escalones y sus requisitos
- * desde `escalones_docente` (administrable), y las reglas de excepción —ej. "tiene Doctorado
- * aprobado → mínimo Asociado"— desde `reglas_excepcion_escalon`. Reemplaza por completo a
- * `CalculoPuntajeDocenteService`, que tenía las mismas reglas hardcodeadas en la constante
- * `CATEGORIAS` y el puntaje por ámbito en un `match` de IDs.
+ * Motor del escalafón docente. Responde **"¿este docente es elegible para ascender?"**, no
+ * "¿qué categoría tiene?": la categoría vigente vive en `historial_escalon_docente` y solo la
+ * otorga Apoyo Profesoral a través de `AscensoEscalafonService`.
  *
- * `App\Services\EscalafonDocenteService` (la regla de no retroactividad frente a cambios en los
- * requisitos) usa este motor como su fuente de verdad de "qué categoría alcanza el docente hoy".
+ * Ese es el cambio de fondo frente a la versión anterior, donde `evaluar()` calculaba la categoría
+ * y `EscalafonDocenteService` (ya eliminado) la persistía cuando el propio docente pedía su
+ * evaluación: el docente se autoascendía. Con el ascenso como acto administrativo, el motor no
+ * escribe nada y una categoría otorgada no se cae sola cuando cambian los requisitos.
  *
- * Separación de responsabilidades a propósito:
- * - Un escalón "base" (sin ningún requisito propio, ej. Auxiliar) es donde cae quien no alcanza
- *   ningún otro escalón y no tiene ninguna excepción a su favor.
- * - Los "requisitos" de un escalón deben cumplirse todos a la vez.
- * - Las "excepciones" son reglas de piso: si se cumplen, garantizan un escalón mínimo sin
- *   importar si se cumplen sus demás requisitos.
+ * Sigue siendo data-driven: los escalones y sus requisitos salen de `escalones_docente`
+ * (administrable), las excepciones —ej. "tiene Doctorado aprobado → mínimo Asociado"— de
+ * `reglas_excepcion_escalon`, y el puntaje por ámbito de `ambito_divulgacion.puntaje`.
  *
- * La evaluación docente mínima es un requisito más de cada escalón (`evaluacion_minima`), no un
- * umbral único y global: ya no existe una pantalla "Umbral evaluación" compartida por todos los
- * escalones. Lo que se compara siempre es el mismo dato real que asigna Apoyo Profesoral
- * (`evaluacion_docentes.promedio_evaluacion_docente`).
+ * Tres reglas del reglamento que conviene tener presentes al leer el código:
+ *
+ * 1. **La antigüedad es tiempo en el escalón anterior**, no meses totales en la Universidad, y solo
+ *    cuenta si está respaldada por experiencia `es_uniautonoma` con documento aprobado. Ver
+ *    `mesesEnEscalon()`.
+ * 2. **La producción académica no es acumulable entre escalones**: solo puntúa la divulgada y
+ *    subida mientras el docente estaba en su escalón actual. Ver `calcularPuntaje()`.
+ * 3. **Todo se congela en `periodo_ascenso.fecha_cierre`**, para que dos docentes con el mismo
+ *    expediente no dependan de qué día alcanzó a firmar Apoyo Profesoral.
+ *
+ * Los ascensos son de uno en uno (`orden` inmediatamente superior). La única forma de saltar
+ * escalones es una regla de excepción, que omite todos los requisitos —antigüedad incluida— pero
+ * no el calendario: igual espera el periodo de ascenso.
  */
 class MotorEscalafonDocenteService
 {
@@ -37,6 +45,19 @@ class MotorEscalafonDocenteService
     private const NIVELES_MCER = [
         'A1' => 1, 'A2' => 2, 'B1' => 3, 'B2' => 4, 'C1' => 5, 'C2' => 6,
     ];
+
+    /**
+     * Estados del semáforo que ordena la bandeja de Apoyo Profesoral.
+     *
+     * No bloquean nada —cualquier documento se puede revisar en cualquier momento— pero evitan
+     * perder tiempo revisando estudios e idiomas de quien todavía no tiene los años, que era el
+     * problema que motivó el semáforo. Bloquear de verdad se descartó porque habría anulado las
+     * excepciones: el doctorado, que es la puerta de escape, nunca se habría podido aprobar.
+     */
+    public const SIN_EXPERIENCIA_SUFICIENTE = 'sin_experiencia_suficiente';
+    public const POR_VERIFICAR_EXPERIENCIA = 'por_verificar_experiencia';
+    public const ANTIGUEDAD_CUMPLIDA = 'antiguedad_cumplida';
+    public const ELEGIBLE = 'elegible';
 
     /**
      * Posición de un escalón en el escalafón, por nombre. Mayor número, escalón superior.
@@ -51,223 +72,381 @@ class MotorEscalafonDocenteService
         return (int) (EscalonDocente::activos()->where('nombre', $nombreEscalon)->value('orden') ?? 0);
     }
 
+    // ---------------------------------------------------------------
+    // Escalón vigente
+    // ---------------------------------------------------------------
+
     /**
-     * Evalúa el perfil de un usuario (docente) contra el escalafón configurado.
+     * El tramo abierto del historial: el escalón que el docente tiene hoy.
      *
-     * @param User $user
-     * @param float|null $evaluacionMinimaOverride Si se indica, reemplaza la `evaluacion_minima`
-     *        propia de cada escalón durante esta evaluación. Lo usa `EscalafonDocenteService`
-     *        para re-evaluar con las reglas vigentes en el momento en que se otorgó una
-     *        categoría (regla de no retroactividad); en el uso normal se omite y cada escalón
-     *        usa su propio valor.
+     * Null si nunca ingresó al escalafón, y entonces no es elegible para nada: sin un punto de
+     * partida no hay contra qué medir la antigüedad ni desde cuándo contar la producción. Lo que
+     * falta en ese caso no es que alguien lo dé de alta, sino una contratación de planta vigente:
+     * el ingreso lo crea `AscensoEscalafonService::ingresar()` cuando Talento Humano la registra.
      */
-    public function evaluar(User $user, ?float $evaluacionMinimaOverride = null): array
+    public function tramoVigente(User $user): ?HistorialEscalonDocente
     {
-        $resultado = [
-            'valido' => false,
-            'categoria_lograda' => 'Ninguna',
-            'razon' => '',
-            'puntaje_total' => 0,
-            'faltantes_por_categoria' => [],
-            'evaluacion_minima_aplicada' => null,
-        ];
-
-        // El escalafon ya no depende del tipo de contratacion. Antes habia aqui una guarda que
-        // cortaba la evaluacion si `contratacions.tipo_contrato` no era 'planta', y con eso
-        // cualquier docente sin contrato registrado -o con contrato de catedra u ocasional-
-        // salia con categoria "Ninguna" y puntaje 0 sin que se mirara un solo requisito.
-        //
-        // La antiguedad ya no se lee del contrato: `calcularMesesUniautonoma()` la deriva de las
-        // experiencias marcadas `es_uniautonoma` con documento aprobado, que es el dato que la
-        // Universidad verifica. Quien no cumpla los requisitos cae al escalon base con el detalle
-        // de lo que le falta, en vez de quedarse sin evaluar.
-        $meses = $this->calcularMesesUniautonoma($user);
-        $puntaje = $this->calcularPuntaje($user);
-        $tieneProduccion = $this->tieneProduccionAprobada($user);
-
-        $escalones = EscalonDocente::activos()->with('idioma:id_idioma_catalogo,nombre_idioma')->ordenados()->get();
-        $escalonBase = $escalones->first(fn ($e) => $this->esBase($e));
-        $escalonesConRequisitos = $escalones->reject(fn ($e) => $this->esBase($e))->sortByDesc('orden')->values();
-        $pisoEscalon = $this->resolverPisoEscalon($user, $escalones);
-
-        $anterior = null;
-
-        foreach ($escalonesConRequisitos as $escalon) {
-            $cumple = $this->evaluarRequisitos($escalon, $user, $meses, $puntaje, $tieneProduccion, $evaluacionMinimaOverride);
-
-            if (collect($cumple)->every(fn ($v) => $v)) {
-                return [
-                    'valido' => true,
-                    'categoria_lograda' => $escalon->nombre,
-                    'razon' => "Cumple todos los requisitos para {$escalon->nombre}.",
-                    'puntaje_total' => $puntaje,
-                    'faltantes_por_categoria' => [],
-                    // Ancla para la regla de no retroactividad de `EscalafonDocenteService`: la
-                    // evaluación mínima que exigía ESTE escalón cuando se otorgó. Null si el
-                    // escalón no exige evaluación (no hay nada que proteger en ese frente).
-                    'evaluacion_minima_aplicada' => $evaluacionMinimaOverride ?? $escalon->evaluacion_minima,
-                ];
-            }
-
-            // Si este es el escalón que otorga el piso de una excepción, la búsqueda se
-            // detiene aquí: no sigue bajando aunque tampoco cumpla todos sus requisitos. Los
-            // faltantes se reportan contra el escalón inmediatamente superior al piso (lo que
-            // le falta para el siguiente ascenso), no contra el piso mismo: ese ya lo tiene
-            // garantizado por la excepción, así que listar lo que le falta de él no aporta nada.
-            if ($pisoEscalon && $escalon->id_escalon === $pisoEscalon->id_escalon) {
-                $escalonObjetivo = $anterior ?? $escalon;
-                $cumpleObjetivo = $anterior
-                    ? $this->evaluarRequisitos($anterior, $user, $meses, $puntaje, $tieneProduccion, $evaluacionMinimaOverride)
-                    : $cumple;
-                $faltantesDetalle = $this->detalleFaltantes($cumpleObjetivo, $escalonObjetivo, $user, $meses, $puntaje, $evaluacionMinimaOverride);
-                $faltantes = collect($faltantesDetalle)->pluck('campo')->toArray();
-
-                return [
-                    'valido' => true,
-                    'categoria_lograda' => $pisoEscalon->nombre,
-                    'razon' => "Conserva {$pisoEscalon->nombre} por excepción. Para ascender a {$escalonObjetivo->nombre} le faltan: "
-                        . implode(', ', $faltantes),
-                    'puntaje_total' => $puntaje,
-                    'faltantes_por_categoria' => [$escalonObjetivo->nombre => $faltantesDetalle],
-                    // El piso lo otorga la excepción, no un requisito de evaluación: nada que anclar.
-                    'evaluacion_minima_aplicada' => null,
-                ];
-            }
-
-            $anterior = $escalon;
-        }
-
-        // Ningún escalón con requisitos se cumplió y ninguna excepción aplicó: cae al escalón
-        // base, reportando qué le falta para el más bajo de los que sí tienen requisitos.
-        $siguienteEscalon = $escalonesConRequisitos->last();
-        $faltantesDetalle = $siguienteEscalon
-            ? $this->detalleFaltantes(
-                $this->evaluarRequisitos($siguienteEscalon, $user, $meses, $puntaje, $tieneProduccion, $evaluacionMinimaOverride),
-                $siguienteEscalon,
-                $user,
-                $meses,
-                $puntaje,
-                $evaluacionMinimaOverride
-            )
-            : [];
-        $faltantes = collect($faltantesDetalle)->pluck('campo')->toArray();
-
-        return [
-            'valido' => true,
-            'categoria_lograda' => $escalonBase->nombre ?? 'Auxiliar',
-            'razon' => $siguienteEscalon
-                ? "No cumple requisitos para categorías superiores. Le faltan para {$siguienteEscalon->nombre}: " . implode(', ', $faltantes)
-                : 'No hay escalones con requisitos configurados.',
-            'puntaje_total' => $puntaje,
-            'faltantes_por_categoria' => $siguienteEscalon ? [$siguienteEscalon->nombre => $faltantesDetalle] : [],
-            // El escalón base no exige evaluación (por definición no exige nada): nada que anclar.
-            'evaluacion_minima_aplicada' => null,
-        ];
+        return $user->historialEscalonUsuario
+            ->first(fn (HistorialEscalonDocente $tramo) => !$tramo->estaRevertido() && $tramo->hasta === null);
     }
 
-    /** Un escalón "base" no exige ningún requisito propio (ej. Auxiliar). */
-    private function esBase(EscalonDocente $escalon): bool
+    public function escalonVigente(User $user): ?EscalonDocente
     {
-        return $escalon->formacion_minima === null
-            && $escalon->nivel_mcer_minimo === null
-            && $escalon->puntaje_minimo === null
-            && $escalon->meses_minimos === null
-            && $escalon->evaluacion_minima === null;
+        return $this->tramoVigente($user)?->escalon;
+    }
+
+    /**
+     * El escalón con el que se entra al escalafón: el activo de `orden` más bajo (hoy, Auxiliar).
+     *
+     * No se elige: todo docente vinculado entra por el primer escalón y sube desde ahí. Por eso el
+     * ingreso no recibe un escalón, lo resuelve contra el catálogo —así que si el Administrador
+     * reordena o desactiva escalones, el ingreso sigue apuntando al primero que exista.
+     *
+     * Null solo si no hay ningún escalón activo, que es un catálogo mal configurado.
+     */
+    public function escalonInicial(): ?EscalonDocente
+    {
+        return EscalonDocente::activos()->orderBy('orden')->first();
+    }
+
+    /**
+     * El escalón al que le tocaría ascender: el activo de `orden` inmediatamente superior.
+     *
+     * Se busca "el siguiente por orden" y no `orden + 1` porque los `orden` no tienen por qué ser
+     * contiguos —el Administrador puede desactivar un escalón intermedio— y en ese caso el ascenso
+     * debe pasar al siguiente que sí exista, no quedarse sin objetivo.
+     */
+    private function escalonSiguiente(EscalonDocente $vigente): ?EscalonDocente
+    {
+        return EscalonDocente::activos()
+            ->with('idioma:id_idioma_catalogo,nombre_idioma')
+            ->where('orden', '>', $vigente->orden)
+            ->orderBy('orden')
+            ->first();
+    }
+
+    // ---------------------------------------------------------------
+    // Evaluación de ascenso
+    // ---------------------------------------------------------------
+
+    /**
+     * Evalúa si el docente puede ascender, con el detalle de lo que le falta.
+     *
+     * @param PeriodoAscenso|null $periodo Periodo contra el que se mide. Si se omite se usa el
+     *        vigente, y si tampoco hay se evalúa a la fecha de hoy: entre un periodo y el
+     *        siguiente el docente sigue consultando su avance, simplemente no hay ascensos que
+     *        ejecutar.
+     */
+    public function evaluarAscenso(User $user, ?PeriodoAscenso $periodo = null): array
+    {
+        $periodo ??= PeriodoAscenso::vigente();
+        $corte = $periodo ? $periodo->fecha_cierre->copy()->endOfDay() : now();
+
+        return $this->evaluarConCorte($user, $periodo, $corte, true);
+    }
+
+    /**
+     * El cuerpo de la evaluación, con la fecha de corte ya resuelta.
+     *
+     * Existe separado de `evaluarAscenso()` por `$compararConHoy`: cuando el docente no es elegible
+     * contra un periodo pasado, el mensaje necesita saber si lo sería hoy —es la diferencia entre
+     * "no cumple" y "todavía no cumplía"—, y eso obliga a evaluarlo dos veces. La bandera corta esa
+     * segunda vuelta para que no se llame a sí misma indefinidamente.
+     */
+    private function evaluarConCorte(
+        User $user,
+        ?PeriodoAscenso $periodo,
+        Carbon $corte,
+        bool $compararConHoy
+    ): array {
+        $tramo = $this->tramoVigente($user);
+        $vigente = $tramo?->escalon;
+
+        $base = [
+            'escalon_vigente' => $vigente?->nombre,
+            'escalon_vigente_desde' => $tramo?->desde?->toDateString(),
+            'escalon_objetivo' => null,
+            'elegible' => false,
+            'via' => null,
+            'razon' => '',
+            'faltantes' => [],
+            'meses_en_escalon' => 0,
+            'meses_en_escalon_declarados' => 0,
+            'meses_requeridos' => null,
+            'estado_antiguedad' => self::SIN_EXPERIENCIA_SUFICIENTE,
+            'puntaje_total' => 0,
+            'periodo_ascenso' => $periodo?->only(['id_periodo_ascenso', 'nombre']),
+            'fecha_corte' => $corte->toDateString(),
+        ];
+
+        if (!$vigente) {
+            return array_merge($base, [
+                'razon' => 'El docente no ha ingresado al escalafón. Apoyo Profesoral debe registrar su escalón inicial.',
+            ]);
+        }
+
+        // Los meses del escalón vigente sirven para dos cosas distintas: el requisito de
+        // antigüedad (solo lo respaldado por documento aprobado) y el semáforo de la bandeja (lo
+        // que alcanzaría si se le aprobara la experiencia que ya declaró).
+        $meses = $this->mesesEnEscalon($user, $vigente, $corte);
+        $mesesDeclarados = $this->mesesEnEscalon($user, $vigente, $corte, false);
+
+        // Inicio de la ventana de producción: desde que entró a este escalón. Lo anterior ya se
+        // usó para llegar hasta aquí.
+        $desdeEscalon = $tramo->desde->copy()->startOfDay();
+        $puntaje = $this->calcularPuntaje($user, $desdeEscalon, $corte);
+
+        // La excepción se resuelve primero porque omite todos los requisitos del escalón que
+        // otorga, incluida la antigüedad. Lo único que no omite es el calendario.
+        $piso = $this->resolverPisoEscalon($user, $corte);
+
+        if ($piso && $piso->orden > $vigente->orden) {
+            return array_merge($base, [
+                'escalon_objetivo' => $piso->nombre,
+                'elegible' => true,
+                'via' => HistorialEscalonDocente::VIA_EXCEPCION,
+                'razon' => "Elegible para {$piso->nombre} por regla de excepción, sin necesidad de cumplir los demás requisitos.",
+                'meses_en_escalon' => $meses,
+                'meses_en_escalon_declarados' => $mesesDeclarados,
+                'estado_antiguedad' => self::ELEGIBLE,
+                'puntaje_total' => $puntaje,
+            ]);
+        }
+
+        $objetivo = $this->escalonSiguiente($vigente);
+
+        if (!$objetivo) {
+            return array_merge($base, [
+                'meses_en_escalon' => $meses,
+                'meses_en_escalon_declarados' => $mesesDeclarados,
+                'puntaje_total' => $puntaje,
+                'estado_antiguedad' => self::ANTIGUEDAD_CUMPLIDA,
+                'razon' => "{$vigente->nombre} es el escalón más alto configurado: no hay ascenso posible.",
+            ]);
+        }
+
+        $cumple = $this->evaluarRequisitos($objetivo, $user, $meses, $puntaje, $corte, $desdeEscalon);
+        $elegible = collect($cumple)->every(fn ($v) => $v);
+        $faltantes = $elegible ? [] : $this->detalleFaltantes($cumple, $objetivo, $vigente, $user, $meses, $puntaje, $corte);
+
+        return array_merge($base, [
+            'escalon_objetivo' => $objetivo->nombre,
+            'elegible' => $elegible,
+            'via' => $elegible ? HistorialEscalonDocente::VIA_REQUISITOS : null,
+            'razon' => $elegible
+                ? "Cumple todos los requisitos para ascender a {$objetivo->nombre}."
+                : $this->razonDeFaltantes(
+                    $objetivo,
+                    $faltantes,
+                    $periodo,
+                    $corte,
+                    $compararConHoy ? $this->evaluarConCorte($user, null, now(), false) : null
+                ),
+            'faltantes' => $faltantes,
+            'meses_en_escalon' => $meses,
+            'meses_en_escalon_declarados' => $mesesDeclarados,
+            'meses_requeridos' => $objetivo->meses_minimos_escalon_anterior,
+            'estado_antiguedad' => $this->estadoAntiguedad($objetivo, $meses, $mesesDeclarados, $elegible),
+            'puntaje_total' => $puntaje,
+        ]);
+    }
+
+    /**
+     * Semáforo que ordena el trabajo de Apoyo Profesoral. Ver las constantes de la clase.
+     */
+    private function estadoAntiguedad(
+        EscalonDocente $objetivo,
+        int $meses,
+        int $mesesDeclarados,
+        bool $elegible
+    ): string {
+        if ($elegible) {
+            return self::ELEGIBLE;
+        }
+
+        $requerido = $objetivo->meses_minimos_escalon_anterior;
+
+        // Un escalón que no exige antigüedad nunca está esperando por ella.
+        if ($requerido === null || $meses >= $requerido) {
+            return self::ANTIGUEDAD_CUMPLIDA;
+        }
+
+        return $mesesDeclarados >= $requerido
+            ? self::POR_VERIFICAR_EXPERIENCIA
+            : self::SIN_EXPERIENCIA_SUFICIENTE;
     }
 
     /**
      * Evalúa los requisitos propios de un escalón. "Al menos una producción aprobada" se exige
-     * siempre que el escalón tenga algún requisito (no es un umbral configurable, es un mínimo
-     * fijo); la evaluación docente sí es configurable por escalón (`evaluacion_minima`) y por
-     * eso, como el resto, solo se exige cuando el escalón la define.
+     * siempre (no es un umbral configurable, es un mínimo fijo); el resto solo cuando el escalón
+     * los define.
      */
     private function evaluarRequisitos(
         EscalonDocente $escalon,
         User $user,
         int $meses,
         int $puntaje,
-        bool $tieneProduccion,
-        ?float $evaluacionMinimaOverride
+        Carbon $corte,
+        Carbon $desdeEscalon
     ): array {
         $cumple = [];
 
         if ($escalon->formacion_minima !== null) {
-            $cumple['formacion'] = $this->tieneFormacionAprobada($user, $escalon->formacion_minima);
+            $cumple['formacion'] = $this->tieneFormacionAprobada($user, $escalon->formacion_minima, $corte);
         }
         if ($escalon->nivel_mcer_minimo !== null) {
-            $cumple['idioma'] = $this->cumpleNivelMcer($user, $escalon->nivel_mcer_minimo, $escalon->idioma?->nombre_idioma);
+            $cumple['idioma'] = $this->cumpleNivelMcer($user, $escalon->nivel_mcer_minimo, $escalon->idioma?->nombre_idioma, $corte);
         }
         if ($escalon->puntaje_minimo !== null) {
             $cumple['puntaje'] = $puntaje >= $escalon->puntaje_minimo;
         }
-        if ($escalon->meses_minimos !== null) {
-            $cumple['antiguedad'] = $meses >= $escalon->meses_minimos;
+        if ($escalon->meses_minimos_escalon_anterior !== null) {
+            $cumple['antiguedad'] = $meses >= $escalon->meses_minimos_escalon_anterior;
+        }
+        if ($escalon->evaluacion_minima !== null) {
+            $cumple['evaluacion'] = optional($user->evaluacionDocenteUsuario)->promedio_evaluacion_docente >= $escalon->evaluacion_minima;
         }
 
-        $evaluacionMinima = $evaluacionMinimaOverride ?? $escalon->evaluacion_minima;
-        if ($evaluacionMinima !== null) {
-            $cumple['evaluacion'] = optional($user->evaluacionDocenteUsuario)->promedio_evaluacion_docente >= $evaluacionMinima;
-        }
-
-        $cumple['produccion_academica'] = $tieneProduccion;
+        // Mínimo fijo, no configurable. Se comprueba aparte del puntaje a propósito: un ámbito de
+        // divulgación puede valer 0 puntos, y en ese caso el docente sí tiene producción avalada
+        // aunque su puntaje siga en cero.
+        $cumple['produccion_academica'] = $this->tieneProduccionEnVentana($user, $desdeEscalon, $corte);
 
         return $cumple;
     }
 
+    /** ¿Tiene al menos una producción aprobada dentro de la ventana de su escalón actual? */
+    private function tieneProduccionEnVentana(User $user, ?Carbon $desde, ?Carbon $hasta): bool
+    {
+        return $user->produccionAcademicaUsuario->contains(
+            fn ($produccion) => $this->produccionEnVentana($produccion, $desde, $hasta)
+        );
+    }
+
     /**
-     * Construye, para cada criterio no cumplido, un mensaje claro con el valor requerido y el
-     * actual del docente.
+     * Nombre legible de cada criterio. Las claves son internas (`produccion_academica`) y estaban
+     * saliendo tal cual en el mensaje de error que ve el usuario.
+     */
+    private const ETIQUETAS_REQUISITO = [
+        'evaluacion' => 'evaluación docente',
+        'formacion' => 'formación académica',
+        'idioma' => 'nivel de idioma',
+        'puntaje' => 'puntaje de producción',
+        'antiguedad' => 'antigüedad en el escalón',
+        'produccion_academica' => 'producción académica',
+    ];
+
+    /**
+     * El mensaje de "no puede ascender", que es lo único que llega a la pantalla cuando el acto se
+     * rechaza con 409.
+     *
+     * Distingue dos situaciones que la lista de criterios sola confunde, y que exigen cosas
+     * distintas de quien lee:
+     *
+     * - **"Todavía no cumplía"**: el docente sí es elegible hoy, pero no lo era a la `fecha_cierre`
+     *   del periodo elegido, porque lo que lo acredita se subió o se aprobó después. No hay nada que
+     *   corregir en el expediente: hay que ascenderlo en un periodo que cierre más tarde. Este caso
+     *   salía indistinguible del otro —una lista de seis requisitos, como si no tuviera nada— y era
+     *   imposible de diagnosticar desde la pantalla.
+     * - **"No cumple"**: le falta de verdad, y ahí lo útil es la lista y saber contra qué fecha se
+     *   midió.
+     *
+     * El detalle de cada criterio —qué se pedía y qué tiene— viaja aparte, en `faltantes`.
+     *
+     * @param array|null $hoy Evaluación del mismo docente con corte a hoy, o null si este cálculo ya
+     *                        es el de hoy y no hay con qué comparar.
+     */
+    private function razonDeFaltantes(
+        EscalonDocente $objetivo,
+        array $faltantes,
+        ?PeriodoAscenso $periodo,
+        Carbon $corte,
+        ?array $hoy
+    ): string {
+        $etiquetas = array_map(
+            fn (array $faltante) => self::ETIQUETAS_REQUISITO[$faltante['campo']] ?? $faltante['campo'],
+            $faltantes
+        );
+
+        // "a, b y c" en vez de "a, b, c": el mensaje lo lee una persona.
+        $ultima = array_pop($etiquetas);
+        $lista = $etiquetas ? implode(', ', $etiquetas) . " y {$ultima}" : $ultima;
+
+        $fecha = $corte->format('d/m/Y');
+
+        if ($periodo && $hoy && $hoy['elegible']) {
+            $via = $hoy['via'] === HistorialEscalonDocente::VIA_EXCEPCION
+                ? ' por regla de excepción'
+                : '';
+
+            return "El periodo «{$periodo->nombre}» cerró el {$fecha}, y a esa fecha el docente todavía no cumplía: "
+                . 'lo que lo acredita se subió o se aprobó después. '
+                . "Hoy sí sería elegible para {$hoy['escalon_objetivo']}{$via}, así que el ascenso hay que "
+                . 'ejecutarlo en un periodo que cierre más tarde, no en este.';
+        }
+
+        // Sin periodo el corte es hoy, y decirlo solo añade ruido.
+        if (!$periodo) {
+            return "Le falta para {$objetivo->nombre}: {$lista}.";
+        }
+
+        return "Con el cierre del periodo «{$periodo->nombre}», el {$fecha}, le falta para "
+            . "{$objetivo->nombre}: {$lista}. No cuenta lo que se haya subido o aprobado después de esa fecha.";
+    }
+
+    /**
+     * Construye, para cada criterio no cumplido, un mensaje con el valor requerido y el actual.
      */
     private function detalleFaltantes(
         array $cumple,
-        EscalonDocente $escalon,
+        EscalonDocente $objetivo,
+        EscalonDocente $vigente,
         User $user,
         int $meses,
         int $puntaje,
-        ?float $evaluacionMinimaOverride = null
+        Carbon $corte
     ): array {
         $info = [
             'produccion_academica' => [
-                'mensaje' => 'Debe tener al menos un producto de producción académica aprobado.',
+                'mensaje' => 'Debe tener al menos un producto de producción académica aprobado, divulgado y subido mientras estaba en su escalón actual.',
                 'requerido' => 1,
                 'actual' => null,
             ],
         ];
 
         if (array_key_exists('evaluacion', $cumple)) {
-            $evaluacionMinima = $evaluacionMinimaOverride ?? $escalon->evaluacion_minima;
             $info['evaluacion'] = [
-                'mensaje' => "La evaluación docente debe ser mínimo {$evaluacionMinima}.",
-                'requerido' => $evaluacionMinima,
+                'mensaje' => "La evaluación docente debe ser mínimo {$objetivo->evaluacion_minima}.",
+                'requerido' => $objetivo->evaluacion_minima,
                 'actual' => optional($user->evaluacionDocenteUsuario)->promedio_evaluacion_docente,
             ];
         }
         if (array_key_exists('formacion', $cumple)) {
             $info['formacion'] = [
-                'mensaje' => "Debe tener un estudio de tipo {$escalon->formacion_minima} con documento aprobado.",
-                'requerido' => $escalon->formacion_minima,
+                'mensaje' => "Debe tener un estudio de tipo {$objetivo->formacion_minima} con documento aprobado.",
+                'requerido' => $objetivo->formacion_minima,
                 'actual' => null,
             ];
         }
         if (array_key_exists('idioma', $cumple)) {
-            $nombreIdioma = $escalon->idioma?->nombre_idioma ?? 'idioma';
+            $nombreIdioma = $objetivo->idioma?->nombre_idioma ?? 'idioma';
             $info['idioma'] = [
-                'mensaje' => "Debe certificar {$nombreIdioma} nivel mínimo {$escalon->nivel_mcer_minimo}, con documento aprobado.",
-                'requerido' => $escalon->nivel_mcer_minimo,
-                'actual' => $this->nivelMcerMaximoAprobado($user, $escalon->idioma?->nombre_idioma),
+                'mensaje' => "Debe certificar {$nombreIdioma} nivel mínimo {$objetivo->nivel_mcer_minimo}, con documento aprobado.",
+                'requerido' => $objetivo->nivel_mcer_minimo,
+                'actual' => $this->nivelMcerMaximoAprobado($user, $objetivo->idioma?->nombre_idioma, $corte),
             ];
         }
         if (array_key_exists('puntaje', $cumple)) {
             $info['puntaje'] = [
-                'mensaje' => "Debe alcanzar al menos {$escalon->puntaje_minimo} puntos de producción académica.",
-                'requerido' => $escalon->puntaje_minimo,
+                'mensaje' => "Debe alcanzar al menos {$objetivo->puntaje_minimo} puntos de producción académica divulgada y subida mientras estaba en {$vigente->nombre}.",
+                'requerido' => $objetivo->puntaje_minimo,
                 'actual' => $puntaje,
             ];
         }
         if (array_key_exists('antiguedad', $cumple)) {
             $info['antiguedad'] = [
-                'mensaje' => "Debe tener al menos {$escalon->meses_minimos} meses de experiencia en la Universidad Autónoma, con documento aprobado.",
-                'requerido' => $escalon->meses_minimos,
+                'mensaje' => "Debe tener al menos {$objetivo->meses_minimos_escalon_anterior} meses como {$vigente->nombre}, respaldados por experiencia en la Universidad Autónoma con documento aprobado.",
+                'requerido' => $objetivo->meses_minimos_escalon_anterior,
                 'actual' => $meses,
             ];
         }
@@ -282,16 +461,18 @@ class MotorEscalafonDocenteService
         return $faltantes;
     }
 
+    // ---------------------------------------------------------------
+    // Reglas de excepción
+    // ---------------------------------------------------------------
+
     /**
      * Resuelve el escalón "piso" que otorgan las reglas de excepción activas cuyas condiciones
      * cumple el docente. Si varias aplican, gana la de mayor escalón.
      */
-    private function resolverPisoEscalon(User $user, $escalones): ?EscalonDocente
+    private function resolverPisoEscalon(User $user, Carbon $corte): ?EscalonDocente
     {
-        $reglas = ReglaExcepcionEscalon::activas()->with('escalonOtorgado')->get();
-
-        $candidatos = $reglas
-            ->filter(fn (ReglaExcepcionEscalon $regla) => $this->cumpleCondicionExcepcion($user, $regla))
+        $candidatos = ReglaExcepcionEscalon::activas()->with('escalonOtorgado')->get()
+            ->filter(fn (ReglaExcepcionEscalon $regla) => $this->cumpleCondicionExcepcion($user, $regla, $corte))
             ->map(fn (ReglaExcepcionEscalon $regla) => $regla->escalonOtorgado)
             ->filter();
 
@@ -304,31 +485,31 @@ class MotorEscalafonDocenteService
      * `tipo_condicion` es un vocabulario controlado por código: hoy solo entiende 'formacion'.
      * Agregar un tipo de condición nuevo requiere un caso más aquí.
      */
-    private function cumpleCondicionExcepcion(User $user, ReglaExcepcionEscalon $regla): bool
+    private function cumpleCondicionExcepcion(User $user, ReglaExcepcionEscalon $regla, Carbon $corte): bool
     {
         return match ($regla->tipo_condicion) {
-            'formacion' => $this->tieneFormacionAprobada($user, $regla->valor_condicion),
+            'formacion' => $this->tieneFormacionAprobada($user, $regla->valor_condicion, $corte),
             default => false,
         };
     }
+
+    // ---------------------------------------------------------------
+    // Formación e idiomas
+    // ---------------------------------------------------------------
 
     /**
      * Si el usuario tiene un estudio con documento aprobado que alcance `$tipo` **o un nivel
      * superior**, según el `orden` del catálogo `niveles_formacion_academica`.
      *
-     * Antes esto comparaba por igualdad de texto, con una consecuencia absurda: quien tenía
-     * Doctorado no cumplía un requisito de Maestría. Ahora usa la misma lógica de "al menos
-     * este nivel" que los idiomas ya tenían con la escala MCER.
+     * Se conserva la comparación por nombre como primer criterio: un estudio cuyo nivel no esté en
+     * el catálogo (registro viejo, o un nivel que el Administrador borró) sigue cumpliendo si el
+     * nombre coincide exactamente. Los niveles con `orden` nulo (Diplomado, Certificación, Curso)
+     * no participan en la jerarquía: solo cumplen por coincidencia exacta.
      *
-     * Se conserva además la comparación por nombre como primer criterio: un estudio cuyo nivel
-     * no esté en el catálogo (registro viejo, o un nivel que el Administrador borró) sigue
-     * cumpliendo si el nombre coincide exactamente. Así nadie pierde una categoría que ya tenía
-     * por un cambio de catálogo.
-     *
-     * Los niveles con `orden` nulo (Diplomado, Certificación, Curso) no participan en la
-     * jerarquía: solo cumplen por coincidencia exacta de nombre.
+     * @param Carbon|null $corte Si se indica, el documento tiene que haberse **subido** antes de esa
+     *        fecha. Su aval puede haber llegado después: al evaluador no se le pone contra reloj.
      */
-    public function tieneFormacionAprobada(User $user, string $tipo): bool
+    public function tieneFormacionAprobada(User $user, string $tipo, ?Carbon $corte = null): bool
     {
         // `mb_strtoupper` y no `strtoupper`: esta comparación cruza PHP con SQL, y el
         // `strtoupper` de PHP no toca los acentos ("Maestría" → "MAESTRíA") mientras que el
@@ -340,8 +521,8 @@ class MotorEscalafonDocenteService
         $ordenRequerido = NivelFormacionAcademica::whereRaw('UPPER(TRIM(nivel_formacion)) = ?', [$tipoNormalizado])
             ->value('orden');
 
-        return $user->estudiosUsuario->contains(function ($estudio) use ($tipoNormalizado, $ordenRequerido) {
-            if (!$estudio->documentosEstudio->contains('estado', 'aprobado')) {
+        return $user->estudiosUsuario->contains(function ($estudio) use ($tipoNormalizado, $ordenRequerido, $corte) {
+            if (!$this->tieneDocumentoAprobado($estudio->documentosEstudio, $corte)) {
                 return false;
             }
 
@@ -382,20 +563,19 @@ class MotorEscalafonDocenteService
     /**
      * Nivel MCER más alto entre los idiomas del usuario con documento aprobado, o null.
      *
-     * Si `$idiomaNombre` viene informado (desde el catálogo de idiomas, ej. "Inglés"), solo
-     * cuenta los idiomas del usuario cuyo nombre coincide (sin distinguir mayúsculas ni espacios
-     * sobrantes). `idiomas.idioma` sigue siendo texto libre en el formulario del
-     * docente/aspirante —no está enlazado al catálogo por FK todavía—, así que esta comparación
-     * es la misma que ya usa `tieneFormacionAprobada()` contra `Estudio.tipo_estudio`.
+     * Si `$idiomaNombre` viene informado (desde el catálogo de idiomas, ej. "Inglés"), solo cuenta
+     * los idiomas del usuario cuyo nombre coincide. `idiomas.idioma` sigue siendo texto libre en el
+     * formulario del docente/aspirante —no está enlazado al catálogo por FK todavía—, así que esta
+     * comparación es la misma que usa `tieneFormacionAprobada()` contra `Estudio.tipo_estudio`.
      */
-    public function nivelMcerMaximoAprobado(User $user, ?string $idiomaNombre = null): ?string
+    public function nivelMcerMaximoAprobado(User $user, ?string $idiomaNombre = null, ?Carbon $corte = null): ?string
     {
         $maximo = null;
         $maximoValor = 0;
         $idiomaNormalizado = $idiomaNombre !== null ? strtoupper(trim($idiomaNombre)) : null;
 
         foreach ($user->idiomasUsuario as $idioma) {
-            if (!$idioma->documentosIdioma->contains('estado', 'aprobado')) {
+            if (!$this->tieneDocumentoAprobado($idioma->documentosIdioma, $corte)) {
                 continue;
             }
 
@@ -415,9 +595,9 @@ class MotorEscalafonDocenteService
         return $maximo;
     }
 
-    private function cumpleNivelMcer(User $user, string $nivelRequerido, ?string $idiomaNombre = null): bool
+    private function cumpleNivelMcer(User $user, string $nivelRequerido, ?string $idiomaNombre = null, ?Carbon $corte = null): bool
     {
-        $maximo = $this->nivelMcerMaximoAprobado($user, $idiomaNombre);
+        $maximo = $this->nivelMcerMaximoAprobado($user, $idiomaNombre, $corte);
         $requerido = self::NIVELES_MCER[strtoupper(trim($nivelRequerido))] ?? null;
 
         if ($maximo === null || $requerido === null) {
@@ -428,11 +608,46 @@ class MotorEscalafonDocenteService
     }
 
     /**
-     * Suma el puntaje de cada producción académica aprobada, según el puntaje configurado en su
-     * ámbito de divulgación (`ambito_divulgacion.puntaje`, administrable). Reemplaza el `match`
-     * hardcodeado de `CalculoPuntajeDocenteService::clasificacionPorAmbito()`.
+     * ¿Hay algún documento aprobado, subido antes del corte?
+     *
+     * El corte se compara contra `created_at` (cuándo lo subió el docente), no contra
+     * `revisado_en`: lo que el reglamento exige es haberlo presentado a tiempo. Que Apoyo
+     * Profesoral o el Evaluador de Producción lo avalen después del cierre no puede perjudicar al
+     * docente, que ya hizo su parte.
      */
-    public function calcularPuntaje(User $user): int
+    private function tieneDocumentoAprobado($documentos, ?Carbon $corte): bool
+    {
+        return $documentos->contains(
+            fn ($documento) => $documento->estado === 'aprobado'
+                && ($corte === null || $documento->created_at === null || $documento->created_at->lessThanOrEqualTo($corte))
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // Producción académica
+    // ---------------------------------------------------------------
+
+    /**
+     * Suma el puntaje de la producción académica aprobada que cae dentro de la ventana del escalón
+     * actual, según el puntaje configurado en su ámbito de divulgación
+     * (`ambito_divulgacion.puntaje`, administrable).
+     *
+     * La ventana es `[desde, hasta]` = `[historial.desde del escalón vigente, fecha_cierre]`, y un
+     * producto cuenta solo si **ambas** fechas caen dentro:
+     *
+     * - `fecha_divulgacion`: lo divulgado antes de entrar al escalón ya se usó para llegar a él.
+     * - la fecha en que se **subió** el documento aprobado: lo cargado después del cierre queda
+     *   para el siguiente periodo de ascenso.
+     *
+     * Esto es lo que implementa "la producción no es acumulable entre escalones" sin necesidad de
+     * marcar ni consumir productos: al ascender, `historial.desde` se mueve y el puntaje arranca en
+     * cero solo. Un producto sin `fecha_divulgacion` no puede ubicarse en la ventana y no suma.
+     *
+     * Con `$desde` y `$hasta` en null suma toda la producción aprobada, que es lo que necesitan los
+     * usos informativos (hoja de vida, filtros de Apoyo Profesoral) donde no hay escalón ni periodo
+     * de por medio.
+     */
+    public function calcularPuntaje(User $user, ?Carbon $desde = null, ?Carbon $hasta = null): int
     {
         $ambitoIds = $user->produccionAcademicaUsuario->pluck('ambito_divulgacion_id')->filter()->unique();
 
@@ -444,47 +659,189 @@ class MotorEscalafonDocenteService
             ->pluck('puntaje', 'id_ambito_divulgacion');
 
         $total = 0;
-        foreach ($user->produccionAcademicaUsuario as $produccion) {
-            $aprobada = $produccion->documentosProduccionAcademica->where('estado', 'aprobado')->isNotEmpty();
 
-            if ($aprobada && $produccion->ambito_divulgacion_id !== null) {
-                $total += (int) ($puntajesPorAmbito[$produccion->ambito_divulgacion_id] ?? 0);
+        foreach ($user->produccionAcademicaUsuario as $produccion) {
+            if ($produccion->ambito_divulgacion_id === null) {
+                continue;
             }
+
+            if (!$this->produccionEnVentana($produccion, $desde, $hasta)) {
+                continue;
+            }
+
+            $total += (int) ($puntajesPorAmbito[$produccion->ambito_divulgacion_id] ?? 0);
         }
 
         return $total;
     }
 
-    private function tieneProduccionAprobada(User $user): bool
+    private function produccionEnVentana($produccion, ?Carbon $desde, ?Carbon $hasta): bool
     {
-        return $user->produccionAcademicaUsuario->flatMap(
-            fn ($p) => $p->documentosProduccionAcademica->where('estado', 'aprobado')
-        )->isNotEmpty();
+        $documentosAprobados = $produccion->documentosProduccionAcademica->where('estado', 'aprobado');
+
+        if ($documentosAprobados->isEmpty()) {
+            return false;
+        }
+
+        if ($desde === null && $hasta === null) {
+            return true;
+        }
+
+        if ($produccion->fecha_divulgacion === null) {
+            return false;
+        }
+
+        $divulgacion = Carbon::parse($produccion->fecha_divulgacion);
+
+        if (($desde && $divulgacion->lessThan($desde)) || ($hasta && $divulgacion->greaterThan($hasta))) {
+            return false;
+        }
+
+        return $documentosAprobados->contains(function ($documento) use ($desde, $hasta) {
+            if ($documento->created_at === null) {
+                return true;
+            }
+
+            return (!$desde || $documento->created_at->greaterThanOrEqualTo($desde))
+                && (!$hasta || $documento->created_at->lessThanOrEqualTo($hasta));
+        });
     }
 
-    /**
-     * Suma los meses de las experiencias marcadas como "en la Universidad Autónoma"
-     * (`es_uniautonoma`) con documento aprobado. Reemplaza `calcularAniosPlanta()`, que leía el
-     * contrato de planta en vez de la experiencia verificada.
-     */
-    public function calcularMesesUniautonoma(User $user): int
-    {
-        $meses = 0;
+    // ---------------------------------------------------------------
+    // Antigüedad en el escalón
+    // ---------------------------------------------------------------
 
+    /**
+     * Meses que el docente lleva en un escalón, respaldados por experiencia en la Universidad
+     * Autónoma con documento aprobado.
+     *
+     * Reemplaza a `calcularMesesUniautonoma()`, que sumaba todas las experiencias sin importar el
+     * escalón y comparaba ese total contra el requisito. Ahora se cruzan dos series de intervalos:
+     *
+     * - **A**: los tramos del historial en ese escalón (no revertidos), acotados al corte. Los
+     *   tramos se acumulan aunque haya interrupciones, que es la regla acordada.
+     * - **B**: los periodos de experiencia `es_uniautonoma`, **fusionados**. Fusionar es lo que
+     *   corrige un error que existía antes: el bucle anterior sumaba cada experiencia por separado,
+     *   así que dos experiencias solapadas contaban doble.
+     *
+     * Lo que el historial dice pero el certificado no cubre no suma: por eso se intersectan.
+     *
+     * @param bool $soloAprobados Con `false` incluye la experiencia que el docente ya declaró pero
+     *        todavía nadie ha revisado. Alimenta el semáforo de la bandeja ("si le apruebo esto,
+     *        ¿alcanza?"), nunca el requisito.
+     */
+    public function mesesEnEscalon(
+        User $user,
+        EscalonDocente $escalon,
+        ?Carbon $corte = null,
+        bool $soloAprobados = true
+    ): int {
+        $corte ??= now();
+
+        $tramos = [];
+        foreach ($user->historialEscalonUsuario as $tramo) {
+            if ($tramo->estaRevertido() || $tramo->escalon_id !== $escalon->id_escalon) {
+                continue;
+            }
+
+            $inicio = $tramo->desde->copy()->startOfDay();
+            $fin = $tramo->hasta ? $tramo->hasta->copy()->endOfDay() : $corte->copy();
+            $fin = $fin->greaterThan($corte) ? $corte->copy() : $fin;
+
+            if ($inicio->lessThan($fin)) {
+                $tramos[] = [$inicio, $fin];
+            }
+        }
+
+        $experiencias = [];
         foreach ($user->experienciasUsuario as $experiencia) {
             if (!$experiencia->es_uniautonoma) {
                 continue;
             }
-            if (!$experiencia->documentosExperiencia->contains('estado', 'aprobado')) {
+            if ($soloAprobados && !$experiencia->documentosExperiencia->contains('estado', 'aprobado')) {
                 continue;
             }
 
-            $inicio = Carbon::parse($experiencia->fecha_inicio);
-            $fin = $experiencia->fecha_finalizacion ? Carbon::parse($experiencia->fecha_finalizacion) : now();
+            $inicio = Carbon::parse($experiencia->fecha_inicio)->startOfDay();
+            $fin = $experiencia->fecha_finalizacion
+                ? Carbon::parse($experiencia->fecha_finalizacion)->endOfDay()
+                : $corte->copy();
+            $fin = $fin->greaterThan($corte) ? $corte->copy() : $fin;
 
-            // `diffInMonths()` devuelve float en Carbon 3 (ej. 139.186 meses). Sumarlo a un int
-            // dispara "Implicit conversion from float ... loses precision", que en PHP 9 pasa de
-            // deprecación a error. Se trunca explícitamente: solo cuentan los meses cumplidos.
+            if ($inicio->lessThan($fin)) {
+                $experiencias[] = [$inicio, $fin];
+            }
+        }
+
+        return $this->sumarMeses(
+            $this->intersectar($this->fusionar($tramos), $this->fusionar($experiencias))
+        );
+    }
+
+    /** Une los intervalos que se solapan o se tocan, para que ningún periodo se cuente dos veces. */
+    private function fusionar(array $intervalos): array
+    {
+        if ($intervalos === []) {
+            return [];
+        }
+
+        usort($intervalos, fn ($a, $b) => $a[0] <=> $b[0]);
+
+        $fusionados = [];
+        $actual = array_shift($intervalos);
+
+        foreach ($intervalos as [$inicio, $fin]) {
+            if ($inicio->lessThanOrEqualTo($actual[1])) {
+                if ($fin->greaterThan($actual[1])) {
+                    $actual[1] = $fin;
+                }
+                continue;
+            }
+
+            $fusionados[] = $actual;
+            $actual = [$inicio, $fin];
+        }
+
+        $fusionados[] = $actual;
+
+        return $fusionados;
+    }
+
+    /** Intersección de dos series de intervalos ya fusionadas. */
+    private function intersectar(array $a, array $b): array
+    {
+        $resultado = [];
+
+        foreach ($a as [$inicioA, $finA]) {
+            foreach ($b as [$inicioB, $finB]) {
+                $inicio = $inicioA->greaterThan($inicioB) ? $inicioA : $inicioB;
+                $fin = $finA->lessThan($finB) ? $finA : $finB;
+
+                if ($inicio->lessThan($fin)) {
+                    $resultado[] = [$inicio->copy(), $fin->copy()];
+                }
+            }
+        }
+
+        return $resultado;
+    }
+
+    /**
+     * Suma los meses cumplidos de una serie de intervalos.
+     *
+     * Se trunca intervalo por intervalo, así que un docente con varios tramos cortos puede perder
+     * unos días en cada uno. Es deliberado: el sesgo tiene que ser conservador —nunca acreditar
+     * antigüedad que no está—, y en la práctica los tramos son de años.
+     *
+     * `diffInMonths()` devuelve float en Carbon 3 (ej. 139.186 meses). Sumarlo a un int dispara
+     * "Implicit conversion from float ... loses precision", que en PHP 9 pasa de deprecación a
+     * error, de ahí el `floor()` y el cast explícitos.
+     */
+    private function sumarMeses(array $intervalos): int
+    {
+        $meses = 0;
+
+        foreach ($intervalos as [$inicio, $fin]) {
             $meses += max(0, (int) floor($inicio->diffInMonths($fin)));
         }
 

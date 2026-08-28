@@ -16,16 +16,12 @@ class Puntaje extends Model
     protected $fillable = [
         'user_id',
         'puntaje_total',
+        // Caché denormalizada del escalón vigente en `historial_escalon_docente`, que es la fuente
+        // de verdad. La escribe únicamente `AscensoEscalafonService`, para que los listados no
+        // tengan que unir contra el historial fila por fila.
         'categoria_lograda',
-        'umbral_aplicado',
-        'categoria_otorgada_at',
     ];
     // Define los campos que se pueden asignar masivamente (mass assignment) en este modelo.
-
-    protected $casts = [
-        'umbral_aplicado' => 'float',
-        'categoria_otorgada_at' => 'datetime',
-    ];
 
     public function usuarioPuntaje(): BelongsTo
         // Define una relación entre el modelo `Puntaje` y el modelo `User`.

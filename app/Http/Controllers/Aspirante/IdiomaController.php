@@ -262,8 +262,17 @@ class IdiomaController
                 $datos = $this->resolverCatalogos($request->validated()); // Valida, resuelve catálogos y actualiza el idioma
                 $idioma->update($datos);
 
-                if ($request->hasFile('archivo')) { // Si hay nuevo archivo, lo actualiza
+                $archivoNuevo = $request->hasFile('archivo');
+
+                if ($archivoNuevo) { // Si hay nuevo archivo, lo actualiza
                     $this->archivoService->actualizarArchivoDocumento($request->file('archivo'), $idioma, 'Idiomas');
+                }
+
+                // El aval anterior se dio sobre los datos viejos: si algo cambió, el certificado
+                // vuelve a la bandeja del revisor. Un guardado que no modifica nada no reabre
+                // la revisión.
+                if ($idioma->wasChanged() || $archivoNuevo) {
+                    $this->archivoService->reabrirRevisionDocumentos($idioma);
                 }
             });
             // Retorna idioma actualizado

@@ -242,8 +242,17 @@ class EstudioController
                 $datos = $this->resolverCatalogos($request->validated()); // Valida, resuelve catálogos y obtiene los datos
                 $estudio->update($datos); // Actualiza los datos del estudio
 
-                if ($request->hasFile('archivo')) {
+                $archivoNuevo = $request->hasFile('archivo');
+
+                if ($archivoNuevo) {
                     $this->archivoService->actualizarArchivoDocumento($request->file('archivo'), $estudio, 'Estudios'); // Si se adjuntó nuevo archivo, lo actualiza
+                }
+
+                // El aval anterior se dio sobre los datos viejos: si algo cambió, el estudio
+                // vuelve a la bandeja del revisor. Un guardado que no modifica nada no reabre
+                // la revisión, para no invalidar avales por abrir y cerrar el formulario.
+                if ($estudio->wasChanged() || $archivoNuevo) {
+                    $this->archivoService->reabrirRevisionDocumentos($estudio);
                 }
             });
             // Respuesta exitosa con datos actualizados

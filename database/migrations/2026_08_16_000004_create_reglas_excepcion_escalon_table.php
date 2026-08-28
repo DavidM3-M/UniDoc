@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 /**
  * Reglas de excepción del escalafón docente: si un docente cumple la condición, queda como
  * mínimo en `escalon_otorgado_id`, sin importar si cumple el resto de requisitos de ese escalón
- * o de los intermedios (ver `EscalafonDocenteService`).
+ * o de los intermedios (ver `MotorEscalafonDocenteService`).
  *
  * `tipo_condicion` es un vocabulario controlado por código (hoy solo entiende 'formacion': el
  * docente tiene un estudio aprobado de `valor_condicion`, ej. 'Doctorado'). Agregar una regla

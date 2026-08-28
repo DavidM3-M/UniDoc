@@ -30,7 +30,7 @@ class ActualizarEscalonDocenteRequest extends FormRequest
             'orden' => 'sometimes|required|integer|min:1|max:100',
 
             // `sometimes|nullable` para formacion_minima/nivel_mcer_minimo/puntaje_minimo/
-            // meses_minimos: si el campo viene en el body debe poder ser null explícito (así se
+            // meses_minimos_escalon_anterior: si el campo viene en el body debe poder ser null explícito (así se
             // quita un requisito sin tener que enviar los demás), pero si no viene no se toca.
             'formacion_minima' => [
                 'sometimes',
@@ -54,7 +54,8 @@ class ActualizarEscalonDocenteRequest extends FormRequest
             ],
 
             'puntaje_minimo' => 'sometimes|nullable|integer|min:0|max:9999',
-            'meses_minimos' => 'sometimes|nullable|integer|min:0|max:960',
+            // Meses en el escalón inmediatamente inferior, no meses totales en la Universidad.
+            'meses_minimos_escalon_anterior' => 'sometimes|nullable|integer|min:0|max:960',
             'evaluacion_minima' => 'sometimes|nullable|numeric|min:0|max:5',
 
             'activo' => 'sometimes|boolean',

@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Log;
 // Definición de la clase FiltrarDocentesController, que contiene métodos para filtrar y mostrar información de docentes.
 
 use Illuminate\Support\Facades\Storage;
-use App\Services\EscalafonDocenteService;
+use App\Services\MotorEscalafonDocenteService;
 
 class FiltrarDocentesController
 {
@@ -501,31 +501,39 @@ class FiltrarDocentesController
     }
 
     /**
-     * Lista todos los docentes con su puntaje total y categoría (escalafón) calculados.
+     * Lista los docentes del escalafón con su categoría vigente y su avance hacia el siguiente escalón.
      *
-     * @param EscalafonDocenteService $escalafon
+     * Solo los que están dentro del escalafón, que son los de planta: `enEscalafon()` filtra por
+     * tramo abierto. Un docente de cátedra no tiene categoría ni ascenso posible, así que su fila
+     * aquí no decía nada.
+     *
+     * La categoría ya no se calcula al vuelo: sale del tramo abierto en `historial_escalon_docente`,
+     * que solo escribe `AscensoEscalafonService`. Lo que sí se calcula es la elegibilidad para
+     * ascender, igual que en la bandeja de `EscalafonDocenteController`, que es la pantalla pensada
+     * para trabajar los ascensos; este listado se queda como vista general.
+     *
+     * @param MotorEscalafonDocenteService $motor
      * @return \Illuminate\Http\JsonResponse
      */
-    public function listarDocentesConPuntaje(EscalafonDocenteService $escalafon)
+    public function listarDocentesConPuntaje(MotorEscalafonDocenteService $motor)
     {
         try {
             // Carga los docentes junto con todas las relaciones que necesita
-            // MotorEscalafonDocenteService::evaluar() para evitar consultas N+1.
+            // MotorEscalafonDocenteService::evaluarAscenso() para evitar consultas N+1.
             $docentes = User::role('Docente')
+                ->enEscalafon()
                 ->with([
-                    'contratacionUsuario',
                     'estudiosUsuario.documentosEstudio',
                     'idiomasUsuario.documentosIdioma',
                     'experienciasUsuario.documentosExperiencia',
                     'produccionAcademicaUsuario.documentosProduccionAcademica',
                     'evaluacionDocenteUsuario',
-                    'puntajeUsuario', // Categoría ya otorgada, para la regla de no retroactividad
+                    'historialEscalonUsuario.escalon', // Categoría vigente y desde cuándo
                 ])
                 ->get();
 
-            $data = $docentes->map(function ($docente) use ($escalafon) {
-                // Solo resuelve: el listado no debe persistir ni otorgar categorías.
-                $resultado = $escalafon->resolver($docente);
+            $data = $docentes->map(function ($docente) use ($motor) {
+                $resultado = $motor->evaluarAscenso($docente);
 
                 return [
                     'id' => $docente->id,
@@ -538,8 +546,10 @@ class FiltrarDocentesController
                     'email' => $docente->email,
                     'numero_identificacion' => $docente->numero_identificacion,
                     'puntaje_total' => $resultado['puntaje_total'],
-                    'categoria_lograda' => $resultado['categoria_lograda'],
-                    'categoria_protegida' => $resultado['categoria_protegida'],
+                    'categoria_lograda' => $resultado['escalon_vigente'],
+                    'escalon_objetivo' => $resultado['escalon_objetivo'],
+                    'elegible' => $resultado['elegible'],
+                    'estado_antiguedad' => $resultado['estado_antiguedad'],
                     'razon' => $resultado['razon'],
                 ];
             })->values();

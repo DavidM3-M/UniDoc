@@ -187,8 +187,17 @@ class ExperienciaController
                 $datos = $request->validated(); // Se validan los datos enviados en la solicitud.
                 $experiencia->update($datos); // Se actualiza la experiencia con los nuevos datos.
 
-                if ($request->hasFile('archivo')) { // Si hay un nuevo archivo, se actualiza el documento.
+                $archivoNuevo = $request->hasFile('archivo');
+
+                if ($archivoNuevo) { // Si hay un nuevo archivo, se actualiza el documento.
                     $this->archivoService->actualizarArchivoDocumento($request->file('archivo'), $experiencia, 'Experiencias');
+                }
+
+                // El aval anterior se dio sobre los datos viejos: si algo cambió, la experiencia
+                // vuelve a la bandeja del revisor. Un guardado que no modifica nada no reabre
+                // la revisión.
+                if ($experiencia->wasChanged() || $archivoNuevo) {
+                    $this->archivoService->reabrirRevisionDocumentos($experiencia);
                 }
             });
 

@@ -46,7 +46,11 @@ class CrearEscalonDocenteRequest extends FormRequest
             ],
 
             'puntaje_minimo' => 'nullable|integer|min:0|max:9999',
-            'meses_minimos' => 'nullable|integer|min:0|max:960',
+
+            // Meses **en el escalón inmediatamente inferior**, no meses totales en la Universidad:
+            // para llegar a Asistente hay que haber sido Auxiliar 48 meses. Se miden contra
+            // `historial_escalon_docente`, no contra la suma de experiencias.
+            'meses_minimos_escalon_anterior' => 'nullable|integer|min:0|max:960',
 
             // Reemplaza el umbral único y global (eliminado): cada escalón exige la suya, y se
             // compara contra el mismo evaluacion_docentes.promedio_evaluacion_docente de siempre.

@@ -422,6 +422,67 @@ class NotificacionController extends Controller
         }
     }
 
+    /**
+     * Avisa al docente de que Apoyo Profesoral le otorgó un escalón del escalafón.
+     *
+     * El ascenso ya no ocurre solo cuando el docente consulta su puntaje: lo ejecuta una persona,
+     * así que el docente no tiene forma de enterarse si no se le avisa. Ver `AscensoEscalafonService`.
+     */
+    public static function escalonOtorgado(User $usuario, string $escalon): void
+    {
+        $asunto  = "Has ascendido a {$escalon} – UniDoc";
+        $mensaje = "Apoyo Profesoral registró tu ascenso en el escalafón docente. Tu nueva categoría es {$escalon}. "
+                 . 'Ten en cuenta que el conteo de antigüedad y el puntaje de producción académica '
+                 . 'vuelven a empezar desde esta categoría.';
+
+        try {
+            Mail::to($usuario->email)->send(
+                new NotificacionMail($asunto, $mensaje, $usuario->primer_nombre, ['Nueva categoría' => $escalon])
+            );
+            $usuario->notify(new NotificacionGeneral($mensaje));
+        } catch (\Exception $e) {
+            Log::error("Error al notificar el ascenso a {$usuario->email}: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Avisa al docente de que se deshizo un acto del escalafón y en qué categoría queda.
+     *
+     * `$escalonRestituido` es null cuando lo revertido era su ingreso: en ese caso el docente sale
+     * del escalafón por completo.
+     */
+    public static function escalonRevertido(
+        User $usuario,
+        ?string $escalonRevertido,
+        ?string $escalonRestituido,
+        string $motivo,
+        ?string $rol = null
+    ): void {
+        $porQuien = $rol ? " por {$rol}" : '';
+        $asunto   = 'Se revirtió un cambio en tu escalafón – UniDoc';
+        $mensaje  = "Se revirtió{$porQuien} tu categoría " . ($escalonRevertido ?? 'de escalafón') . '. '
+                  . ($escalonRestituido
+                        ? "Quedas nuevamente como {$escalonRestituido}."
+                        : 'Quedas fuera del escalafón hasta que se registre tu categoría de nuevo.');
+
+        $detalles = ['Motivo' => $motivo];
+        if ($escalonRestituido) {
+            $detalles['Categoría vigente'] = $escalonRestituido;
+        }
+        if ($rol) {
+            $detalles['Revertido por'] = $rol;
+        }
+
+        try {
+            Mail::to($usuario->email)->send(
+                new NotificacionMail($asunto, $mensaje, $usuario->primer_nombre, $detalles)
+            );
+            $usuario->notify(new NotificacionGeneral($mensaje));
+        } catch (\Exception $e) {
+            Log::error("Error al notificar la reversión de escalafón a {$usuario->email}: " . $e->getMessage());
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Métodos de instancia: endpoints REST para consultar y gestionar notificaciones
     // -------------------------------------------------------------------------

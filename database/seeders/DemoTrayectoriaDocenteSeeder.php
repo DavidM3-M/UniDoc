@@ -6,11 +6,17 @@ use App\Models\Aspirante\Documento;
 use App\Models\Aspirante\Estudio;
 use App\Models\Aspirante\Experiencia;
 use App\Models\Aspirante\Idioma;
+use App\Constants\ConstTalentoHumano\AreasContratacion;
+use App\Constants\ConstTalentoHumano\TipoContratacion;
+use App\Constants\ConstTalentoHumano\TipoProceso;
 use App\Models\Aspirante\ProduccionAcademica;
 use App\Models\Docente\EvaluacionDocente;
+use App\Models\EscalonDocente;
 use App\Models\ExamenIdioma;
+use App\Models\HistorialEscalonDocente;
 use App\Models\Idioma as IdiomaCatalogo;
 use App\Models\NivelFormacionAcademica;
+use App\Models\PeriodoAscenso;
 use App\Models\TalentoHumano\Contratacion;
 use App\Models\TiposProductoAcademico\AmbitoDivulgacion;
 use App\Models\Usuario\User;
@@ -21,29 +27,34 @@ use Illuminate\Support\Str;
 
 /**
  * Trayectoria completa de un docente de demostración, con **todos los documentos aprobados**,
- * para poder recorrer el flujo de punta a punta y ver el puntaje y la categoría del escalafón.
+ * para poder recorrer el flujo del escalafón de punta a punta.
  *
- * Sin esto no había forma de probar el escalafón: `MotorEscalafonDocenteService` exige contrato
- * de planta, evaluación docente, estudios/idiomas/experiencia/producción **con documento en
- * estado `aprobado`**, y la base de demo no traía ninguno de esos elementos.
+ * Sin esto no había forma de probar el escalafón: el motor exige evaluación docente y
+ * estudios/idiomas/experiencia/producción **con documento en estado `aprobado`**, y la base de
+ * demo no traía ninguno de esos elementos.
  *
- * ## Qué categoría alcanza
+ * ## Qué deja montado
  *
- * Los datos están calibrados contra `EscalonDocenteSeeder` para que el docente llegue a
- * **Asociado** y le falte algo concreto para Titular — así se ve tanto la categoría lograda
- * como la lista de faltantes:
+ * Con el reglamento nuevo un docente no está en el escalafón hasta que Apoyo Profesoral registra
+ * su tramo, así que este seeder también siembra `historial_escalon_docente` y
+ * `periodos_ascenso`. Sin ellos la bandeja de ascensos y la hoja de vida salen vacías por más
+ * documentos aprobados que haya, que es exactamente lo que le pasaría al front al levantar el
+ * proyecto.
  *
- * | Requisito   | Asociado | Titular | Este docente        |
- * |-------------|----------|---------|---------------------|
- * | Formación   | Doctorado| Doctorado | Doctorado ✔       |
- * | Inglés MCER | B2       | B2      | B2 (IELTS 6.5) ✔    |
- * | Puntaje     | 30       | 60      | 35 ✔ / ✘ Titular    |
- * | Meses Uniaut| 120      | 216     | 132 ✔ / ✘ Titular   |
- * | Evaluación  | 4.0      | 4.0     | 4.5 ✔               |
- * | Producción  | ≥1       | ≥1      | 5 ✔                 |
+ * | Qué                | Valor                                                        |
+ * |--------------------|--------------------------------------------------------------|
+ * | Tramo cerrado      | Auxiliar, 2015-01-15 → 2020-01-15                            |
+ * | Tramo vigente      | Asistente, desde 2020-01-15                                  |
+ * | Periodo cerrado    | hace ~2 meses — es contra el que se puede **ejecutar** un ascenso |
+ * | Periodo vigente    | en ~4 meses — es contra el que se **proyecta** en la bandeja  |
  *
- * Depende de `AmbitoDivulgacionPuntajeSeeder`: sin él todos los ámbitos valen 0 puntos y el
- * docente se queda en Auxiliar por más producción que registre.
+ * El docente queda **elegible para Asociado por la regla de excepción** (tiene Doctorado
+ * aprobado), no por requisitos: como Asistente lleva unos 79 meses contra los 120 que exige
+ * Asociado. Se calibró así a propósito, porque es el único estado en el que se puede recorrer el
+ * ascenso completo sin inventar una antigüedad de 18 años. Para ver la lista de faltantes basta
+ * con rechazarle el documento del Doctorado desde Apoyo Profesoral.
+ *
+ * Depende de `AmbitoDivulgacionPuntajeSeeder`: sin él todos los ámbitos valen 0 puntos.
  *
  * Es idempotente: se apoya en las claves únicas de cada tabla, así que volver a ejecutarlo no
  * duplica nada.
@@ -68,22 +79,105 @@ class DemoTrayectoriaDocenteSeeder extends Seeder
         $this->idiomas($docente);
         $this->experiencias($docente);
         $this->producciones($docente);
+        $this->periodosDeAscenso();
+        $this->historialDeEscalafon($docente);
 
         $this->command?->info('Trayectoria de demostración lista para ' . self::EMAIL_DOCENTE . ' (todos los documentos aprobados).');
     }
 
     /**
-     * El motor descarta de entrada a quien no tenga contrato de planta
-     * ("Solo aplica para docentes de planta"), así que este es el primer requisito.
+     * Dos periodos de ascenso, porque cada uno sirve para algo distinto y sin los dos no se puede
+     * recorrer el flujo:
+     *
+     * - El **cerrado** es el único contra el que `AscensoEscalafonService::ascender()` deja
+     *   ejecutar un ascenso; con el periodo todavía abierto responde 409.
+     * - El **vigente** es contra el que se proyecta la bandeja y la consulta del docente
+     *   ("así quedaría el expediente al cierre").
+     *
+     * Las fechas son relativas a hoy a propósito: fijarlas en el calendario haría que el seeder
+     * dejara de servir en cuanto pasara ese día.
+     */
+    private function periodosDeAscenso(): void
+    {
+        $cerrado = Carbon::now()->subMonths(2)->startOfDay();
+
+        PeriodoAscenso::updateOrCreate(
+            ['nombre' => 'Ascensos de demostración (cerrado)'],
+            ['fecha_cierre' => $cerrado->toDateString(), 'cerrado_en' => $cerrado]
+        );
+
+        PeriodoAscenso::updateOrCreate(
+            ['nombre' => 'Ascensos de demostración (vigente)'],
+            ['fecha_cierre' => Carbon::now()->addMonths(4)->toDateString(), 'cerrado_en' => null]
+        );
+    }
+
+    /**
+     * Los tramos del docente en el escalafón.
+     *
+     * Es lo que convierte a un usuario con documentos aprobados en alguien que existe para el
+     * escalafón: sin un tramo abierto el motor no tiene contra qué medir la antigüedad ni desde
+     * cuándo contar la producción, y devuelve "no ha ingresado al escalafón" con todo en cero.
+     *
+     * El tramo de Auxiliar arranca el mismo día que la experiencia UniAutónoma para que los meses
+     * queden respaldados: el motor solo acredita el tiempo que el certificado cubre.
+     */
+    private function historialDeEscalafon(User $docente): void
+    {
+        $tramos = [
+            ['escalon' => 'Auxiliar',  'desde' => '2015-01-15', 'hasta' => '2020-01-15'],
+            ['escalon' => 'Asistente', 'desde' => '2020-01-15', 'hasta' => null],
+        ];
+
+        foreach ($tramos as $datos) {
+            $escalon = EscalonDocente::where('nombre', $datos['escalon'])->first();
+
+            if (!$escalon) {
+                $this->command?->warn("No se encontró el escalón «{$datos['escalon']}»; se omite ese tramo.");
+                continue;
+            }
+
+            HistorialEscalonDocente::updateOrCreate(
+                [
+                    'user_id' => $docente->id,
+                    'escalon_id' => $escalon->id_escalon,
+                    'desde' => $datos['desde'],
+                ],
+                [
+                    'hasta' => $datos['hasta'],
+                    'via' => HistorialEscalonDocente::VIA_INGRESO,
+                    'motivo' => 'Tramo de demostración generado por DemoTrayectoriaDocenteSeeder.',
+                ]
+            );
+        }
+
+        // Caché denormalizada que normalmente escribe `AscensoEscalafonService`. Los listados la
+        // leen, así que dejarla desalineada haría ver al docente en una categoría que no tiene.
+        $docente->puntajeUsuario()->updateOrCreate(
+            ['user_id' => $docente->id],
+            ['categoria_lograda' => 'Asistente', 'puntaje_total' => 0]
+        );
+    }
+
+    /**
+     * Contrato de planta, que es lo que mete al docente al escalafón: `ContratacionObserver` escucha
+     * esta escritura y le crea el tramo de ingreso. El motor ya no mira el contrato para la
+     * antigüedad —esa sale de las experiencias `es_uniautonoma` aprobadas—, pero sin él este docente
+     * no estaría en el escalafón y las pantallas de Talento Humano saldrían vacías.
+     *
+     * Los valores salen de las constantes y no de literales. Escribiéndolos a mano se desviaron dos
+     * veces de lo que acepta `CrearContratacionRequest` (`Rule::in`): `tipo_contrato` quedó en
+     * minúscula y `area` con tilde, dos valores que la API habría rechazado y que este seeder colaba
+     * por escribir directo al modelo, saltándose la validación.
      */
     private function contratoDePlanta(User $docente): void
     {
         Contratacion::updateOrCreate(
             ['user_id' => $docente->id],
             [
-                'tipo_contrato' => 'planta',
-                'tipo_proceso' => 'Contratacion',
-                'area' => 'Facultad de Ingeniería',
+                'tipo_contrato' => TipoContratacion::PLANTA,
+                'tipo_proceso' => TipoProceso::CONTRATACION,
+                'area' => AreasContratacion::FACULTAD_DE_INGENIERIA,
                 'fecha_inicio' => '2015-01-15',
                 'fecha_fin' => '2030-12-31',
                 'valor_contrato' => 6500000,

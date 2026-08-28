@@ -8,8 +8,12 @@ use Illuminate\Database\Seeder;
 
 /**
  * Siembra los cuatro escalones que ya regían hardcodeados en
- * `CalculoPuntajeDocenteService::CATEGORIAS`, con los mismos valores (ahora en meses en vez de
- * años de antigüedad, acumulados: 4, 4+6=10, 4+6+8=18).
+ * `CalculoPuntajeDocenteService::CATEGORIAS`, con los mismos valores en meses.
+ *
+ * Los números no cambiaron con el nuevo reglamento, pero **sí lo que significan**: 48, 120 y 216 ya
+ * no son meses totales en la Universidad sino meses en el escalón inmediatamente inferior (4 años
+ * como Auxiliar para llegar a Asistente, 10 como Asistente para Asociado, 18 como Asociado para
+ * Titular). De ahí el nombre de la columna, `meses_minimos_escalon_anterior`.
  *
  * El requisito de idioma exigía "inglés" en el código viejo (el propio nombre de la constante lo
  * decía: NIVELES_INGLES), aunque en la práctica no filtraba por idioma. Aquí sí queda explícito:
@@ -32,7 +36,7 @@ class EscalonDocenteSeeder extends Seeder
                 'idioma_catalogo_id' => null,
                 'nivel_mcer_minimo' => null,
                 'puntaje_minimo' => null,
-                'meses_minimos' => null,
+                'meses_minimos_escalon_anterior' => null,
             ],
             [
                 'nombre' => 'Asistente',
@@ -41,7 +45,7 @@ class EscalonDocenteSeeder extends Seeder
                 'idioma_catalogo_id' => $ingles->id_idioma_catalogo,
                 'nivel_mcer_minimo' => 'B1',
                 'puntaje_minimo' => 20,
-                'meses_minimos' => 48,
+                'meses_minimos_escalon_anterior' => 48,
                 'evaluacion_minima' => 4.0,
             ],
             [
@@ -51,7 +55,7 @@ class EscalonDocenteSeeder extends Seeder
                 'idioma_catalogo_id' => $ingles->id_idioma_catalogo,
                 'nivel_mcer_minimo' => 'B2',
                 'puntaje_minimo' => 30,
-                'meses_minimos' => 120,
+                'meses_minimos_escalon_anterior' => 120,
                 'evaluacion_minima' => 4.0,
             ],
             [
@@ -61,7 +65,7 @@ class EscalonDocenteSeeder extends Seeder
                 'idioma_catalogo_id' => $ingles->id_idioma_catalogo,
                 'nivel_mcer_minimo' => 'B2',
                 'puntaje_minimo' => 60,
-                'meses_minimos' => 216,
+                'meses_minimos_escalon_anterior' => 216,
                 'evaluacion_minima' => 4.0,
             ],
         ];

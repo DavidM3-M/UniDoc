@@ -2,6 +2,7 @@
 
 // Importa la clase Route desde el espacio de nombres Illuminate\Support\Facades
 
+use App\Http\Controllers\ApoyoProfesoral\EscalafonDocenteController;
 use App\Http\Controllers\ApoyoProfesoral\EvaluacionDocenteController;
 use App\Http\Controllers\ApoyoProfesoral\FiltrarDocentesController;
 use App\Http\Controllers\ApoyoProfesoral\VerificacionDocumentosController;
@@ -45,6 +46,22 @@ Route::group([
     Route::get('ver-evaluacion/{userId}', [EvaluacionDocenteController::class, 'verEvaluacionDocente']);
     Route::post('asignar-evaluacion/{userId}', [EvaluacionDocenteController::class, 'asignarEvaluacionDocente']);
     Route::put('actualizar-evaluacion/{userId}', [EvaluacionDocenteController::class, 'actualizarEvaluacionDocente']);
+
+    // Escalafón docente. El ascenso es un acto de Apoyo Profesoral: el motor solo dice quién es
+    // elegible, y la categoría vigente vive en `historial_escalon_docente`.
+    // Los escalones y sus requisitos los administra el rol Administrador, no este grupo.
+    Route::get('escalafon/periodos', [EscalafonDocenteController::class, 'listarPeriodos']);
+    Route::post('escalafon/periodos', [EscalafonDocenteController::class, 'crearPeriodo']);
+    Route::put('escalafon/periodos/{id}', [EscalafonDocenteController::class, 'actualizarPeriodo']);
+    Route::post('escalafon/periodos/{id}/cerrar', [EscalafonDocenteController::class, 'cerrarPeriodo']);
+
+    // Bandeja: ?estado_antiguedad= filtra por el semáforo, ?periodo_ascenso_id= cambia el corte.
+    Route::get('escalafon/docentes', [EscalafonDocenteController::class, 'listarDocentes']);
+    Route::get('escalafon/docentes/{userId}', [EscalafonDocenteController::class, 'verDocente']);
+    // No hay ruta de ingreso: entrar al escalafón no lo decide nadie. `ContratacionObserver` mete al
+    // docente en el primer escalón en cuanto Talento Humano le registra la contratación de planta.
+    Route::post('escalafon/docentes/{userId}/ascender', [EscalafonDocenteController::class, 'ascender']);
+    Route::post('escalafon/historial/{id}/revertir', [EscalafonDocenteController::class, 'revertir']);
 
     // Rutas para generar certificados
     Route::post('crear-certificados-masivos', [GenerarCertificadosController::class, 'crearCertificadosMasivos']);

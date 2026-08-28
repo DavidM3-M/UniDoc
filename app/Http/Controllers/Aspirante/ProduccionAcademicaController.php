@@ -189,8 +189,17 @@ class ProduccionAcademicaController
             $datos = $request->validated(); // Valida los datos recibidos
             $produccionAcademica->update($datos); // Actualiza la producción
 
-            if ($request->hasFile('archivo')) { // Si hay un nuevo archivo, lo actualiza
+            $archivoNuevo = $request->hasFile('archivo');
+
+            if ($archivoNuevo) { // Si hay un nuevo archivo, lo actualiza
                $this->archivoService->actualizarArchivoDocumento($request->file('archivo'), $produccionAcademica, 'ProduccionAcademica');
+            }
+
+            // El aval anterior se dio sobre los datos viejos: si algo cambió, la producción
+            // vuelve a la bandeja del Evaluador de Producción. Un guardado que no modifica
+            // nada no reabre la revisión.
+            if ($produccionAcademica->wasChanged() || $archivoNuevo) {
+               $this->archivoService->reabrirRevisionDocumentos($produccionAcademica);
             }
          });
          // Respuesta exitosa con datos actualizados

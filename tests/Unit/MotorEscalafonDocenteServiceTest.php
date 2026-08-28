@@ -8,23 +8,33 @@ use App\Models\Aspirante\Experiencia;
 use App\Models\Aspirante\Idioma;
 use App\Models\Aspirante\ProduccionAcademica;
 use App\Models\Docente\EvaluacionDocente;
-use App\Models\TalentoHumano\Contratacion;
+use App\Models\EscalonDocente;
+use App\Models\HistorialEscalonDocente;
+use App\Models\PeriodoAscenso;
 use App\Models\TiposProductoAcademico\AmbitoDivulgacion;
 use App\Models\TiposProductoAcademico\ProductoAcademico;
 use App\Models\Usuario\User;
 use App\Services\MotorEscalafonDocenteService;
+use Carbon\Carbon;
 use Database\Seeders\EscalonDocenteSeeder;
 use Database\Seeders\ReglaExcepcionEscalonSeeder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
 /**
- * Pruebas del motor de evaluación data-driven del escalafón docente.
+ * Pruebas del motor del escalafón docente.
  *
- * A diferencia del `CalculoPuntajeDocenteService` que reemplaza, este motor lee sus reglas de
- * base de datos (escalones, excepciones, puntaje por ámbito), así que las pruebas siembran esas
- * tablas con `EscalonDocenteSeeder`/`ReglaExcepcionEscalonSeeder` —los mismos valores que ya
- * regían hardcodeados— y usan `DatabaseTransactions` para no dejar rastro en la base real.
+ * El motor ya no otorga categorías: responde "¿es elegible para ascender?" contra la fecha de
+ * cierre de un periodo de ascenso. Lo que se prueba aquí son las tres reglas del nuevo reglamento
+ * que cambian el resultado —antigüedad en el escalón anterior, producción no acumulable, y todo
+ * congelado al cierre— más las que ya regían y no debían romperse.
+ *
+ * Las reglas siguen viniendo de base de datos, así que se siembran `EscalonDocenteSeeder` y
+ * `ReglaExcepcionEscalonSeeder`, y se usa `DatabaseTransactions` para no dejar rastro.
+ *
+ * Los escalones sembrados: Auxiliar (base), Asistente (48 meses como Auxiliar, Maestría, inglés B1,
+ * 20 puntos, evaluación 4.0), Asociado (120 como Asistente, Doctorado, B2, 30 puntos) y Titular
+ * (216 como Asociado, Doctorado, B2, 60 puntos).
  */
 class MotorEscalafonDocenteServiceTest extends TestCase
 {
@@ -46,24 +56,20 @@ class MotorEscalafonDocenteServiceTest extends TestCase
     // Helpers de construcción
     // ---------------------------------------------------------------
 
-    private function documento(string $estado = 'aprobado'): Documento
+    private function documento(string $estado = 'aprobado', ?string $subidoEn = null): Documento
     {
-        return (new Documento())->forceFill(['estado' => $estado]);
-    }
-
-    private function contrato(string $tipo = 'Planta', string $inicio = '2015-01-01', ?string $fin = null): Contratacion
-    {
-        return (new Contratacion())->forceFill([
-            'tipo_contrato' => $tipo,
-            'fecha_inicio' => $inicio,
-            'fecha_fin' => $fin,
+        return (new Documento())->forceFill([
+            'estado' => $estado,
+            // `created_at` es lo que compara el motor contra la fecha de cierre: lo que importa es
+            // cuándo lo subió el docente, no cuándo se lo avalaron.
+            'created_at' => $subidoEn ? Carbon::parse($subidoEn) : now()->subYears(20),
         ]);
     }
 
-    private function estudio(string $tipo, string $estadoDoc = 'aprobado'): Estudio
+    private function estudio(string $tipo, string $estadoDoc = 'aprobado', ?string $subidoEn = null): Estudio
     {
         $estudio = (new Estudio())->forceFill(['tipo_estudio' => $tipo]);
-        $estudio->setRelation('documentosEstudio', collect([$this->documento($estadoDoc)]));
+        $estudio->setRelation('documentosEstudio', collect([$this->documento($estadoDoc, $subidoEn)]));
 
         return $estudio;
     }
@@ -88,10 +94,24 @@ class MotorEscalafonDocenteServiceTest extends TestCase
         ]);
     }
 
-    private function produccion(int $ambitoId, string $estadoDoc = 'aprobado'): ProduccionAcademica
-    {
-        $produccion = (new ProduccionAcademica())->forceFill(['ambito_divulgacion_id' => $ambitoId]);
-        $produccion->setRelation('documentosProduccionAcademica', collect([$this->documento($estadoDoc)]));
+    /**
+     * Producción académica con sus dos fechas relevantes: cuándo se divulgó y cuándo se subió el
+     * documento. Ambas tienen que caer dentro de la ventana del escalón para que puntúe.
+     */
+    private function produccion(
+        int $ambitoId,
+        string $fechaDivulgacion,
+        ?string $subidoEn = null,
+        string $estadoDoc = 'aprobado'
+    ): ProduccionAcademica {
+        $produccion = (new ProduccionAcademica())->forceFill([
+            'ambito_divulgacion_id' => $ambitoId,
+            'fecha_divulgacion' => $fechaDivulgacion,
+        ]);
+        $produccion->setRelation(
+            'documentosProduccionAcademica',
+            collect([$this->documento($estadoDoc, $subidoEn ?? $fechaDivulgacion)])
+        );
 
         return $produccion;
     }
@@ -101,166 +121,521 @@ class MotorEscalafonDocenteServiceTest extends TestCase
         return (new EvaluacionDocente())->forceFill(['promedio_evaluacion_docente' => $promedio]);
     }
 
-    /** Experiencia Uniautónoma aprobada, de `$meses` meses de duración. */
-    private function experienciaUniautonoma(int $meses, bool $esUniautonoma = true, string $estadoDoc = 'aprobado'): Experiencia
-    {
-        $inicio = now()->subMonths($meses);
+    /** Experiencia en la Universidad Autónoma entre dos fechas. */
+    private function experiencia(
+        string $inicio,
+        ?string $fin = null,
+        string $estadoDoc = 'aprobado',
+        bool $esUniautonoma = true
+    ): Experiencia {
         $experiencia = (new Experiencia())->forceFill([
             'es_uniautonoma' => $esUniautonoma,
-            'fecha_inicio' => $inicio->toDateString(),
-            'fecha_finalizacion' => null,
+            'fecha_inicio' => $inicio,
+            'fecha_finalizacion' => $fin,
         ]);
         $experiencia->setRelation('documentosExperiencia', collect([$this->documento($estadoDoc)]));
 
         return $experiencia;
     }
 
+    /** Un tramo del historial: el docente estuvo en `$escalon` entre esas fechas. */
+    private function tramo(string $escalon, string $desde, ?string $hasta = null, bool $revertido = false): HistorialEscalonDocente
+    {
+        $modelo = EscalonDocente::where('nombre', $escalon)->firstOrFail();
+
+        $tramo = (new HistorialEscalonDocente())->forceFill([
+            'escalon_id' => $modelo->id_escalon,
+            'desde' => $desde,
+            'hasta' => $hasta,
+            'via' => HistorialEscalonDocente::VIA_INGRESO,
+            'revertido_en' => $revertido ? now() : null,
+        ]);
+        $tramo->setRelation('escalon', $modelo);
+
+        return $tramo;
+    }
+
+    private function periodo(string $fechaCierre): PeriodoAscenso
+    {
+        return (new PeriodoAscenso())->forceFill([
+            'id_periodo_ascenso' => 1,
+            'nombre' => 'Periodo de prueba',
+            'fecha_cierre' => Carbon::parse($fechaCierre),
+        ]);
+    }
+
     /**
-     * Construye un docente con las relaciones que consume el servicio.
+     * Construye un docente con las relaciones que consume el motor.
      *
-     * @param array $opts contrato, estudios, idiomas, producciones, experiencias, evaluacion
+     * @param array $opts estudios, idiomas, producciones, experiencias, evaluacion, historial
      */
     private function docente(array $opts = []): User
     {
         $user = new User();
-        $user->setRelation('contratacionUsuario', array_key_exists('contrato', $opts) ? $opts['contrato'] : $this->contrato());
         $user->setRelation('estudiosUsuario', collect($opts['estudios'] ?? []));
         $user->setRelation('idiomasUsuario', collect($opts['idiomas'] ?? []));
         $user->setRelation('produccionAcademicaUsuario', collect($opts['producciones'] ?? []));
         $user->setRelation('experienciasUsuario', collect($opts['experiencias'] ?? []));
         $user->setRelation('evaluacionDocenteUsuario', $opts['evaluacion'] ?? null);
+        $user->setRelation('historialEscalonUsuario', collect($opts['historial'] ?? []));
 
         return $user;
     }
 
-    /** Docente que cumple todos los requisitos de Titular. */
-    private function docenteTitular(AmbitoDivulgacion $ambitoTop, array $sobrescribir = []): User
+    /**
+     * Auxiliar desde 2019 que cumple absolutamente todo lo que pide Asistente al cierre de 2026.
+     * Los tests van rompiendo un requisito a la vez a partir de aquí.
+     */
+    private function auxiliarQueCumpleTodo(array $sobrescribir = []): User
     {
+        $ambito = $this->ambitoConPuntaje(25);
+
         return $this->docente(array_merge([
-            'contrato' => $this->contrato('Planta', '2000-01-01'),
-            'estudios' => [$this->estudio('Doctorado')],
-            'idiomas' => [$this->idioma('B2')],
-            'producciones' => [
-                $this->produccion($ambitoTop->id_ambito_divulgacion),
-                $this->produccion($ambitoTop->id_ambito_divulgacion),
-                $this->produccion($ambitoTop->id_ambito_divulgacion),
-                $this->produccion($ambitoTop->id_ambito_divulgacion),
-                $this->produccion($ambitoTop->id_ambito_divulgacion),
-                $this->produccion($ambitoTop->id_ambito_divulgacion),
-            ],
-            'experiencias' => [$this->experienciaUniautonoma(216)],
-            'evaluacion' => $this->evaluacion(4.5),
+            'historial' => [$this->tramo('Auxiliar', '2019-02-01')],
+            'experiencias' => [$this->experiencia('2019-02-01')],
+            'estudios' => [$this->estudio('Maestría', 'aprobado', '2020-01-01')],
+            'idiomas' => [$this->idioma('B1')],
+            'producciones' => [$this->produccion($ambito->id_ambito_divulgacion, '2023-03-01')],
+            'evaluacion' => $this->evaluacion(4.3),
         ], $sobrescribir));
     }
 
     // ---------------------------------------------------------------
-    // El escalafon no depende del tipo de contratacion
+    // Antigüedad: tiempo en el escalón anterior, no total en la Universidad
+    // ---------------------------------------------------------------
+
+    public function test_sin_historial_no_es_elegible_para_nada(): void
+    {
+        $resultado = $this->servicio->evaluarAscenso(
+            $this->docente(['experiencias' => [$this->experiencia('2000-01-01')]]),
+            $this->periodo('2026-12-31')
+        );
+
+        $this->assertFalse($resultado['elegible']);
+        $this->assertNull($resultado['escalon_vigente']);
+        $this->assertStringContainsString('no ha ingresado al escalafón', $resultado['razon']);
+    }
+
+    public function test_antiguedad_insuficiente_no_asciende(): void
+    {
+        // Auxiliar desde hace 47 meses: le falta uno para los 48 que pide Asistente.
+        $desde = Carbon::parse('2026-12-31')->subMonths(47)->toDateString();
+
+        $resultado = $this->servicio->evaluarAscenso(
+            $this->auxiliarQueCumpleTodo([
+                'historial' => [$this->tramo('Auxiliar', $desde)],
+                'experiencias' => [$this->experiencia($desde)],
+            ]),
+            $this->periodo('2026-12-31')
+        );
+
+        $this->assertFalse($resultado['elegible']);
+        $this->assertSame(47, $resultado['meses_en_escalon']);
+        $this->assertContains('antiguedad', array_column($resultado['faltantes'], 'campo'));
+    }
+
+    public function test_cumpliendo_todo_es_elegible_al_siguiente_escalon(): void
+    {
+        $resultado = $this->servicio->evaluarAscenso(
+            $this->auxiliarQueCumpleTodo(),
+            $this->periodo('2026-12-31')
+        );
+
+        $this->assertTrue($resultado['elegible']);
+        $this->assertSame('Auxiliar', $resultado['escalon_vigente']);
+        $this->assertSame('Asistente', $resultado['escalon_objetivo']);
+        $this->assertSame(HistorialEscalonDocente::VIA_REQUISITOS, $resultado['via']);
+        $this->assertSame(MotorEscalafonDocenteService::ELEGIBLE, $resultado['estado_antiguedad']);
+    }
+
+    /**
+     * Los tramos de un mismo escalón se acumulan aunque el docente se haya retirado en medio.
+     */
+    public function test_tramos_interrumpidos_del_mismo_escalon_se_acumulan(): void
+    {
+        $docente = $this->auxiliarQueCumpleTodo([
+            'historial' => [
+                $this->tramo('Auxiliar', '2019-02-01', '2021-02-01'), // 24 meses
+                $this->tramo('Auxiliar', '2023-02-01'),               // 24 meses hasta 2025-02-01
+            ],
+            'experiencias' => [
+                $this->experiencia('2019-02-01', '2021-02-01'),
+                $this->experiencia('2023-02-01'),
+            ],
+        ]);
+
+        $resultado = $this->servicio->evaluarAscenso($docente, $this->periodo('2025-02-01'));
+
+        $this->assertSame(48, $resultado['meses_en_escalon']);
+        $this->assertTrue($resultado['elegible']);
+    }
+
+    /**
+     * El historial dice 60 meses pero el certificado solo cubre 30: cuentan 30.
+     *
+     * Es la regla de "la antigüedad tiene que estar respaldada". Lo que el historial afirma y el
+     * documento no acredita no suma.
+     */
+    public function test_solo_cuenta_la_antiguedad_respaldada_por_experiencia_aprobada(): void
+    {
+        $docente = $this->auxiliarQueCumpleTodo([
+            'historial' => [$this->tramo('Auxiliar', '2021-01-01')], // 60 meses hasta 2026-01-01
+            'experiencias' => [$this->experiencia('2021-01-01', '2023-07-01')], // 30 meses
+        ]);
+
+        $resultado = $this->servicio->evaluarAscenso($docente, $this->periodo('2026-01-01'));
+
+        $this->assertSame(30, $resultado['meses_en_escalon']);
+        $this->assertFalse($resultado['elegible']);
+    }
+
+    /**
+     * Dos experiencias solapadas no pueden contar doble.
+     *
+     * Regresión: el cálculo anterior sumaba cada experiencia por separado, así que un docente con
+     * dos registros que cubrían el mismo periodo acreditaba el doble de antigüedad de la que tenía.
+     */
+    public function test_experiencias_solapadas_no_cuentan_doble(): void
+    {
+        $docente = $this->auxiliarQueCumpleTodo([
+            'historial' => [$this->tramo('Auxiliar', '2020-01-01')],
+            'experiencias' => [
+                $this->experiencia('2020-01-01', '2024-01-01'), // 48 meses
+                $this->experiencia('2021-01-01', '2023-01-01'), // dentro de la anterior
+            ],
+        ]);
+
+        $resultado = $this->servicio->evaluarAscenso($docente, $this->periodo('2024-01-01'));
+
+        $this->assertSame(48, $resultado['meses_en_escalon']);
+    }
+
+    public function test_experiencia_que_no_es_uniautonoma_no_respalda_antiguedad(): void
+    {
+        $docente = $this->auxiliarQueCumpleTodo([
+            'experiencias' => [$this->experiencia('2019-02-01', null, 'aprobado', false)],
+        ]);
+
+        $resultado = $this->servicio->evaluarAscenso($docente, $this->periodo('2026-12-31'));
+
+        $this->assertSame(0, $resultado['meses_en_escalon']);
+        $this->assertFalse($resultado['elegible']);
+    }
+
+    public function test_un_tramo_revertido_no_suma_antiguedad(): void
+    {
+        $docente = $this->auxiliarQueCumpleTodo([
+            'historial' => [
+                $this->tramo('Auxiliar', '2019-02-01', '2023-02-01', true), // revertido
+                $this->tramo('Auxiliar', '2023-02-01'),
+            ],
+        ]);
+
+        $resultado = $this->servicio->evaluarAscenso($docente, $this->periodo('2025-02-01'));
+
+        // Solo los 24 meses del tramo que sigue contando.
+        $this->assertSame(24, $resultado['meses_en_escalon']);
+    }
+
+    // ---------------------------------------------------------------
+    // Semáforo de la bandeja
+    // ---------------------------------------------------------------
+
+    public function test_experiencia_sin_aprobar_deja_el_semaforo_en_por_verificar(): void
+    {
+        $docente = $this->auxiliarQueCumpleTodo([
+            'experiencias' => [$this->experiencia('2019-02-01', null, 'pendiente')],
+        ]);
+
+        $resultado = $this->servicio->evaluarAscenso($docente, $this->periodo('2026-12-31'));
+
+        $this->assertSame(MotorEscalafonDocenteService::POR_VERIFICAR_EXPERIENCIA, $resultado['estado_antiguedad']);
+        $this->assertSame(0, $resultado['meses_en_escalon']);
+        $this->assertGreaterThanOrEqual(48, $resultado['meses_en_escalon_declarados']);
+    }
+
+    public function test_sin_experiencia_suficiente_ni_declarando(): void
+    {
+        $desde = Carbon::parse('2026-12-31')->subMonths(10)->toDateString();
+
+        $docente = $this->auxiliarQueCumpleTodo([
+            'historial' => [$this->tramo('Auxiliar', $desde)],
+            'experiencias' => [$this->experiencia($desde, null, 'pendiente')],
+        ]);
+
+        $resultado = $this->servicio->evaluarAscenso($docente, $this->periodo('2026-12-31'));
+
+        $this->assertSame(MotorEscalafonDocenteService::SIN_EXPERIENCIA_SUFICIENTE, $resultado['estado_antiguedad']);
+    }
+
+    public function test_antiguedad_cumplida_pero_faltan_otros_requisitos(): void
+    {
+        $docente = $this->auxiliarQueCumpleTodo(['idiomas' => []]);
+
+        $resultado = $this->servicio->evaluarAscenso($docente, $this->periodo('2026-12-31'));
+
+        $this->assertFalse($resultado['elegible']);
+        $this->assertSame(MotorEscalafonDocenteService::ANTIGUEDAD_CUMPLIDA, $resultado['estado_antiguedad']);
+        $this->assertContains('idioma', array_column($resultado['faltantes'], 'campo'));
+    }
+
+    // ---------------------------------------------------------------
+    // Producción académica: la ventana del escalón
     // ---------------------------------------------------------------
 
     /**
-     * Un docente sin contrato registrado se evalua igual que cualquier otro.
-     *
-     * Antes una guarda cortaba aqui y devolvia categoria "Ninguna" sin mirar un solo requisito,
-     * asi que quien no tuviera contrato de planta aparecia con puntaje 0 aunque cumpliera todo.
+     * Lo divulgado antes de entrar al escalón ya se usó para llegar a él.
      */
-    public function test_sin_contratacion_igual_se_evalua(): void
+    public function test_produccion_divulgada_antes_de_entrar_al_escalon_no_puntua(): void
     {
-        $ambito = $this->ambitoConPuntaje(10);
+        $ambito = $this->ambitoConPuntaje(25);
 
-        $resultado = $this->servicio->evaluar(
-            $this->docenteTitular($ambito, ['contrato' => null])
-        );
+        $docente = $this->auxiliarQueCumpleTodo([
+            'producciones' => [$this->produccion($ambito->id_ambito_divulgacion, '2018-05-01')],
+        ]);
 
-        $this->assertTrue($resultado['valido']);
-        $this->assertSame('Titular', $resultado['categoria_lograda']);
-        $this->assertSame(60, $resultado['puntaje_total']);
+        $resultado = $this->servicio->evaluarAscenso($docente, $this->periodo('2026-12-31'));
+
+        $this->assertSame(0, $resultado['puntaje_total']);
+        $this->assertFalse($resultado['elegible']);
+        $this->assertContains('puntaje', array_column($resultado['faltantes'], 'campo'));
     }
 
-    /** Sin cumplir requisitos cae al escalon base, no a "Ninguna". */
-    public function test_sin_contratacion_y_sin_requisitos_cae_al_escalon_base(): void
+    /**
+     * Divulgada en ventana pero cargada al sistema después del cierre: va para el siguiente periodo.
+     */
+    public function test_produccion_subida_despues_del_cierre_no_puntua(): void
     {
-        $resultado = $this->servicio->evaluar($this->docente(['contrato' => null]));
+        $ambito = $this->ambitoConPuntaje(25);
 
-        $this->assertTrue($resultado['valido']);
-        $this->assertNotSame('Ninguna', $resultado['categoria_lograda']);
+        $docente = $this->auxiliarQueCumpleTodo([
+            'producciones' => [$this->produccion($ambito->id_ambito_divulgacion, '2026-03-01', '2027-01-02')],
+        ]);
+
+        $resultado = $this->servicio->evaluarAscenso($docente, $this->periodo('2026-12-31'));
+
+        $this->assertSame(0, $resultado['puntaje_total']);
+        $this->assertFalse($resultado['elegible']);
     }
 
-    // ---------------------------------------------------------------
-    // Categorías, requisitos por escalón
-    // ---------------------------------------------------------------
-
-    public function test_cumpliendo_todo_logra_titular(): void
+    /**
+     * Subida a tiempo y avalada después del cierre: sí puntúa.
+     *
+     * Lo que el reglamento exige es haberla presentado a tiempo. Que el Evaluador de Producción
+     * tarde en avalarla no puede perjudicar al docente, que ya hizo su parte.
+     */
+    public function test_produccion_subida_a_tiempo_puntua_aunque_el_aval_llegue_despues(): void
     {
-        $ambito = $this->ambitoConPuntaje(10);
+        $ambito = $this->ambitoConPuntaje(25);
 
-        $resultado = $this->servicio->evaluar($this->docenteTitular($ambito));
+        // El documento se subió en ventana; su estado es 'aprobado' hoy, después del cierre.
+        $docente = $this->auxiliarQueCumpleTodo([
+            'producciones' => [$this->produccion($ambito->id_ambito_divulgacion, '2026-03-01', '2026-03-05')],
+        ]);
 
-        $this->assertTrue($resultado['valido']);
-        $this->assertSame('Titular', $resultado['categoria_lograda']);
-        $this->assertSame(60, $resultado['puntaje_total']);
-        $this->assertSame([], $resultado['faltantes_por_categoria']);
+        $resultado = $this->servicio->evaluarAscenso($docente, $this->periodo('2026-12-31'));
+
+        $this->assertSame(25, $resultado['puntaje_total']);
+        $this->assertTrue($resultado['elegible']);
     }
 
-    public function test_con_maestria_y_requisitos_completos_logra_asistente(): void
+    public function test_produccion_sin_aval_no_puntua(): void
     {
-        $ambito = $this->ambitoConPuntaje(10);
+        $ambito = $this->ambitoConPuntaje(25);
 
-        $resultado = $this->servicio->evaluar($this->docente([
-            'estudios' => [$this->estudio('Maestría')],
-            'idiomas' => [$this->idioma('B1')],
-            'producciones' => [$this->produccion($ambito->id_ambito_divulgacion), $this->produccion($ambito->id_ambito_divulgacion)],
-            'experiencias' => [$this->experienciaUniautonoma(48)],
-            'evaluacion' => $this->evaluacion(4.2),
-        ]));
+        $docente = $this->auxiliarQueCumpleTodo([
+            'producciones' => [$this->produccion($ambito->id_ambito_divulgacion, '2023-03-01', null, 'pendiente')],
+        ]);
 
-        $this->assertSame('Asistente', $resultado['categoria_lograda']);
-        $this->assertSame(20, $resultado['puntaje_total']);
+        $resultado = $this->servicio->evaluarAscenso($docente, $this->periodo('2026-12-31'));
+
+        $this->assertSame(0, $resultado['puntaje_total']);
+        $this->assertContains('produccion_academica', array_column($resultado['faltantes'], 'campo'));
     }
 
-    public function test_sin_cumplir_nada_queda_en_el_escalon_base(): void
+    /**
+     * El puntaje arranca en cero en cada escalón: lo que sirvió para llegar aquí no vuelve a servir.
+     */
+    public function test_la_produccion_no_es_acumulable_entre_escalones(): void
     {
-        $resultado = $this->servicio->evaluar($this->docente([
-            'estudios' => [$this->estudio('Pregrado')],
-            'idiomas' => [$this->idioma('A2')],
-            'evaluacion' => $this->evaluacion(4.2),
-        ]));
+        $ambito = $this->ambitoConPuntaje(45);
 
-        $this->assertTrue($resultado['valido']);
-        $this->assertSame('Auxiliar', $resultado['categoria_lograda']);
-        $this->assertArrayHasKey('Asistente', $resultado['faltantes_por_categoria']);
-    }
-
-    // ---------------------------------------------------------------
-    // Excepciones: "tiene Doctorado -> mínimo Asociado"
-    // ---------------------------------------------------------------
-
-    public function test_doctorado_con_puntaje_insuficiente_queda_asociado_por_excepcion(): void
-    {
-        $ambito = $this->ambitoConPuntaje(10);
-
-        $resultado = $this->servicio->evaluar($this->docente([
+        // Ascendió a Asistente en 2024; toda su producción es de cuando era Auxiliar.
+        $docente = $this->docente([
+            'historial' => [
+                $this->tramo('Auxiliar', '2019-02-01', '2024-01-01'),
+                $this->tramo('Asistente', '2024-01-01'),
+            ],
+            'experiencias' => [$this->experiencia('2019-02-01')],
             'estudios' => [$this->estudio('Doctorado')],
             'idiomas' => [$this->idioma('B2')],
-            'producciones' => [$this->produccion($ambito->id_ambito_divulgacion)], // 10 puntos, Titular pide 60
-            'experiencias' => [$this->experienciaUniautonoma(216)],
+            'producciones' => [$this->produccion($ambito->id_ambito_divulgacion, '2022-05-01')],
             'evaluacion' => $this->evaluacion(4.5),
-        ]));
+        ]);
 
-        $this->assertSame('Asociado', $resultado['categoria_lograda']);
-        $this->assertSame(10, $resultado['puntaje_total']);
+        $resultado = $this->servicio->evaluarAscenso($docente, $this->periodo('2026-12-31'));
 
-        $campos = array_column($resultado['faltantes_por_categoria']['Titular'], 'campo');
-        $this->assertContains('puntaje', $campos);
+        $this->assertSame('Asistente', $resultado['escalon_vigente']);
+        $this->assertSame(0, $resultado['puntaje_total']);
     }
 
     // ---------------------------------------------------------------
-    // Jerarquía de formación: "al menos este nivel", no coincidencia exacta
+    // Ascensos de uno en uno
     // ---------------------------------------------------------------
 
-    public function test_un_nivel_superior_cumple_el_requisito_de_uno_inferior(): void
+    /**
+     * Un Auxiliar que cumple todo lo de Titular sigue teniendo por objetivo Asistente.
+     *
+     * El motor evalúa un solo escalón —el inmediatamente superior— en vez de recorrerlos todos de
+     * mayor a menor como antes, que permitía saltar de Auxiliar a Titular de una sola vez.
+     */
+    public function test_no_se_pueden_saltar_escalones(): void
     {
-        // Doctorado (orden 60) debe cumplir un requisito de Maestría (orden 50). Antes fallaba:
-        // se comparaba por igualdad de texto y tener más formación no servía de nada.
+        $ambito = $this->ambitoConPuntaje(100);
+
+        $docente = $this->docente([
+            'historial' => [$this->tramo('Auxiliar', '2000-01-01')],
+            'experiencias' => [$this->experiencia('2000-01-01')],
+            // Sin Doctorado, para que no se dispare la excepción y se vea el tope por escalón.
+            'estudios' => [$this->estudio('Maestría')],
+            'idiomas' => [$this->idioma('C2')],
+            'producciones' => [$this->produccion($ambito->id_ambito_divulgacion, '2020-01-01')],
+            'evaluacion' => $this->evaluacion(5.0),
+        ]);
+
+        $resultado = $this->servicio->evaluarAscenso($docente, $this->periodo('2026-12-31'));
+
+        $this->assertSame('Asistente', $resultado['escalon_objetivo']);
+        $this->assertTrue($resultado['elegible']);
+    }
+
+    public function test_el_escalon_mas_alto_no_tiene_ascenso_posible(): void
+    {
+        $resultado = $this->servicio->evaluarAscenso(
+            $this->docente([
+                'historial' => [$this->tramo('Titular', '2000-01-01')],
+                'experiencias' => [$this->experiencia('2000-01-01')],
+            ]),
+            $this->periodo('2026-12-31')
+        );
+
+        $this->assertFalse($resultado['elegible']);
+        $this->assertNull($resultado['escalon_objetivo']);
+        $this->assertStringContainsString('escalón más alto', $resultado['razon']);
+    }
+
+    // ---------------------------------------------------------------
+    // Reglas de excepción
+    // ---------------------------------------------------------------
+
+    /**
+     * El Doctorado otorga Asociado directo, sin antigüedad, sin puntaje y saltándose Asistente.
+     */
+    public function test_la_excepcion_por_doctorado_salta_todos_los_requisitos(): void
+    {
+        $docente = $this->docente([
+            'historial' => [$this->tramo('Auxiliar', '2026-11-01')], // recién ingresado
+            'estudios' => [$this->estudio('Doctorado')],
+        ]);
+
+        $resultado = $this->servicio->evaluarAscenso($docente, $this->periodo('2026-12-31'));
+
+        $this->assertTrue($resultado['elegible']);
+        $this->assertSame('Asociado', $resultado['escalon_objetivo']);
+        $this->assertSame(HistorialEscalonDocente::VIA_EXCEPCION, $resultado['via']);
+        $this->assertSame(0, $resultado['meses_en_escalon']);
+        $this->assertSame([], $resultado['faltantes']);
+    }
+
+    /**
+     * Quien llegó a Asociado por excepción acumula tiempo como Asociado desde el acto, aunque nunca
+     * haya cumplido los 120 meses de Asistente.
+     */
+    public function test_quien_entra_por_excepcion_acumula_tiempo_en_su_nuevo_escalon(): void
+    {
+        $docente = $this->docente([
+            'historial' => [
+                $this->tramo('Auxiliar', '2023-01-01', '2024-01-01'),
+                $this->tramo('Asociado', '2024-01-01'), // entró por excepción
+            ],
+            'experiencias' => [$this->experiencia('2023-01-01')],
+            'estudios' => [$this->estudio('Doctorado')],
+        ]);
+
+        $resultado = $this->servicio->evaluarAscenso($docente, $this->periodo('2026-01-01'));
+
+        $this->assertSame('Asociado', $resultado['escalon_vigente']);
+        $this->assertSame('Titular', $resultado['escalon_objetivo']);
+        $this->assertSame(24, $resultado['meses_en_escalon']);
+    }
+
+    /**
+     * La excepción no aplica hacia abajo: quien ya es Asociado no "asciende" a Asociado.
+     */
+    public function test_la_excepcion_no_aplica_si_ya_esta_en_ese_escalon_o_por_encima(): void
+    {
+        $docente = $this->docente([
+            'historial' => [$this->tramo('Asociado', '2024-01-01')],
+            'estudios' => [$this->estudio('Doctorado')],
+            'experiencias' => [$this->experiencia('2024-01-01')],
+        ]);
+
+        $resultado = $this->servicio->evaluarAscenso($docente, $this->periodo('2026-01-01'));
+
+        $this->assertSame('Titular', $resultado['escalon_objetivo']);
+        $this->assertFalse($resultado['elegible']);
+    }
+
+    // ---------------------------------------------------------------
+    // La fecha de corte
+    // ---------------------------------------------------------------
+
+    /**
+     * La antigüedad se mide al cierre, no al día en que se firma.
+     *
+     * Un docente que cumple sus 48 meses tres semanas después del cierre no entra en ese periodo,
+     * aunque el acto se firme más tarde y para entonces ya los tenga. Es lo que hace que dos
+     * expedientes iguales reciban la misma respuesta.
+     */
+    public function test_la_antiguedad_se_mide_a_la_fecha_de_cierre(): void
+    {
+        // 48 meses exactos el 2027-01-21, tres semanas después del cierre.
+        $docente = $this->auxiliarQueCumpleTodo([
+            'historial' => [$this->tramo('Auxiliar', '2023-01-21')],
+            'experiencias' => [$this->experiencia('2023-01-21')],
+        ]);
+
+        $alCierre = $this->servicio->evaluarAscenso($docente, $this->periodo('2026-12-31'));
+        $tresSemanasDespues = $this->servicio->evaluarAscenso($docente, $this->periodo('2027-01-21'));
+
+        $this->assertFalse($alCierre['elegible']);
+        $this->assertSame(47, $alCierre['meses_en_escalon']);
+
+        $this->assertTrue($tresSemanasDespues['elegible']);
+        $this->assertSame(48, $tresSemanasDespues['meses_en_escalon']);
+    }
+
+    /**
+     * Un documento subido después del cierre no cuenta, aunque hoy esté aprobado.
+     */
+    public function test_un_estudio_subido_despues_del_cierre_no_cuenta(): void
+    {
+        $docente = $this->auxiliarQueCumpleTodo([
+            'estudios' => [$this->estudio('Maestría', 'aprobado', '2027-02-01')],
+        ]);
+
+        $resultado = $this->servicio->evaluarAscenso($docente, $this->periodo('2026-12-31'));
+
+        $this->assertFalse($resultado['elegible']);
+        $this->assertContains('formacion', array_column($resultado['faltantes'], 'campo'));
+    }
+
+    // ---------------------------------------------------------------
+    // Requisitos que ya regían y no debían romperse
+    // ---------------------------------------------------------------
+
+    public function test_un_doctorado_cumple_un_requisito_de_maestria(): void
+    {
         $this->assertTrue(
             $this->servicio->tieneFormacionAprobada(
                 $this->docente(['estudios' => [$this->estudio('Doctorado')]]),
@@ -269,152 +644,22 @@ class MotorEscalafonDocenteServiceTest extends TestCase
         );
     }
 
-    public function test_un_nivel_inferior_no_cumple_el_requisito_de_uno_superior(): void
+    public function test_el_nivel_de_idioma_solo_cuenta_para_el_idioma_exigido(): void
     {
-        $this->assertFalse(
-            $this->servicio->tieneFormacionAprobada(
-                $this->docente(['estudios' => [$this->estudio('Maestría')]]),
-                'Doctorado'
-            )
+        $docente = $this->docente(['idiomas' => [$this->idioma('C1', 'aprobado', 'Francés')]]);
+
+        $this->assertSame('C1', $this->servicio->nivelMcerMaximoAprobado($docente));
+        $this->assertNull($this->servicio->nivelMcerMaximoAprobado($docente, 'Inglés'));
+    }
+
+    public function test_una_evaluacion_docente_baja_bloquea_el_ascenso(): void
+    {
+        $resultado = $this->servicio->evaluarAscenso(
+            $this->auxiliarQueCumpleTodo(['evaluacion' => $this->evaluacion(3.9)]),
+            $this->periodo('2026-12-31')
         );
-    }
 
-    public function test_niveles_sinonimos_con_el_mismo_orden_se_cumplen_entre_si(): void
-    {
-        // "Pregrado" (constante vieja) y "Universitario" (SNIES) comparten orden 30, así que un
-        // estudio viejo sigue cumpliendo un requisito expresado con el nombre nuevo.
-        $this->assertTrue(
-            $this->servicio->tieneFormacionAprobada(
-                $this->docente(['estudios' => [$this->estudio('Pregrado')]]),
-                'Universitario'
-            )
-        );
-    }
-
-    public function test_la_formacion_complementaria_no_cumple_requisitos_del_escalafon(): void
-    {
-        // Un diplomado (orden nulo) se registra en la hoja de vida pero no asciende a nadie.
-        $this->assertFalse(
-            $this->servicio->tieneFormacionAprobada(
-                $this->docente(['estudios' => [$this->estudio('Diplomado')]]),
-                'Universitario'
-            )
-        );
-    }
-
-    public function test_un_estudio_sin_documento_aprobado_no_cumple_aunque_el_nivel_alcance(): void
-    {
-        $this->assertFalse(
-            $this->servicio->tieneFormacionAprobada(
-                $this->docente(['estudios' => [$this->estudio('Doctorado', 'pendiente')]]),
-                'Maestría'
-            )
-        );
-    }
-
-    public function test_sin_doctorado_no_aplica_la_excepcion(): void
-    {
-        $resultado = $this->servicio->evaluar($this->docente([
-            'estudios' => [$this->estudio('Pregrado')],
-            'idiomas' => [$this->idioma('A2')],
-            'evaluacion' => $this->evaluacion(4.2),
-        ]));
-
-        $this->assertSame('Auxiliar', $resultado['categoria_lograda']);
-    }
-
-    public function test_doctorado_no_aprobado_no_activa_la_excepcion(): void
-    {
-        $resultado = $this->servicio->evaluar($this->docente([
-            'estudios' => [$this->estudio('Doctorado', 'pendiente')],
-            'idiomas' => [$this->idioma('A2')],
-            'evaluacion' => $this->evaluacion(4.2),
-        ]));
-
-        $this->assertSame('Auxiliar', $resultado['categoria_lograda']);
-    }
-
-    // ---------------------------------------------------------------
-    // Puntaje: sale del ámbito real, no de una clasificación hardcodeada
-    // ---------------------------------------------------------------
-
-    public function test_el_puntaje_sale_del_ambito_configurado_en_el_catalogo(): void
-    {
-        $ambito = $this->ambitoConPuntaje(7); // valor arbitrario, no uno de los "clásicos" 10/6/3
-
-        $puntaje = $this->servicio->calcularPuntaje($this->docente([
-            'producciones' => [$this->produccion($ambito->id_ambito_divulgacion)],
-        ]));
-
-        $this->assertSame(7, $puntaje);
-    }
-
-    public function test_produccion_con_documento_no_aprobado_no_suma(): void
-    {
-        $ambito = $this->ambitoConPuntaje(10);
-
-        $puntaje = $this->servicio->calcularPuntaje($this->docente([
-            'producciones' => [$this->produccion($ambito->id_ambito_divulgacion, 'pendiente')],
-        ]));
-
-        $this->assertSame(0, $puntaje);
-    }
-
-    // ---------------------------------------------------------------
-    // Antigüedad: meses de experiencia Uniautónoma aprobada
-    // ---------------------------------------------------------------
-
-    public function test_meses_uniautonoma_solo_cuenta_experiencias_marcadas_y_aprobadas(): void
-    {
-        $meses = $this->servicio->calcularMesesUniautonoma($this->docente([
-            'experiencias' => [
-                $this->experienciaUniautonoma(24),
-                $this->experienciaUniautonoma(12, esUniautonoma: false), // no marcada, no cuenta
-                $this->experienciaUniautonoma(6, estadoDoc: 'pendiente'), // no aprobada, no cuenta
-            ],
-        ]));
-
-        $this->assertSame(24, $meses);
-    }
-
-    public function test_meses_uniautonoma_suma_varias_experiencias(): void
-    {
-        $meses = $this->servicio->calcularMesesUniautonoma($this->docente([
-            'experiencias' => [
-                $this->experienciaUniautonoma(24),
-                $this->experienciaUniautonoma(30),
-            ],
-        ]));
-
-        $this->assertSame(54, $meses);
-    }
-
-    // ---------------------------------------------------------------
-    // Forma del resultado y orden del escalafón
-    // ---------------------------------------------------------------
-
-    public function test_el_resultado_expone_siempre_las_mismas_claves(): void
-    {
-        $ambito = $this->ambitoConPuntaje(10);
-        $resultado = $this->servicio->evaluar($this->docenteTitular($ambito));
-
-        $this->assertSame(
-            ['valido', 'categoria_lograda', 'razon', 'puntaje_total', 'faltantes_por_categoria', 'evaluacion_minima_aplicada'],
-            array_keys($resultado)
-        );
-    }
-
-    public function test_rango_de_categoria_ordena_el_escalafon(): void
-    {
-        $this->assertGreaterThan(
-            MotorEscalafonDocenteService::rangoCategoria('Asociado'),
-            MotorEscalafonDocenteService::rangoCategoria('Titular')
-        );
-        $this->assertGreaterThan(
-            MotorEscalafonDocenteService::rangoCategoria('Auxiliar'),
-            MotorEscalafonDocenteService::rangoCategoria('Asistente')
-        );
-        $this->assertSame(0, MotorEscalafonDocenteService::rangoCategoria(null));
-        $this->assertSame(0, MotorEscalafonDocenteService::rangoCategoria('Inexistente'));
+        $this->assertFalse($resultado['elegible']);
+        $this->assertContains('evaluacion', array_column($resultado['faltantes'], 'campo'));
     }
 }

@@ -51,6 +51,10 @@ Route::group([
     // hoja de vida. Misma tabla que administra el rol Administrador en Escalafón docente.
     Route::get('escalones-docente', [ConstantesController::class, 'obtenerEscalonesDocente']);
 
+    // Fecha de cierre contra la que se está midiendo el expediente del docente hoy. Null entre un
+    // periodo y el siguiente.
+    Route::get('periodo-ascenso-vigente', [ConstantesController::class, 'obtenerPeriodoAscensoVigente']);
+
     // Constantes relacionadas con certificaciones bancarias
     Route::get('tipos-cuenta-bancaria', [ConstantesController::class, 'obtenerTipoCuenta']);
 

@@ -6,8 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Regla de excepción del escalafón docente: si se cumple `tipo_condicion` + `valor_condicion`,
- * el docente queda como mínimo en `escalon_otorgado_id`. Ver `EscalafonDocenteService`.
+ * Regla de excepción del escalafón docente: si se cumple `tipo_condicion` + `valor_condicion`, el
+ * docente queda elegible para `escalon_otorgado_id` sin cumplir ninguno de sus requisitos, la
+ * antigüedad incluida. Lo que la excepción no salta es el calendario: el ascenso sigue esperando a
+ * un periodo de ascenso y al acto de Apoyo Profesoral. Ver `MotorEscalafonDocenteService`.
  */
 class ReglaExcepcionEscalon extends Model
 {

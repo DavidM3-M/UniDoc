@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Constants\ConstDocumentos\EstadoDocumentos;
 use Illuminate\Support\Facades\Storage;
 use App\Models\Aspirante\Documento;
 use Illuminate\Support\Str;
@@ -54,6 +55,37 @@ class ArchivoService
         }
 
         return $documento;
+    }
+
+    /**
+     * Devolver a revisión los documentos de un registro que acaba de editarse.
+     *
+     * El aval lo dio un revisor sobre unos datos concretos (el título de un estudio, las fechas
+     * de una experiencia, el puntaje de un examen de idioma). Si el docente los cambia después,
+     * esa decisión ya no dice nada sobre lo que hay guardado ahora, así que el documento vuelve
+     * a la bandeja como `pendiente`.
+     *
+     * Se limpian también el motivo y la firma del revisor: dejar el motivo de un rechazo viejo
+     * junto a un estado `pendiente` haría que la interfaz mostrara un reproche que ya no aplica,
+     * y `Documento::esDecisionHistorica()` lee justamente `revisado_por` para distinguir «nadie
+     * lo ha revisado» de «se revisó antes de la trazabilidad».
+     *
+     * Se actualizan todos los documentos del registro —no solo los ya decididos— porque una
+     * producción académica puede tener varios archivos y deben quedar en el mismo estado.
+     *
+     * @param  \Illuminate\Database\Eloquent\Model  $modelo Registro cuyos documentos se reabren.
+     * @return int Cantidad de documentos devueltos a revisión.
+     */
+    public function reabrirRevisionDocumentos($modelo): int
+    {
+        return Documento::where('documentable_id', $modelo->getKey())
+            ->where('documentable_type', get_class($modelo))
+            ->update([
+                'estado'         => EstadoDocumentos::PENDIENTE,
+                'motivo_rechazo' => null,
+                'revisado_por'   => null,
+                'revisado_en'    => null,
+            ]);
     }
 
     /**

@@ -98,8 +98,10 @@ Route::group([
     // La evaluación la asigna el rol "Apoyo Profesoral"; el docente únicamente la consulta.
     Route::get('ver-evaluaciones', [EvaluacionDocenteController::class, 'verEvaluacionDocente']);
 
-    // Rutas relacionadas con el puntaje
-    Route::get('evaluar-puntaje', [PuntajeController::class, 'evaluarYGuardarPuntaje']);
+    // Estado del escalafón: qué le falta al docente para el siguiente escalón. Solo lectura desde
+    // que el ascenso es un acto de Apoyo Profesoral; la ruta conserva el nombre viejo para no
+    // romper el frontend.
+    Route::get('evaluar-puntaje', [PuntajeController::class, 'consultarEstadoEscalafon']);
 
     // Rutas relacionadas con normativas
     Route::get('obtener-normativas', [NormativaController::class, 'obtenerNormativas']);

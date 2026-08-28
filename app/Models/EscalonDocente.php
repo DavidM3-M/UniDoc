@@ -13,6 +13,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  *
  * `idioma_catalogo_id` + `nivel_mcer_minimo` van siempre juntos: el nivel es ambiguo sin decir
  * de qué idioma (ver `Idioma`, catálogo administrable de idiomas).
+ *
+ * `meses_minimos_escalon_anterior` son meses **en el escalón inmediatamente inferior**, no meses
+ * totales en la Universidad: para llegar a Asistente hay que haber sido Auxiliar 48 meses. Se
+ * miden contra `historial_escalon_docente`, no contra la suma de experiencias.
  */
 class EscalonDocente extends Model
 {
@@ -27,7 +31,7 @@ class EscalonDocente extends Model
         'idioma_catalogo_id',
         'nivel_mcer_minimo',
         'puntaje_minimo',
-        'meses_minimos',
+        'meses_minimos_escalon_anterior',
         'evaluacion_minima',
         'activo',
     ];
@@ -36,7 +40,7 @@ class EscalonDocente extends Model
         'activo' => 'boolean',
         'orden' => 'integer',
         'puntaje_minimo' => 'integer',
-        'meses_minimos' => 'integer',
+        'meses_minimos_escalon_anterior' => 'integer',
         'evaluacion_minima' => 'float',
     ];
 

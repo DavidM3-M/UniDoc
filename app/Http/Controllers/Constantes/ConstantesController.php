@@ -232,16 +232,37 @@ class ConstantesController
      * Escalones del escalafón docente con sus requisitos, para mostrárselos al docente en su
      * hoja de vida (`CategoriasEscalafon.tsx`). Misma fuente de verdad que usa
      * `MotorEscalafonDocenteService` para evaluar — nada hardcodeado ni duplicado aquí.
+     *
+     * Ojo con `meses_minimos_escalon_anterior`: se llamaba `meses_minimos` y eran meses totales en
+     * la Universidad. Ahora son meses en el escalón inmediatamente inferior, así que la pantalla
+     * tiene que redactarlo como "4 años como Auxiliar", no como "4 años de antigüedad".
      */
     public function obtenerEscalonesDocente()
     {
         $escalones = \App\Models\EscalonDocente::activos()
             ->with('idioma:id_idioma_catalogo,nombre_idioma')
             ->ordenados()
-            ->get(['id_escalon', 'nombre', 'orden', 'formacion_minima', 'idioma_catalogo_id', 'nivel_mcer_minimo', 'puntaje_minimo', 'meses_minimos', 'evaluacion_minima']);
+            ->get(['id_escalon', 'nombre', 'orden', 'formacion_minima', 'idioma_catalogo_id', 'nivel_mcer_minimo', 'puntaje_minimo', 'meses_minimos_escalon_anterior', 'evaluacion_minima']);
 
         return response()->json([
             'escalones_docente' => $escalones,
+        ]);
+    }
+
+    /**
+     * Periodo de ascenso vigente, para que el docente vea contra qué fecha de cierre se está
+     * midiendo su expediente.
+     *
+     * Devuelve null entre un periodo y el siguiente: ahí el docente sigue subiendo documentos con
+     * normalidad —nada depende de una ventana de carga abierta—, simplemente no hay ascensos que
+     * ejecutar todavía.
+     */
+    public function obtenerPeriodoAscensoVigente()
+    {
+        return response()->json([
+            'periodo_ascenso' => \App\Models\PeriodoAscenso::vigente()?->only([
+                'id_periodo_ascenso', 'nombre', 'fecha_cierre',
+            ]),
         ]);
     }
 }
