@@ -58,4 +58,39 @@ php artisan config:cache  || true
 php artisan route:cache   || true
 php artisan view:cache    || true
 
+# ─── Worker de colas ────────────────────────────────────────────────────
+# La carga masiva del SNIES no importa nada durante la petición: SniesImportacionController
+# guarda el .xlsx, despacha ImportarSniesJob y responde de inmediato. QUEUE_CONNECTION no está
+# definido en .env, así que cae al valor por defecto `database` y el trabajo se inserta como una
+# fila en la tabla `jobs`. Sin nadie consumiéndola, ahí se queda para siempre y la importación
+# nunca sale de "pendiente": no falla, no avisa, simplemente no pasa nada.
+#
+# El worker va dentro de esta imagen para que viaje con ella. El docker-compose.yml que levanta
+# el servicio `queue-worker` vive en la raíz del monorepo, que no está versionada: quien clone
+# solo este repositorio obtiene el Dockerfile y este entrypoint, pero ninguna cola procesándose.
+# Ese es exactamente el caso en el que la importación "no sirve" sin dar ningún error.
+#
+# RUN_QUEUE_WORKER=false lo apaga. Lo usa el monorepo en su servicio `backend`, que ya tiene un
+# contenedor `queue-worker` dedicado. Dos workers sobre la misma cola no corrompen nada —Laravel
+# reserva cada trabajo de forma atómica— pero duplican memoria sin ganar nada.
+if [ "${RUN_QUEUE_WORKER:-true}" = "true" ]; then
+    echo ">> Iniciando worker de colas en segundo plano"
+
+    # El bucle es la supervisión. `--max-time=3600` hace que el worker termine solo cada hora
+    # para soltar la memoria que PHP no devuelve en procesos largos, y el bucle lo vuelve a
+    # levantar; lo mismo si algo lo mata. Sin él, el contenedor seguiría reportándose sano
+    # —Apache vivo— con la cola parada, que es la peor forma de fallar: en silencio.
+    #
+    # Corre como www-data, el mismo usuario de Apache. Como root escribiría storage/logs y
+    # bootstrap/cache con propietario root, y a partir de ahí Apache ya no podría escribir ahí.
+    su -s /bin/sh www-data -c '
+        while true; do
+            php /var/www/html/artisan queue:work \
+                --tries=3 --timeout=1800 --sleep=3 --max-time=3600
+            echo ">> El worker de colas terminó; reiniciando en 5 s"
+            sleep 5
+        done
+    ' &
+fi
+
 exec apache2-foreground
