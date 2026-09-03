@@ -3997,6 +3997,343 @@
                                           },
                                           "description":  "Elimina un tipo de experiencia. **Solo se puede borrar si ninguna experiencia ni convocatoria lo usa.** Como no hay llave foránea, el uso se comprueba por nombre. Para retirarlo del formulario sin perder el histórico use `activo: false`.\n\n**Respuesta 409:**\n```json\n{\n  \"status\": \"error\",\n  \"message\": \"No se puede eliminar: 12 experiencia(s) y 2 convocatoria(s) usan este tipo...\",\n  \"experiencias_asociadas\": 12,\n  \"convocatorias_asociadas\": 2\n}\n```\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `404` — Tipo de experiencia no encontrado\n- `409` — Está en uso"
                                       }
+                                  },
+                                  {
+                                      "name": "Escalafón · Listar periodos de ascenso",
+                                      "request": {
+                                          "method": "GET",
+                                          "header": [
+                                              {
+                                                  "key": "Authorization",
+                                                  "value": "Bearer {{token}}"
+                                              }
+                                          ],
+                                          "url": {
+                                              "raw": "{{base_url}}/admin/escalafon/periodos",
+                                              "host": [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path": [
+                                                  "admin",
+                                                  "escalafon",
+                                                  "periodos"
+                                              ]
+                                          },
+                                          "description": "Periodos de ascenso, del cierre más reciente al más antiguo, con `cerrado` calculado (lo está si tiene `cerrado_en` o si su `fecha_cierre` ya pasó).\n\n**Compartida con Apoyo Profesoral:** es el mismo acto con las mismas reglas, atendido por el mismo controlador bajo los dos prefijos.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador"
+                                      }
+                                  },
+                                  {
+                                      "name": "Escalafón · Crear periodo de ascenso",
+                                      "request": {
+                                          "method": "POST",
+                                          "header": [
+                                              {
+                                                  "key": "Authorization",
+                                                  "value": "Bearer {{token}}"
+                                              },
+                                              {
+                                                  "key": "Content-Type",
+                                                  "value": "application/json"
+                                              }
+                                          ],
+                                          "url": {
+                                              "raw": "{{base_url}}/admin/escalafon/periodos",
+                                              "host": [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path": [
+                                                  "admin",
+                                                  "escalafon",
+                                                  "periodos"
+                                              ]
+                                          },
+                                          "description": "Crea un periodo de ascenso. `fecha_cierre` es el corte contra el que se congelan **todos** los requisitos, no solo la producción académica.\n\n**Campos:**\n- `nombre` (requerido): máx. 100\n- `fecha_cierre` (requerido): futura y posterior a la del último periodo registrado\n\n**Compartida con Apoyo Profesoral:** es el mismo acto con las mismas reglas, atendido por el mismo controlador bajo los dos prefijos.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `422` — Fecha en el pasado o anterior al último periodo",
+                                          "body": {
+                                              "mode": "raw",
+                                              "raw": "{\n  \"nombre\": \"Ascensos 2027-I\",\n  \"fecha_cierre\": \"2027-06-30\"\n}"
+                                          }
+                                      }
+                                  },
+                                  {
+                                      "name": "Escalafón · Actualizar periodo de ascenso",
+                                      "request": {
+                                          "method": "PUT",
+                                          "header": [
+                                              {
+                                                  "key": "Authorization",
+                                                  "value": "Bearer {{token}}"
+                                              },
+                                              {
+                                                  "key": "Content-Type",
+                                                  "value": "application/json"
+                                              }
+                                          ],
+                                          "url": {
+                                              "raw": "{{base_url}}/admin/escalafon/periodos/1",
+                                              "host": [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path": [
+                                                  "admin",
+                                                  "escalafon",
+                                                  "periodos",
+                                                  "1"
+                                              ]
+                                          },
+                                          "description": "Actualiza un periodo **que todavía no ha cerrado**. Un periodo cerrado es el corte con el que ya se evaluaron —y posiblemente otorgaron— ascensos reales: moverle la fecha cambiaría retroactivamente el expediente con el que se tomaron esas decisiones.\n\n**Compartida con Apoyo Profesoral:** es el mismo acto con las mismas reglas, atendido por el mismo controlador bajo los dos prefijos.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `404` — Periodo no encontrado\n- `409` — El periodo ya cerró",
+                                          "body": {
+                                              "mode": "raw",
+                                              "raw": "{\n  \"nombre\": \"Ascensos 2027-I (corregido)\",\n  \"fecha_cierre\": \"2027-07-31\"\n}"
+                                          }
+                                      }
+                                  },
+                                  {
+                                      "name": "Escalafón · Cerrar periodo de ascenso",
+                                      "request": {
+                                          "method": "POST",
+                                          "header": [
+                                              {
+                                                  "key": "Authorization",
+                                                  "value": "Bearer {{token}}"
+                                              }
+                                          ],
+                                          "url": {
+                                              "raw": "{{base_url}}/admin/escalafon/periodos/1/cerrar",
+                                              "host": [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path": [
+                                                  "admin",
+                                                  "escalafon",
+                                                  "periodos",
+                                                  "1",
+                                                  "cerrar"
+                                              ]
+                                          },
+                                          "description": "Cierre anticipado. Marca `cerrado_en` pero **no** toca `fecha_cierre`: el corte de los requisitos sigue siendo la fecha anunciada, porque adelantar el cierre administrativo no puede cambiarle el expediente a quien contaba con presentar documentos hasta esa fecha.\n\n**Compartida con Apoyo Profesoral:** es el mismo acto con las mismas reglas, atendido por el mismo controlador bajo los dos prefijos.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `404` — Periodo no encontrado\n- `409` — Ya estaba cerrado"
+                                      }
+                                  },
+                                  {
+                                      "name": "Escalafón · Bandeja de docentes",
+                                      "request": {
+                                          "method": "GET",
+                                          "header": [
+                                              {
+                                                  "key": "Authorization",
+                                                  "value": "Bearer {{token}}"
+                                              }
+                                          ],
+                                          "url": {
+                                              "raw": "{{base_url}}/admin/escalafon/docentes?estado_antiguedad=elegible&periodo_ascenso_id=1",
+                                              "host": [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path": [
+                                                  "admin",
+                                                  "escalafon",
+                                                  "docentes"
+                                              ],
+                                              "query": [
+                                                  {
+                                                      "key": "estado_antiguedad",
+                                                      "value": "elegible",
+                                                      "description": "Opcional: filtra por el semáforo de antigüedad"
+                                                  },
+                                                  {
+                                                      "key": "periodo_ascenso_id",
+                                                      "value": "1",
+                                                      "description": "Opcional: cambia la fecha de corte de la evaluación"
+                                                  }
+                                              ]
+                                          },
+                                          "description": "Docentes **dentro** del escalafón (los que tienen un tramo abierto) con su escalón vigente, su antigüedad y si son elegibles para ascender.\n\n**Query opcional:**\n- `estado_antiguedad`: filtra por el semáforo (`sin_experiencia_suficiente`, `por_verificar_experiencia`, `antiguedad_cumplida`, `elegible`)\n- `periodo_ascenso_id`: evalúa contra un periodo distinto del vigente\n\n**Compartida con Apoyo Profesoral:** es el mismo acto con las mismas reglas, atendido por el mismo controlador bajo los dos prefijos.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador"
+                                      }
+                                  },
+                                  {
+                                      "name": "Escalafón · Detalle de un docente",
+                                      "request": {
+                                          "method": "GET",
+                                          "header": [
+                                              {
+                                                  "key": "Authorization",
+                                                  "value": "Bearer {{token}}"
+                                              }
+                                          ],
+                                          "url": {
+                                              "raw": "{{base_url}}/admin/escalafon/docentes/5",
+                                              "host": [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path": [
+                                                  "admin",
+                                                  "escalafon",
+                                                  "docentes",
+                                                  "5"
+                                              ]
+                                          },
+                                          "description": "Evaluación de ascenso del docente más el historial completo de sus tramos, **incluidos los revertidos**: el expediente tiene que dejar ver que un ascenso existió y se deshizo.\n\nCada tramo trae `corregido`, que indica si el Administrador lo editó a mano; el detalle de qué cambió está en `GET /admin/escalafon/docentes/{userId}/bitacora`.\n\nEs además la única forma de obtener el `id_historial_escalon` que necesitan la reversión y la corrección.\n\n**Compartida con Apoyo Profesoral:** es el mismo acto con las mismas reglas, atendido por el mismo controlador bajo los dos prefijos.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `404` — Docente no encontrado"
+                                      }
+                                  },
+                                  {
+                                      "name": "Escalafón · Ascender docente",
+                                      "request": {
+                                          "method": "POST",
+                                          "header": [
+                                              {
+                                                  "key": "Authorization",
+                                                  "value": "Bearer {{token}}"
+                                              },
+                                              {
+                                                  "key": "Content-Type",
+                                                  "value": "application/json"
+                                              }
+                                          ],
+                                          "url": {
+                                              "raw": "{{base_url}}/admin/escalafon/docentes/5/ascender",
+                                              "host": [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path": [
+                                                  "admin",
+                                                  "escalafon",
+                                                  "docentes",
+                                                  "5",
+                                                  "ascender"
+                                              ]
+                                          },
+                                          "description": "Ejecuta el ascenso del docente al escalón que le corresponda según el periodo indicado.\n\nEl periodo tiene que estar **cerrado**: ascender antes sería otorgar sobre una proyección. La elegibilidad se revalida contra la base de datos, no contra lo que vio la bandeja.\n\n**Campos:**\n- `periodo_ascenso_id` (requerido)\n- `motivo` (opcional): máx. 1000\n\n**Respuesta 409** (no elegible): incluye `faltantes` con el desglose por requisito —qué se pedía y qué tiene— y `fecha_corte`.\n\n**Compartida con Apoyo Profesoral:** es el mismo acto con las mismas reglas, atendido por el mismo controlador bajo los dos prefijos.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `404` — Docente no encontrado\n- `409` — Periodo abierto, o el docente no es elegible",
+                                          "body": {
+                                              "mode": "raw",
+                                              "raw": "{\n  \"periodo_ascenso_id\": 1,\n  \"motivo\": \"Cumple todos los requisitos al cierre.\"\n}"
+                                          }
+                                      }
+                                  },
+                                  {
+                                      "name": "Escalafón · Revertir acto",
+                                      "request": {
+                                          "method": "POST",
+                                          "header": [
+                                              {
+                                                  "key": "Authorization",
+                                                  "value": "Bearer {{token}}"
+                                              },
+                                              {
+                                                  "key": "Content-Type",
+                                                  "value": "application/json"
+                                              }
+                                          ],
+                                          "url": {
+                                              "raw": "{{base_url}}/admin/escalafon/historial/12/revertir",
+                                              "host": [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path": [
+                                                  "admin",
+                                                  "escalafon",
+                                                  "historial",
+                                                  "12",
+                                                  "revertir"
+                                              ]
+                                          },
+                                          "description": "Deshace un acto del escalafón: marca el tramo como revertido y reabre el anterior. El tramo **no se borra** —tiene que seguir visible junto con quién lo revirtió y por qué—.\n\n**Campos:**\n- `motivo` (requerido): máx. 1000. Obligatorio, a diferencia del ascenso, porque le quita una categoría a alguien que ya la tenía y el docente recibe esta explicación.\n\n**Compartida con Apoyo Profesoral:** es el mismo acto con las mismas reglas, atendido por el mismo controlador bajo los dos prefijos.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `404` — Tramo no encontrado\n- `409` — El tramo ya estaba revertido\n- `422` — Sin motivo",
+                                          "body": {
+                                              "mode": "raw",
+                                              "raw": "{\n  \"motivo\": \"Se rechazó el documento que sostenía el requisito de formación.\"\n}"
+                                          }
+                                      }
+                                  },
+                                  {
+                                      "name": "Escalafón · Ingreso manual (solo Admin)",
+                                      "request": {
+                                          "method": "POST",
+                                          "header": [
+                                              {
+                                                  "key": "Authorization",
+                                                  "value": "Bearer {{token}}"
+                                              },
+                                              {
+                                                  "key": "Content-Type",
+                                                  "value": "application/json"
+                                              }
+                                          ],
+                                          "url": {
+                                              "raw": "{{base_url}}/admin/escalafon/docentes/5/ingreso-manual",
+                                              "host": [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path": [
+                                                  "admin",
+                                                  "escalafon",
+                                                  "docentes",
+                                                  "5",
+                                                  "ingreso-manual"
+                                              ]
+                                          },
+                                          "description": "**Exclusiva del Administrador.** Ingresa al docente al escalafón en el escalón y la fecha indicados.\n\nEl ingreso ordinario no pasa por aquí: `ContratacionObserver` mete al docente en el primer escalón en cuanto Talento Humano registra su contratación de planta. Esta ruta cubre lo que aquel no sabe hacer —el docente que llega con una categoría ya reconocida, el reingreso tras una reversión, la carga de expedientes anteriores al sistema— pero **sigue exigiendo contratación de planta vigente**.\n\nSi lo que está mal es una fecha que el automático ya escribió, la herramienta es la corrección, no esta: el docente ya está dentro.\n\n**Campos:**\n- `escalon_id` (requerido): debe existir y estar activo\n- `desde` (requerido): no puede ser futura\n- `motivo` (requerido): máx. 1000, queda en bitácora\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `404` — Docente no encontrado\n- `409` — Ya tiene tramo abierto, no acredita planta vigente, escalón inactivo, o el usuario no tiene rol Docente\n- `422` — Falta el motivo o la fecha es futura",
+                                          "body": {
+                                              "mode": "raw",
+                                              "raw": "{\n  \"escalon_id\": 3,\n  \"desde\": \"2018-02-01\",\n  \"motivo\": \"Categoría homologada al vincularse desde otra universidad.\"\n}"
+                                          }
+                                      }
+                                  },
+                                  {
+                                      "name": "Escalafón · Corregir tramo (solo Admin)",
+                                      "request": {
+                                          "method": "PUT",
+                                          "header": [
+                                              {
+                                                  "key": "Authorization",
+                                                  "value": "Bearer {{token}}"
+                                              },
+                                              {
+                                                  "key": "Content-Type",
+                                                  "value": "application/json"
+                                              }
+                                          ],
+                                          "url": {
+                                              "raw": "{{base_url}}/admin/escalafon/historial/12",
+                                              "host": [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path": [
+                                                  "admin",
+                                                  "escalafon",
+                                                  "historial",
+                                                  "12"
+                                              ]
+                                          },
+                                          "description": "**Exclusiva del Administrador.** Corrige el escalón y/o las fechas de un tramo ya registrado. Es lo único que permite arreglar un expediente sin falsearlo: antes, la única forma de tocar un tramo era revertirlo, y revertir un ingreso deja al docente fuera del escalafón.\n\n**Campos** (al menos uno de los tres primeros):\n- `escalon_id`, `desde`, `hasta` — `hasta: null` **reabre** el tramo; omitirlo lo deja igual\n- `motivo` (requerido): máx. 1000\n\n**No son corregibles** `user_id`, `periodo_ascenso_id`, `via`, `otorgado_por` ni los campos de reversión: los dos primeros trasplantarían antigüedad y falsearían la base legal del acto, los demás son firmas.\n\nLa respuesta trae `impacto` con la antigüedad y el puntaje antes y después, porque las consecuencias no son evidentes: adelantar `desde` descarta producción que hasta entonces puntuaba, y retrasarlo puede no dar ni un mes si no hay experiencia uniautónoma documentada que cubra ese periodo —el motor **intersecta** las dos series—.\n\nCorregir el escalón del tramo vigente es, de hecho, otorgar una categoría sin evaluación del motor ni periodo de ascenso; el `message` lo dice en voz alta cuando ocurre.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `404` — Tramo no encontrado\n- `409` — Tramo revertido, solapamiento con otro tramo, dos tramos abiertos, cierre del único tramo vigente (use la reversión), o escalón inactivo como vigente\n- `422` — Sin motivo, sin ningún campo a corregir, o `hasta` anterior a `desde`",
+                                          "body": {
+                                              "mode": "raw",
+                                              "raw": "{\n  \"escalon_id\": 2,\n  \"desde\": \"2016-01-01\",\n  \"motivo\": \"La contratación se cargó con la fecha del contrato renovado.\"\n}"
+                                          }
+                                      }
+                                  },
+                                  {
+                                      "name": "Escalafón · Bitácora del docente (solo Admin)",
+                                      "request": {
+                                          "method": "GET",
+                                          "header": [
+                                              {
+                                                  "key": "Authorization",
+                                                  "value": "Bearer {{token}}"
+                                              }
+                                          ],
+                                          "url": {
+                                              "raw": "{{base_url}}/admin/escalafon/docentes/5/bitacora",
+                                              "host": [
+                                                  "{{base_url}}"
+                                              ],
+                                              "path": [
+                                                  "admin",
+                                                  "escalafon",
+                                                  "docentes",
+                                                  "5",
+                                                  "bitacora"
+                                              ]
+                                          },
+                                          "description": "**Exclusiva del Administrador.** Intervenciones manuales sobre el historial de escalafón del docente, de la más reciente a la más antigua, con snapshot antes/después y el motivo.\n\nVa por docente y no por tramo porque la pregunta de quien audita un expediente es «¿qué se ha tocado a mano aquí?», y un tramo corregido puede además haber desaparecido.\n\n`tipo_modificacion` es `creacion` (ingreso manual) o `actualizacion` (corrección). Los ascensos y reversiones no salen aquí: van firmados en el propio tramo y los devuelve `GET /admin/escalafon/docentes/{userId}`.\n\n**Errores posibles:**\n- `401` — Token inválido\n- `403` — Sin rol Administrador\n- `404` — Docente no encontrado"
+                                      }
                                   }
                               ]
                  },

@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\Aspirante\Experiencia;
+use App\Models\EscalonDocente;
 use App\Models\ExamenIdioma;
+use App\Models\HistorialEscalonDocente;
 use App\Models\Idioma as IdiomaCatalogo;
 use App\Models\NivelFormacionAcademica;
 use App\Models\TipoExperiencia;
@@ -340,5 +342,63 @@ class CatalogoIntegridadApiTest extends TestCase
              ])
              ->assertStatus(422)
              ->assertJsonPath('errors.institucion_experiencia', fn($v) => !empty($v));
+    }
+
+    // ---------------------------------------------------------------
+    // Escalones del escalafón: el historial también los sujeta
+    // ---------------------------------------------------------------
+
+    /**
+     * Un escalón que algún docente tuvo no se puede borrar, y hay que decirlo con un 409.
+     *
+     * `eliminar()` solo contaba las reglas de excepción, pero la FK
+     * `historial_escalon_docente.escalon_id` es `restrictOnDelete` —a propósito, para que borrar un
+     * escalón no se lleve por delante el expediente de nadie—, así que PostgreSQL abortaba con
+     * SQLSTATE 23503 y la API devolvía un 500 genérico donde correspondía explicar qué estorba.
+     */
+    public function test_eliminar_escalon_con_historial_de_docentes_retorna_409(): void
+    {
+        $admin   = $this->crearUsuarioConRol('Administrador');
+        $docente = $this->crearUsuarioConRol('Docente');
+
+        $escalon = EscalonDocente::create([
+            'nombre' => 'Escalon integridad ' . uniqid(),
+            'orden'  => 90,
+            'activo' => true,
+        ]);
+
+        HistorialEscalonDocente::create([
+            'user_id'      => $docente->id,
+            'escalon_id'   => $escalon->id_escalon,
+            'desde'        => '2020-01-01',
+            'via'          => HistorialEscalonDocente::VIA_INGRESO,
+            'otorgado_por' => null,
+        ]);
+
+        $this->actingAs($admin, 'api')
+             ->deleteJson('/api/admin/escalones-docente/' . $escalon->id_escalon)
+             ->assertStatus(409)
+             ->assertJsonPath('docentes_asociados', 1)
+             ->assertJsonPath('tramos_asociados', 1);
+
+        $this->assertDatabaseHas('escalones_docente', ['id_escalon' => $escalon->id_escalon]);
+    }
+
+    /** Sin nada que lo sujete sí se borra: el 409 anterior no es un bloqueo indiscriminado. */
+    public function test_eliminar_escalon_sin_referencias_retorna_200(): void
+    {
+        $admin = $this->crearUsuarioConRol('Administrador');
+
+        $escalon = EscalonDocente::create([
+            'nombre' => 'Escalon libre ' . uniqid(),
+            'orden'  => 91,
+            'activo' => true,
+        ]);
+
+        $this->actingAs($admin, 'api')
+             ->deleteJson('/api/admin/escalones-docente/' . $escalon->id_escalon)
+             ->assertStatus(200);
+
+        $this->assertDatabaseMissing('escalones_docente', ['id_escalon' => $escalon->id_escalon]);
     }
 }

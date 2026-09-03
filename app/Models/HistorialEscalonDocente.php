@@ -6,6 +6,7 @@ use App\Models\Usuario\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Un tramo del docente en un escalón: desde cuándo lo tiene y, si ya ascendió, hasta cuándo.
@@ -81,6 +82,17 @@ class HistorialEscalonDocente extends Model
     public function docente(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id', 'id');
+    }
+
+    /**
+     * Las veces que el Administrador tocó este tramo a mano.
+     *
+     * Vacía en la inmensa mayoría: solo el ingreso manual y la corrección escriben aquí. Que no lo
+     * esté es la señal de que el tramo no es exactamente lo que el acto original produjo.
+     */
+    public function bitacoras(): HasMany
+    {
+        return $this->hasMany(HistorialEscalonBitacora::class, 'historial_escalon_id', 'id_historial_escalon');
     }
 
     public function otorgante(): BelongsTo

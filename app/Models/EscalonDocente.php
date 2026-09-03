@@ -59,6 +59,18 @@ class EscalonDocente extends Model
         return $this->hasMany(ReglaExcepcionEscalon::class, 'escalon_otorgado_id', 'id_escalon');
     }
 
+    /**
+     * Los tramos del historial que han estado en este escalón, revertidos incluidos.
+     *
+     * Existe sobre todo para poder contarlos antes de borrar: la FK `historial_escalon_docente.
+     * escalon_id` es `restrictOnDelete`, así que un escalón que algún docente tuvo no se puede
+     * eliminar y hay que decirlo con un 409, no dejando que la base tumbe la petición.
+     */
+    public function historial(): HasMany
+    {
+        return $this->hasMany(HistorialEscalonDocente::class, 'escalon_id', 'id_escalon');
+    }
+
     public function idioma(): BelongsTo
     {
         return $this->belongsTo(Idioma::class, 'idioma_catalogo_id', 'id_idioma_catalogo');

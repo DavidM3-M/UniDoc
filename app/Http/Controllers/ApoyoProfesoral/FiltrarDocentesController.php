@@ -546,6 +546,10 @@ class FiltrarDocentesController
                     'email' => $docente->email,
                     'numero_identificacion' => $docente->numero_identificacion,
                     'puntaje_total' => $resultado['puntaje_total'],
+                    // El mismo puntaje contando la producción todavía sin avalar. Va aquí explícito
+                    // porque esta fila se arma campo por campo, a diferencia de la bandeja de
+                    // `EscalafonDocenteController`, que devuelve el resultado completo del motor.
+                    'puntaje_declarado' => $resultado['puntaje_declarado'],
                     'categoria_lograda' => $resultado['escalon_vigente'],
                     'escalon_objetivo' => $resultado['escalon_objetivo'],
                     'elegible' => $resultado['elegible'],

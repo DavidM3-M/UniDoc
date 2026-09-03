@@ -30,8 +30,10 @@ class EscalonDocenteController
     public function listar()
     {
         try {
+            // `historial_count` deja que la pantalla sepa que el escalón está en uso antes de
+            // intentar borrarlo y llevarse un 409.
             $escalones = EscalonDocente::with('idioma:id_idioma_catalogo,nombre_idioma')
-                ->withCount('excepciones')
+                ->withCount(['excepciones', 'historial'])
                 ->ordenados()
                 ->get();
 
@@ -125,7 +127,14 @@ class EscalonDocenteController
     }
 
     /**
-     * Elimina un escalón que no tenga excepciones apuntándole como piso.
+     * Elimina un escalón que nadie esté usando.
+     *
+     * Dos cosas lo pueden estar usando: una regla de excepción que lo otorgue como piso, y el
+     * historial de los docentes que lo tuvieron. Lo segundo faltaba, y no era un descuido inocuo:
+     * la FK `historial_escalon_docente.escalon_id` es `restrictOnDelete` —a propósito, para que
+     * borrar un escalón no se lleve por delante el expediente de nadie—, así que la petición no
+     * pasaba en silencio: PostgreSQL abortaba con SQLSTATE 23503, la excepción caía en el `catch`
+     * genérico y la API devolvía un 500 donde correspondía un 409 explicando qué estorba.
      *
      * Para retirarlo de la evaluación sin perder el histórico de docentes que ya lo alcanzaron
      * está `activo = false`.
@@ -143,12 +152,26 @@ class EscalonDocenteController
             }
 
             $excepciones = $escalon->excepciones()->count();
+            $tramos = $escalon->historial()->count();
+            $docentes = $escalon->historial()->distinct()->count('user_id');
 
-            if ($excepciones > 0) {
+            if ($excepciones > 0 || $tramos > 0) {
+                $motivos = [];
+
+                if ($excepciones > 0) {
+                    $motivos[] = "{$excepciones} excepción(es) lo otorgan como mínimo";
+                }
+                if ($tramos > 0) {
+                    $motivos[] = "{$docentes} docente(s) lo tienen o lo tuvieron en su historial";
+                }
+
                 return response()->json([
                     'status' => 'error',
-                    'message' => "No se puede eliminar: hay {$excepciones} excepción(es) que otorgan este escalón como mínimo. Puede marcarlo como inactivo para retirarlo de la evaluación.",
+                    'message' => 'No se puede eliminar: ' . implode(' y ', $motivos)
+                        . '. Puede marcarlo como inactivo para retirarlo de la evaluación.',
                     'excepciones_asociadas' => $excepciones,
+                    'docentes_asociados' => $docentes,
+                    'tramos_asociados' => $tramos,
                 ], 409);
             }
 

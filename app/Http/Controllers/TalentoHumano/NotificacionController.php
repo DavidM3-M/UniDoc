@@ -428,10 +428,13 @@ class NotificacionController extends Controller
      * El ascenso ya no ocurre solo cuando el docente consulta su puntaje: lo ejecuta una persona,
      * así que el docente no tiene forma de enterarse si no se le avisa. Ver `AscensoEscalafonService`.
      */
-    public static function escalonOtorgado(User $usuario, string $escalon): void
+    public static function escalonOtorgado(User $usuario, string $escalon, ?string $rol = null): void
     {
+        // El rol viene del ejecutor y no está escrito a mano porque el ascenso dejó de ser exclusivo
+        // de Apoyo Profesoral: el Administrador ejecuta el mismo acto desde `/admin/escalafon`.
+        $quien   = $rol ?? 'La Universidad';
         $asunto  = "Has ascendido a {$escalon} – UniDoc";
-        $mensaje = "Apoyo Profesoral registró tu ascenso en el escalafón docente. Tu nueva categoría es {$escalon}. "
+        $mensaje = "{$quien} registró tu ascenso en el escalafón docente. Tu nueva categoría es {$escalon}. "
                  . 'Ten en cuenta que el conteo de antigüedad y el puntaje de producción académica '
                  . 'vuelven a empezar desde esta categoría.';
 
@@ -480,6 +483,66 @@ class NotificacionController extends Controller
             $usuario->notify(new NotificacionGeneral($mensaje));
         } catch (\Exception $e) {
             Log::error("Error al notificar la reversión de escalafón a {$usuario->email}: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Avisa al docente de que se corrigió un tramo de su historial de escalafón.
+     *
+     * No es un ascenso ni una reversión, así que no puede reutilizar ninguno de los dos mensajes:
+     * felicitarle por un ascenso que no ha habido, o decirle que se le quitó una categoría, serían
+     * las dos igual de falsas. Es una corrección administrativa del registro.
+     *
+     * Se avisa aunque solo cambien las fechas: `desde` es el origen del conteo de antigüedad y el
+     * inicio de la ventana de producción académica que puntúa, así que moverlo le cambia al docente
+     * la respuesta a "cuándo puedo ascender" sin tocarle la categoría.
+     *
+     * @param array $antes   Retrato del tramo antes de la corrección (escalon, desde, hasta).
+     * @param array $despues Retrato después.
+     */
+    public static function escalonCorregido(
+        User $usuario,
+        array $antes,
+        array $despues,
+        string $motivo,
+        ?string $rol = null
+    ): void {
+        $quien  = $rol ?? 'La Universidad';
+        $asunto = 'Se corrigió un registro de tu escalafón – UniDoc';
+
+        // Solo se enumera lo que cambió de verdad: una corrección de fecha no debe abrirse con una
+        // frase sobre la categoría, que es lo primero que el docente busca en el correo.
+        $cambios = [];
+
+        if (($antes['escalon'] ?? null) !== ($despues['escalon'] ?? null)) {
+            $cambios['Categoría'] = ($antes['escalon'] ?? 'sin escalón') . ' → ' . ($despues['escalon'] ?? 'sin escalón');
+        }
+        if (($antes['desde'] ?? null) !== ($despues['desde'] ?? null)) {
+            $cambios['Desde'] = ($antes['desde'] ?? '—') . ' → ' . ($despues['desde'] ?? '—');
+        }
+        if (($antes['hasta'] ?? null) !== ($despues['hasta'] ?? null)) {
+            $cambios['Hasta'] = ($antes['hasta'] ?? 'vigente') . ' → ' . ($despues['hasta'] ?? 'vigente');
+        }
+
+        $mensaje = "{$quien} corrigió un registro de tu historial en el escalafón docente. "
+                 . (isset($cambios['Categoría'])
+                        ? 'Tu categoría cambió con esta corrección. '
+                        : 'Tu categoría no cambia, pero sí el periodo con el que se cuenta tu antigüedad. ')
+                 . 'Puedes revisar el detalle en tu estado de escalafón.';
+
+        $detalles = array_merge($cambios, ['Motivo' => $motivo]);
+
+        if ($rol) {
+            $detalles['Corregido por'] = $rol;
+        }
+
+        try {
+            Mail::to($usuario->email)->send(
+                new NotificacionMail($asunto, $mensaje, $usuario->primer_nombre, $detalles)
+            );
+            $usuario->notify(new NotificacionGeneral($mensaje));
+        } catch (\Exception $e) {
+            Log::error("Error al notificar la corrección de escalafón a {$usuario->email}: " . $e->getMessage());
         }
     }
 

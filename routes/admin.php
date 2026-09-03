@@ -17,7 +17,9 @@ use App\Http\Controllers\Admin\IdiomaController;
 use App\Http\Controllers\Admin\ExamenIdiomaController;
 use App\Http\Controllers\Admin\RangoExamenIdiomaController;
 use App\Http\Controllers\Admin\EscalonDocenteController;
+use App\Http\Controllers\Admin\EscalafonHistorialController;
 use App\Http\Controllers\Admin\ReglaExcepcionEscalonController;
+use App\Http\Controllers\ApoyoProfesoral\EscalafonDocenteController;
 use App\Http\Controllers\TalentoHumano\ContratacionController;
 
 Route::group([
@@ -134,6 +136,39 @@ Route::group([
     Route::post('reglas-excepcion-escalon', [ReglaExcepcionEscalonController::class, 'crear']);
     Route::put('reglas-excepcion-escalon/{id}', [ReglaExcepcionEscalonController::class, 'actualizar']);
     Route::delete('reglas-excepcion-escalon/{id}', [ReglaExcepcionEscalonController::class, 'eliminar']);
+
+    // ---------------------------------------------------------------
+    // Escalafón docente: los actos sobre el expediente de un docente.
+    //
+    // Las rutas de arriba definen las REGLAS del escalafón (qué escalones hay y qué pide cada uno);
+    // estas las APLICAN sobre docentes concretos. Hasta ahora eran exclusivas de Apoyo Profesoral.
+    // ---------------------------------------------------------------
+
+    // Mismo acto y mismas reglas que en `/apoyoProfesoral`, así que es el mismo controlador: un
+    // ascenso ejecutado por el Administrador revalida contra el motor y exige periodo cerrado
+    // igual, y queda firmado con su id en `otorgado_por` porque el servicio usa `$request->user()`.
+    // Duplicar el controlador solo garantizaría que las dos copias se separen con el tiempo. Mismo
+    // criterio que las contrataciones de más abajo, que reutilizan el controlador de Talento Humano.
+    Route::get('escalafon/periodos', [EscalafonDocenteController::class, 'listarPeriodos']);
+    Route::post('escalafon/periodos', [EscalafonDocenteController::class, 'crearPeriodo']);
+    Route::put('escalafon/periodos/{id}', [EscalafonDocenteController::class, 'actualizarPeriodo']);
+    Route::post('escalafon/periodos/{id}/cerrar', [EscalafonDocenteController::class, 'cerrarPeriodo']);
+
+    // La bandeja no es solo consulta: `verDocente` es la única forma de obtener el
+    // `id_historial_escalon` que necesitan la reversión y la corrección para direccionar un tramo.
+    Route::get('escalafon/docentes', [EscalafonDocenteController::class, 'listarDocentes']);
+    Route::get('escalafon/docentes/{userId}', [EscalafonDocenteController::class, 'verDocente']);
+    Route::post('escalafon/docentes/{userId}/ascender', [EscalafonDocenteController::class, 'ascender']);
+    Route::post('escalafon/historial/{id}/revertir', [EscalafonDocenteController::class, 'revertir']);
+
+    // Exclusivas del Administrador: corregir el expediente. No existen bajo `/apoyoProfesoral` y por
+    // eso viven en otra clase (ver el docblock de `Admin\EscalafonHistorialController`).
+    // El ingreso ordinario lo sigue disparando `ContratacionObserver`, siempre al primer escalón;
+    // `ingreso-manual` cubre lo que aquel no sabe hacer y exige contratación de planta vigente igual.
+    // Toda escritura de aquí queda en `historial_escalon_bitacoras` con motivo obligatorio.
+    Route::post('escalafon/docentes/{userId}/ingreso-manual', [EscalafonHistorialController::class, 'ingresarManual']);
+    Route::put('escalafon/historial/{id}', [EscalafonHistorialController::class, 'corregir']);
+    Route::get('escalafon/docentes/{userId}/bitacora', [EscalafonHistorialController::class, 'bitacora']);
 
     // Rutas de reportes
     Route::get('usuarios-excel', [ReporteController::class, 'usuariosExcel']);

@@ -821,6 +821,101 @@ que ahora administra el rol `Administrador`.
   el `default` y suma **0 puntos** hasta que se actualice ese servicio. Volverlo configurable
   queda fuera del alcance de este CRUD.
 
+#### Escalafón docente
+
+Los catálogos de arriba (`escalones-docente`, `reglas-excepcion-escalon`) definen las **reglas** del
+escalafón. Estas rutas las **aplican** sobre el expediente de un docente concreto.
+
+**Acciones compartidas con Apoyo Profesoral.** Son el mismo acto con las mismas reglas —se revalida
+contra el motor, se exige periodo cerrado y queda firmado con el ejecutor— así que las atiende el
+mismo controlador (`ApoyoProfesoral\EscalafonDocenteController`) montado bajo los dos prefijos.
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| GET | `/admin/escalafon/periodos` | Periodos de ascenso, con `cerrado` calculado |
+| POST | `/admin/escalafon/periodos` | Crea un periodo; `fecha_cierre` debe ser futura y posterior al último |
+| PUT | `/admin/escalafon/periodos/{id}` | Actualiza; **409** si el periodo ya cerró |
+| POST | `/admin/escalafon/periodos/{id}/cerrar` | Cierre anticipado; **no** mueve `fecha_cierre` |
+| GET | `/admin/escalafon/docentes` | Bandeja. `?estado_antiguedad=`, `?periodo_ascenso_id=` |
+| GET | `/admin/escalafon/docentes/{userId}` | Evaluación + historial completo, revertidos incluidos |
+| POST | `/admin/escalafon/docentes/{userId}/ascender` | Ejecuta el ascenso; **409** con el desglose de lo que falta |
+| POST | `/admin/escalafon/historial/{id}/revertir` | Deshace un acto; `motivo` obligatorio |
+
+**Acciones exclusivas del Administrador.** No existen bajo `/apoyoProfesoral`.
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| POST | `/admin/escalafon/docentes/{userId}/ingreso-manual` | Ingresa al docente en el escalón y la fecha indicados |
+| PUT | `/admin/escalafon/historial/{id}` | Corrige escalón y/o fechas de un tramo |
+| GET | `/admin/escalafon/docentes/{userId}/bitacora` | Intervenciones manuales sobre su historial |
+
+**Campos de `ingreso-manual`**
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `escalon_id` | integer | Sí | Escalón de entrada. Debe existir y estar **activo** (si no, 409) |
+| `desde` | date | Sí | Fecha de entrada. No puede ser futura |
+| `motivo` | string | Sí | Máx. 1000. Queda en la bitácora |
+
+**Campos de la corrección** (al menos uno de los tres primeros, si no 422)
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `escalon_id` | integer | No | Escalón destino |
+| `desde` | date | No | Nuevo inicio del tramo |
+| `hasta` | date\|null | No | Nuevo fin. `null` **reabre** el tramo; omitirlo lo deja como está |
+| `motivo` | string | Sí | Máx. 1000 |
+
+**Reglas de negocio**
+
+- **El ingreso ordinario no pasa por aquí.** `ContratacionObserver` mete al docente en el primer
+  escalón en cuanto Talento Humano registra su contratación de planta. `ingreso-manual` cubre lo que
+  aquel no sabe hacer: el docente que llega con una categoría ya reconocida, el reingreso tras una
+  reversión y la carga de expedientes anteriores al sistema. **Sigue exigiendo contratación de
+  planta vigente**: el escalafón es de los docentes de planta y esa regla no se relaja.
+- **Cuando lo que está mal es una fecha que el automático ya escribió, la herramienta es la
+  corrección, no el ingreso manual**: el docente ya está dentro.
+- **Un ingreso manual se distingue del automático por la firma.** Los dos llevan `via = 'ingreso'`;
+  el automático deja `otorgado_por` en null porque no lo decide nadie, el manual lo lleva relleno.
+- **No son corregibles** `user_id`, `periodo_ascenso_id`, `via`, `otorgado_por` ni los campos de
+  reversión. Los dos primeros trasplantarían antigüedad y falsearían la base legal del acto; los
+  demás son firmas. La identidad de quien corrige vive en la bitácora.
+- **Un tramo revertido no se corrige** (409): es el registro de algo que se deshizo.
+- **Los tramos consecutivos comparten la fecha de frontera.** El ascenso cierra uno y abre el
+  siguiente el mismo día, así que los periodos se tratan como `[desde, hasta)`: compartir esa fecha
+  no es un solapamiento, pisarse sí (409).
+- **Los huecos entre tramos son legales** (el docente pudo retirarse y volver), así que **los
+  vecinos no se ajustan en cascada**. Para mover una frontera se encoge primero el tramo que estorba
+  —lo que abre un hueco— y después se estira el otro.
+- **Cerrar el único tramo abierto responde 409.** Dejaría al docente fuera del escalafón en silencio
+  y sin motivo; a ese estado se llega por la reversión, que sí se firma y sí le avisa.
+- **Un escalón inactivo** vale para un tramo histórico pero no para el vigente (409): el motor
+  resuelve la categoría con `activos()` y el docente quedaría con un escalón ilegible.
+- **Corregir el escalón del tramo vigente es, de hecho, otorgar una categoría** sin evaluación del
+  motor ni periodo de ascenso. Es una capacidad deliberada del Administrador —es como se arregla un
+  expediente mal cargado— y el `message` de la respuesta lo dice en voz alta cuando ocurre.
+- **La antigüedad no siempre crece al retrasar `desde`.** `mesesEnEscalon()` **intersecta** los
+  tramos del historial con los periodos de experiencia `es_uniautonoma` con documento aprobado: sin
+  experiencia documentada que cubra el periodo nuevo, la corrección no da ni un mes. Por eso la
+  respuesta trae `impacto` con la antigüedad y el puntaje antes y después.
+- **Adelantar `desde` descarta producción académica** que hasta entonces puntuaba: `desde` es también
+  el límite inferior de la ventana que suma. Sale igualmente en `impacto`.
+- **Ninguna corrección revalida ascensos ya otorgados.** Mismo criterio que el resto del sistema: las
+  reglas que cuentan son las del momento del otorgamiento.
+- **Toda escritura queda en `historial_escalon_bitacoras`**, con motivo obligatorio y snapshot
+  antes/después. Es una tabla aparte y no un par de columnas porque un tramo puede corregirse varias
+  veces. Los ascensos y reversiones no se duplican ahí: ya van firmados en el propio tramo.
+- **El docente recibe una notificación** en toda corrección, también cuando solo cambian las fechas:
+  le cambia la antigüedad y la ventana de producción, que es lo que usa para saber cuándo asciende.
+- **La invariante de un solo tramo abierto por docente está en la base de datos**, como índice único
+  parcial (`WHERE hasta IS NULL AND revertido_en IS NULL`). Las validaciones en PHP son las que dan
+  el 409 con mensaje útil; el índice es la red que convierte una carrera en error en vez de en un
+  expediente corrupto.
+
+> **Hueco conocido:** si se revierte el tramo de ingreso de un docente, `ContratacionObserver` lo
+> volverá a crear en la siguiente edición de cualquiera de sus contrataciones, en el primer escalón.
+> Es comportamiento preexistente del observer.
+
 #### Otros
 
 | Método | URI | Descripción |

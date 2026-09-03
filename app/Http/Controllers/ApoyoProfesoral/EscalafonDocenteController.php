@@ -20,12 +20,22 @@ use Illuminate\Support\Facades\Log;
  * Bandeja de ascensos del escalafón docente y los actos que la acompañan.
  *
  * Es la contrapartida del cambio de fondo del nuevo reglamento: el ascenso dejó de ser algo que el
- * motor otorgaba solo cuando el docente pedía su evaluación y pasó a ser un acto de Apoyo
- * Profesoral. Aquí se ve quién es elegible, se ejecutan los ascensos y se revierten los que hubo
- * que deshacer.
+ * motor otorgaba solo cuando el docente pedía su evaluación y pasó a ser un acto administrativo.
+ * Aquí se ve quién es elegible, se ejecutan los ascensos y se revierten los que hubo que deshacer.
  *
- * El ingreso al escalafón no está aquí y no es un acto de nadie: `ContratacionObserver` mete al
- * docente en el primer escalón en cuanto Talento Humano le registra la contratación de planta.
+ * **Lo usan dos roles.** Vive en el espacio de Apoyo Profesoral porque es quien lo estrenó, pero
+ * `routes/admin.php` monta las mismas acciones bajo `/admin/escalafon` para el Administrador. Es el
+ * mismo acto con las mismas reglas —se revalida contra el motor, se exige periodo cerrado y se firma
+ * con el ejecutor— así que tener dos copias solo garantizaría que se separen con el tiempo. Al
+ * escribir aquí, tener presente que el `$request->user()` puede ser cualquiera de los dos.
+ *
+ * Lo que **no** está aquí y es exclusivo del Administrador son las correcciones del expediente
+ * —ingreso manual y edición de tramos—, que viven en `Admin\EscalafonHistorialController`.
+ * Separadas físicamente a propósito: si estuvieran en esta clase, bastaría un `Route::post()`
+ * escrito por descuido en `routes/apoyo_profesoral.php` para dárselas a quien no debe tenerlas.
+ *
+ * El ingreso ordinario al escalafón no es un acto de nadie: `ContratacionObserver` mete al docente
+ * en el primer escalón en cuanto Talento Humano le registra la contratación de planta.
  *
  * La administración de los escalones y sus requisitos NO vive aquí: eso es del rol Administrador
  * (`Admin\EscalonDocenteController`). Este controlador aplica las reglas, no las define.
@@ -242,6 +252,10 @@ class EscalafonDocenteController
                         'revertido_en' => $tramo->revertido_en?->toDateTimeString(),
                         'revertido_por' => $tramo->revisorReversion?->email,
                         'motivo_reversion' => $tramo->motivo_reversion,
+                        // Un tramo corregido a mano ya no es exactamente lo que produjo el acto
+                        // original. El detalle de qué cambió está en
+                        // `GET /admin/escalafon/docentes/{userId}/bitacora`.
+                        'corregido' => ($tramo->bitacoras_count ?? 0) > 0,
                     ])->values(),
                 ],
             ], 200);
@@ -377,6 +391,10 @@ class EscalafonDocenteController
             'experienciasUsuario.documentosExperiencia',
             'produccionAcademicaUsuario.documentosProduccionAcademica',
             'evaluacionDocenteUsuario',
+            // El conteo de bitácora es lo que permite marcar un tramo como corregido a mano. Se
+            // carga también para Apoyo Profesoral, que es precisamente quien necesita enterarse de
+            // que el Administrador tocó un expediente que él está evaluando.
+            'historialEscalonUsuario' => fn ($query) => $query->withCount('bitacoras'),
             'historialEscalonUsuario.escalon',
             'historialEscalonUsuario.otorgante:id,email',
             'historialEscalonUsuario.revisorReversion:id,email',

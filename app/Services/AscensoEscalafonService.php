@@ -6,6 +6,7 @@ use App\Constants\ConstTalentoHumano\TipoContratacion;
 use App\Exceptions\AscensoEscalafonException;
 use App\Http\Controllers\TalentoHumano\NotificacionController;
 use App\Models\EscalonDocente;
+use App\Models\HistorialEscalonBitacora;
 use App\Models\HistorialEscalonDocente;
 use App\Models\PeriodoAscenso;
 use App\Models\TalentoHumano\Contratacion;
@@ -23,9 +24,16 @@ use Illuminate\Support\Facades\Log;
  * si el Administrador subía un requisito. El nuevo reglamento exige un acto de Apoyo Profesoral, y
  * eso es lo que hace esta clase.
  *
- * Con una excepción deliberada: el **ingreso no es un acto de nadie**. Lo dispara la contratación
- * de planta a través de `ContratacionObserver`, sin firma y sin formulario, porque ser docente de
- * planta ya es la decisión. Ascender y revertir sí quedan firmados por quien los ejecuta.
+ * Con una excepción deliberada: el **ingreso ordinario no es un acto de nadie**. Lo dispara la
+ * contratación de planta a través de `ContratacionObserver`, sin firma y sin formulario, porque ser
+ * docente de planta ya es la decisión. Ascender y revertir sí quedan firmados por quien los ejecuta.
+ *
+ * A eso se suman dos actos exclusivos del **Administrador**, que no existían y que son la única
+ * forma de arreglar un expediente sin falsearlo: `ingresarManual()`, para el docente que llega con
+ * una categoría ya reconocida o al que hay que reingresar tras una reversión, y `corregirTramo()`,
+ * para el escalón o la fecha que se cargaron mal. Los dos exigen motivo y quedan además en
+ * `historial_escalon_bitacoras`, porque un tramo puede corregirse más de una vez y el propio tramo
+ * solo puede retratar el último estado.
  *
  * Mismo patrón que `AvalProduccionService`: la decisión se aplica dentro de una transacción y la
  * notificación al docente es best-effort —un fallo del correo no puede tumbar un acto que ya está
@@ -174,7 +182,7 @@ class AscensoEscalafonService
             ]);
 
             $this->sincronizarCache($docente, $objetivo->nombre);
-            $this->notificarAscenso($docente, $objetivo->nombre);
+            $this->notificarAscenso($docente, $objetivo->nombre, $ejecutor);
 
             return $tramo;
         });
@@ -223,6 +231,325 @@ class AscensoEscalafonService
 
             return $tramo->refresh();
         });
+    }
+
+    // ---------------------------------------------------------------
+    // Correcciones del Administrador
+    // ---------------------------------------------------------------
+
+    /**
+     * Mete al docente al escalafón en el escalón y con la fecha que indica el Administrador.
+     *
+     * Es la contrapartida manual de `ingresar()`, y existe porque el automático solo sabe hacer una
+     * cosa: meter al docente en el **primer** escalón con la fecha de su contrato de planta más
+     * antiguo. Eso no cubre al docente que llega con una categoría ya reconocida, ni al que hay que
+     * reingresar tras una reversión en el escalón que le corresponde, ni la carga de expedientes
+     * anteriores al sistema.
+     *
+     * Sigue exigiendo **contratación de planta vigente**, igual que el automático: el escalafón es
+     * de los docentes de planta y esa regla no se relaja porque quien registra sea el Administrador.
+     * Lo que cambia es que el escalón y la fecha los elige él en vez de deducirse. Cuando lo que
+     * está mal es una fecha que el automático ya escribió, la herramienta no es esta sino
+     * `corregirTramo()`.
+     *
+     * A diferencia de `ingresar()`, este sí lanza excepciones: hay un funcionario esperando una
+     * respuesta y necesita saber por qué no se pudo.
+     *
+     * @throws AscensoEscalafonException si el docente ya está dentro, no acredita planta vigente,
+     *         el escalón está inactivo o el usuario no es docente.
+     */
+    public function ingresarManual(
+        User $docente,
+        EscalonDocente $escalon,
+        Carbon $desde,
+        User $ejecutor,
+        string $motivo
+    ): HistorialEscalonDocente {
+        return DB::transaction(function () use ($docente, $escalon, $desde, $ejecutor, $motivo) {
+            // Un tramo sobre alguien sin rol Docente no aparecería nunca en la bandeja, que filtra
+            // por `User::role('Docente')`: quedaría en la tabla sin pantalla que lo muestre.
+            if (!$docente->hasRole('Docente')) {
+                throw new AscensoEscalafonException(
+                    'Solo se puede ingresar al escalafón a un usuario con rol Docente.'
+                );
+            }
+
+            if ($this->tramoAbierto($docente)) {
+                throw new AscensoEscalafonException(
+                    'El docente ya tiene un escalón vigente. Para cambiarlo, corrija el tramo o revierta el acto que lo otorgó.'
+                );
+            }
+
+            if (!$escalon->activo) {
+                throw new AscensoEscalafonException(
+                    "El escalón «{$escalon->nombre}» está inactivo y no puede ser el escalón vigente de un docente."
+                );
+            }
+
+            if ($this->inicioComoPlanta($docente) === null) {
+                throw new AscensoEscalafonException(
+                    'El docente no tiene una contratación de planta vigente, que es lo que acredita el ingreso al '
+                    . 'escalafón. Registre primero la contratación en Talento Humano.'
+                );
+            }
+
+            $tramo = HistorialEscalonDocente::create([
+                'user_id' => $docente->id,
+                'escalon_id' => $escalon->id_escalon,
+                'periodo_ascenso_id' => null,
+                'desde' => $desde->toDateString(),
+                'hasta' => null,
+                'via' => HistorialEscalonDocente::VIA_INGRESO,
+                'motivo' => $motivo,
+                // La firma es lo que distingue este ingreso del automático, que deja `otorgado_por`
+                // en null precisamente porque no lo decide nadie. Por eso no hace falta una `via`
+                // nueva: el par (via = 'ingreso', otorgado_por != null) ya lo identifica.
+                'otorgado_por' => $ejecutor->id,
+            ]);
+
+            $this->registrarBitacora(
+                $tramo,
+                HistorialEscalonBitacora::TIPO_CREACION,
+                null,
+                $this->instantanea($tramo),
+                $ejecutor,
+                $motivo
+            );
+
+            $this->sincronizarCache($docente, $escalon->nombre);
+
+            return $tramo;
+        });
+    }
+
+    /**
+     * Corrige el escalón y/o las fechas de un tramo ya registrado.
+     *
+     * Es lo único que permite arreglar un expediente sin falsearlo. Antes, la única forma de tocar
+     * un tramo era revertirlo, y revertir un ingreso deja al docente fuera del escalafón: para
+     * corregir una fecha de entrada mal cargada había que sacarlo y volverlo a meter, perdiendo por
+     * el camino el acto original.
+     *
+     * Lo que **no** se puede tocar y por qué: `user_id` (mover un tramo de docente es trasplantar
+     * antigüedad entre expedientes), `periodo_ascenso_id` (es el ancla de auditoría: contra qué
+     * corte y qué reglas se otorgó), `via` (es cómo se llegó al escalón, lo decidió el motor; un
+     * `via = 'correccion'` destruiría la distinción entre requisitos y excepción, que no está
+     * guardada en ningún otro sitio), `otorgado_por` y los campos de reversión (son firmas; la de
+     * quien corrige vive en la bitácora).
+     *
+     * Un tramo revertido tampoco se corrige: es el registro de algo que se deshizo, y editarlo
+     * dejaría el expediente diciendo que lo que se deshizo era otra cosa.
+     *
+     * **Los tramos vecinos no se ajustan en cascada.** Una cascada reescribiría actos firmados por
+     * otras personas que nadie pidió tocar, y como los huecos entre tramos son legales —el docente
+     * pudo retirarse y volver— no existe una única cascada correcta. Mover una frontera se hace en
+     * dos pasos: primero se encoge el tramo que estorba, lo que abre un hueco, y después se estira
+     * el otro.
+     *
+     * @param array $cambios Subconjunto de `['escalon_id' => int, 'desde' => string, 'hasta' => ?string]`.
+     *        La clave `hasta` presente con valor null significa "reabrir"; ausente significa "no tocar".
+     * @throws AscensoEscalafonException si el tramo está revertido o el resultado rompe una invariante.
+     */
+    public function corregirTramo(
+        HistorialEscalonDocente $tramo,
+        array $cambios,
+        User $ejecutor,
+        string $motivo
+    ): HistorialEscalonDocente {
+        return DB::transaction(function () use ($tramo, $cambios, $ejecutor, $motivo) {
+            if ($tramo->estaRevertido()) {
+                throw new AscensoEscalafonException(
+                    'Este tramo está revertido: es el registro de un acto que se deshizo y no se corrige. '
+                    . 'Registre el tramo que corresponda en su lugar.'
+                );
+            }
+
+            // Bloquea los tramos del docente antes de decidir nada: las invariantes se comprueban
+            // contra la cadena entera, no contra el tramo aislado.
+            $vecinos = $this->tramosBloqueados($tramo->user_id, $tramo->id_historial_escalon);
+            $antes = $this->instantanea($tramo);
+
+            $escalon = array_key_exists('escalon_id', $cambios)
+                ? EscalonDocente::findOrFail($cambios['escalon_id'])
+                : $tramo->escalon;
+
+            $desde = array_key_exists('desde', $cambios)
+                ? Carbon::parse($cambios['desde'])->startOfDay()
+                : $tramo->desde->copy();
+
+            // Distinguir "no envío `hasta`" de "envío `hasta: null`" solo se puede por la presencia
+            // de la clave: las dos llegan aquí con el mismo valor si se leen con `?? null`.
+            $hasta = array_key_exists('hasta', $cambios)
+                ? ($cambios['hasta'] === null ? null : Carbon::parse($cambios['hasta'])->startOfDay())
+                : $tramo->hasta?->copy();
+
+            $this->validarCorreccion($tramo, $vecinos, $escalon, $desde, $hasta);
+
+            $tramo->update([
+                'escalon_id' => $escalon->id_escalon,
+                'desde' => $desde->toDateString(),
+                'hasta' => $hasta?->toDateString(),
+            ]);
+
+            $tramo->refresh()->load('escalon');
+
+            $this->registrarBitacora(
+                $tramo,
+                HistorialEscalonBitacora::TIPO_ACTUALIZACION,
+                $antes,
+                $this->instantanea($tramo),
+                $ejecutor,
+                $motivo
+            );
+
+            // El vigente se relee de la base, no de una relación cargada antes de la corrección:
+            // la escritura que se acaba de hacer puede haberlo cambiado.
+            $docente = $tramo->docente;
+            $vigente = HistorialEscalonDocente::where('user_id', $tramo->user_id)
+                ->vigentes()
+                ->with('escalon')
+                ->first();
+
+            $this->sincronizarCache($docente, $vigente?->escalon?->nombre);
+            $this->notificarCorreccion($docente, $antes, $this->instantanea($tramo), $motivo, $ejecutor);
+
+            return $tramo;
+        });
+    }
+
+    /**
+     * Las invariantes que la cadena de tramos de un docente tiene que seguir cumpliendo.
+     *
+     * @param \Illuminate\Support\Collection<int, HistorialEscalonDocente> $vecinos Tramos no
+     *        revertidos del mismo docente, sin contar el que se corrige.
+     * @throws AscensoEscalafonException
+     */
+    private function validarCorreccion(
+        HistorialEscalonDocente $tramo,
+        $vecinos,
+        EscalonDocente $escalon,
+        Carbon $desde,
+        ?Carbon $hasta
+    ): void {
+        if ($hasta !== null && $desde->greaterThan($hasta)) {
+            throw new AscensoEscalafonException(
+                'La fecha de inicio no puede ser posterior a la de fin.'
+            );
+        }
+
+        // Un escalón inactivo sigue siendo un destino legítimo para un tramo **histórico** —por eso
+        // la FK es `restrictOnDelete` en vez de borrarse en cascada—, pero no para el vigente: el
+        // motor resuelve la categoría con `EscalonDocente::activos()` y dejaría al docente con un
+        // escalón que ningún listado sabe interpretar.
+        if ($hasta === null && !$escalon->activo) {
+            throw new AscensoEscalafonException(
+                "El escalón «{$escalon->nombre}» está inactivo y no puede ser el escalón vigente de un docente. "
+                . 'Sí puede asignarse a un tramo ya cerrado.'
+            );
+        }
+
+        // Cerrar el único tramo abierto dejaría al docente dentro de la tabla pero fuera del
+        // escalafón —desaparece de la bandeja, `escalonVigente()` pasa a null— en silencio y sin
+        // motivo de reversión. Ese estado existe, pero se llega a él por `revertir()`, que sí lo
+        // firma y sí avisa al docente.
+        if ($hasta !== null && $tramo->hasta === null) {
+            throw new AscensoEscalafonException(
+                'Cerrar el único tramo vigente sacaría al docente del escalafón sin dejar rastro del acto. '
+                . 'Use la reversión.'
+            );
+        }
+
+        if ($hasta === null && $tramo->hasta !== null) {
+            $abierto = $vecinos->firstWhere('hasta', null);
+
+            if ($abierto) {
+                throw new AscensoEscalafonException(
+                    "No se puede reabrir este tramo: el docente ya tiene abierto el #{$abierto->id_historial_escalon} "
+                    . "({$abierto->escalon?->nombre}, desde {$abierto->desde?->toDateString()}). Ciérrelo primero."
+                );
+            }
+        }
+
+        $this->validarSinSolape($vecinos, $desde, $hasta);
+    }
+
+    /**
+     * Ningún tramo puede solaparse con otro del mismo docente.
+     *
+     * Los intervalos son **semiabiertos** `[desde, hasta)`, y eso no es un detalle: `ascender()`
+     * cierra el tramo anterior y abre el siguiente **el mismo día** —`anterior.hasta` y
+     * `nuevo.desde` valen los dos `periodo.fecha_cierre`— para que la ventana de producción del
+     * escalón nuevo empiece justo donde acaba la del viejo. Comparar con `<=` en vez de `<` daría
+     * por solapada toda cadena de ascensos legítima.
+     *
+     * Un `hasta` nulo se trata como infinito.
+     *
+     * @param \Illuminate\Support\Collection<int, HistorialEscalonDocente> $vecinos
+     * @throws AscensoEscalafonException
+     */
+    private function validarSinSolape($vecinos, Carbon $desde, ?Carbon $hasta): void
+    {
+        foreach ($vecinos as $vecino) {
+            $empiezaAntesDeQueElOtroTermine = $vecino->hasta === null || $desde->lessThan($vecino->hasta);
+            $elOtroEmpiezaAntesDeQueEsteTermine = $hasta === null || $vecino->desde->lessThan($hasta);
+
+            if ($empiezaAntesDeQueElOtroTermine && $elOtroEmpiezaAntesDeQueEsteTermine) {
+                $fin = $vecino->hasta?->toDateString() ?? 'vigente';
+
+                throw new AscensoEscalafonException(
+                    "El periodo indicado se solapa con el tramo #{$vecino->id_historial_escalon} "
+                    . "({$vecino->escalon?->nombre}, {$vecino->desde?->toDateString()} → {$fin})."
+                );
+            }
+        }
+    }
+
+    /**
+     * Tramos que cuentan del docente, bloqueados para el resto de la transacción.
+     *
+     * @return \Illuminate\Support\Collection<int, HistorialEscalonDocente>
+     */
+    private function tramosBloqueados(int $userId, ?int $exceptoId = null)
+    {
+        return HistorialEscalonDocente::where('user_id', $userId)
+            ->noRevertidos()
+            ->when($exceptoId, fn ($query) => $query->whereKeyNot($exceptoId))
+            ->orderBy('desde')
+            ->lockForUpdate()
+            ->get()
+            ->each(fn (HistorialEscalonDocente $tramo) => $tramo->load('escalon:id_escalon,nombre'));
+    }
+
+    /** Retrato del tramo para la bitácora: solo lo que el Administrador puede haber cambiado. */
+    private function instantanea(HistorialEscalonDocente $tramo): array
+    {
+        return [
+            'escalon_id' => $tramo->escalon_id,
+            'escalon' => $tramo->escalon?->nombre,
+            'desde' => $tramo->desde?->toDateString(),
+            'hasta' => $tramo->hasta?->toDateString(),
+            'via' => $tramo->via,
+            'periodo_ascenso_id' => $tramo->periodo_ascenso_id,
+        ];
+    }
+
+    private function registrarBitacora(
+        HistorialEscalonDocente $tramo,
+        string $tipo,
+        ?array $antes,
+        ?array $despues,
+        User $ejecutor,
+        string $motivo
+    ): void {
+        HistorialEscalonBitacora::create([
+            'historial_escalon_id' => $tramo->id_historial_escalon,
+            'docente_id' => $tramo->user_id,
+            'user_modifico_id' => $ejecutor->id,
+            'tipo_modificacion' => $tipo,
+            'datos_anteriores' => $antes,
+            'datos_nuevos' => $despues,
+            'motivo' => $motivo,
+        ]);
     }
 
     // ---------------------------------------------------------------
@@ -327,12 +654,45 @@ class AscensoEscalafonService
         $docente->unsetRelation('puntajeUsuario');
     }
 
-    private function notificarAscenso(User $docente, string $escalon): void
+    /**
+     * El rol viaja hasta el correo porque el ascenso dejó de ser exclusivo de Apoyo Profesoral: las
+     * rutas de `/admin` ejecutan este mismo acto. Sin él, el mensaje seguiría diciendo que lo
+     * registró Apoyo Profesoral incluso cuando lo firmó el Administrador.
+     */
+    private function notificarAscenso(User $docente, string $escalon, User $ejecutor): void
     {
         try {
-            NotificacionController::escalonOtorgado($docente, $escalon);
+            NotificacionController::escalonOtorgado($docente, $escalon, $ejecutor->getRoleNames()->first());
         } catch (\Throwable $e) {
             Log::error("Error al notificar el ascenso del docente {$docente->id}: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Avisa al docente de una corrección administrativa sobre su historial.
+     *
+     * Corregir el escalón le cambia la categoría, y corregir el `desde` le cambia la antigüedad y la
+     * ventana de producción que puntúa: las dos cosas que usa para saber cuándo puede ascender. Que
+     * cambien sin avisar convertiría la corrección en algo que descubre por su cuenta al mirar la
+     * pantalla y no puede explicarse.
+     */
+    private function notificarCorreccion(
+        User $docente,
+        array $antes,
+        array $despues,
+        string $motivo,
+        User $ejecutor
+    ): void {
+        try {
+            NotificacionController::escalonCorregido(
+                $docente,
+                $antes,
+                $despues,
+                $motivo,
+                $ejecutor->getRoleNames()->first()
+            );
+        } catch (\Throwable $e) {
+            Log::error("Error al notificar la corrección de escalafón del docente {$docente->id}: " . $e->getMessage());
         }
     }
 

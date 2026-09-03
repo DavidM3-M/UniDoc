@@ -182,7 +182,12 @@ class MotorEscalafonDocenteService
 
         if (!$vigente) {
             return array_merge($base, [
-                'razon' => 'El docente no ha ingresado al escalafón. Apoyo Profesoral debe registrar su escalón inicial.',
+                // El mensaje decía que Apoyo Profesoral debía registrar el escalón inicial, y eso
+                // dejó de ser cierto en dos pasos: primero cuando el ingreso pasó a dispararlo
+                // `ContratacionObserver` con la contratación de planta, y después cuando el
+                // Administrador ganó el ingreso manual. Ninguno de los dos es Apoyo Profesoral.
+                'razon' => 'El docente no ha ingresado al escalafón. El ingreso lo acredita una contratación '
+                    . 'de planta vigente; si ya la tiene, el Administrador puede registrarlo manualmente.',
             ]);
         }
 
