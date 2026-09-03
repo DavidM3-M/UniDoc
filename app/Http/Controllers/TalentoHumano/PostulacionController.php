@@ -500,8 +500,9 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
             $cumpleFecha = false;
 
             foreach ($experienciasUsuario as $exp) {
-                // Si la experiencia está vigente (sin fecha_finalizacion) se considera válida
-                if (empty($exp->fecha_finalizacion)) {
+                // Si la experiencia está vigente (es el trabajo actual, o no informó fecha de
+                // finalización) se considera válida: no tiene un fin con el que comparar.
+                if ($exp->esTrabajoActual() || empty($exp->fecha_finalizacion)) {
                     $cumpleFecha = true;
                     break;
                 }
@@ -667,10 +668,9 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
 
             try {
                 $inicio = \Carbon\Carbon::parse($exp->fecha_inicio);
-                // Trabajo actual o sin fecha de fin → usar hoy como fin
-                $fin = (!empty($exp->fecha_finalizacion))
-                    ? \Carbon\Carbon::parse($exp->fecha_finalizacion)
-                    : \Carbon\Carbon::today();
+                // Trabajo actual o sin fecha de fin → usar hoy como fin, así el total crece solo
+                // con el calendario. Ver `Experiencia::fechaFinEfectiva()`.
+                $fin = $exp->fechaFinEfectiva();
 
                 if ($fin->lessThan($inicio)) {
                     continue; // Datos inconsistentes, omitir
@@ -777,10 +777,8 @@ public function generarHojaDeVidaPDFSimple($idUsuario)
             if (strtolower($experiencia->tipo_experiencia) === strtolower(str_replace('_', ' ', $tipoExperiencia))) {
                 if ($experiencia->fecha_inicio) {
                     $fechaInicio = \Carbon\Carbon::parse($experiencia->fecha_inicio);
-                    // Si no tiene fecha de finalización (trabajo actual), usar hoy
-                    $fechaFin = !empty($experiencia->fecha_finalizacion)
-                        ? \Carbon\Carbon::parse($experiencia->fecha_finalizacion)
-                        : \Carbon\Carbon::today();
+                    // Si es el trabajo actual (o no informó fecha de fin), usar hoy.
+                    $fechaFin = $experiencia->fechaFinEfectiva();
                     $diferencia = $fechaInicio->diffInDays($fechaFin);
                     $totalAnios += $diferencia / 365.25; // Convertir días a años
                 }

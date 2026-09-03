@@ -24,6 +24,20 @@ class ActualizarExperienciaRequest extends FormRequest
     }
 
     /**
+     * Mismo criterio que al crear: marcar el cargo como actual borra la fecha de finalización.
+     *
+     * Aquí importa más que en la creación, porque es el camino por el que un registro cerrado
+     * pasa a ser el trabajo actual del docente: si no se limpiara, la fecha vieja quedaría en la
+     * fila y congelaría la antigüedad que el escalafón debería seguir contando hasta el corte.
+     */
+    protected function prepareForValidation(): void
+    {
+        if ($this->input('trabajo_actual') === TrabajoActual::SI) {
+            $this->merge(['fecha_finalizacion' => null]);
+        }
+    }
+
+    /**
      * Get the validation rules that apply to the request.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
@@ -65,7 +79,8 @@ class ActualizarExperienciaRequest extends FormRequest
             // Valida que `fecha_inicio` sea opcional (`sometimes`), requerido si está presente y de tipo `date`.
             'fecha_finalizacion'           => 'sometimes|nullable|date|after_or_equal:fecha_inicio',
             // Valida que `fecha_finalizacion` sea opcional (`sometimes`), puede ser nulo (`nullable`), de tipo `date`,
-            // y que sea igual o posterior a `fecha_inicio`.
+            // y que sea igual o posterior a `fecha_inicio`. Que sea obligatoria cuando el cargo ya
+            // terminó lo decide `withValidator()`, que sí puede mirar lo que hay guardado.
             'fecha_expedicion_certificado' => 'sometimes|nullable|date',
             // Valida que `fecha_expedicion_certificado` sea opcional (`sometimes`), puede ser nulo (`nullable`) y de tipo `date`.
             'archivo'                      => 'sometimes|nullable|file|mimes:pdf|max:2048',
@@ -74,6 +89,43 @@ class ActualizarExperienciaRequest extends FormRequest
     
         ];
     }
+    /**
+     * Una experiencia que ya terminó tiene que decir cuándo.
+     *
+     * No se puede resolver con un `required_if` porque la actualización es parcial: el docente
+     * puede mandar solo `trabajo_actual` y tener la fecha ya guardada, o al revés. La coherencia
+     * se evalúa entonces sobre el estado que quedaría después de guardar —lo enviado sobre lo
+     * almacenado—, no sobre lo enviado.
+     *
+     * Sin esta regla, cambiar el cargo de 'Si' a 'No' borraría la fecha de fin (la limpia
+     * `prepareForValidation()` mientras es actual) y dejaría el registro contando antigüedad
+     * hasta hoy para siempre.
+     */
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator) {
+            $trabajoActual = $this->input(
+                'trabajo_actual',
+                $this->valorGuardado(Experiencia::class, 'id_experiencia', 'trabajo_actual')
+            );
+
+            if ($trabajoActual !== TrabajoActual::NO) {
+                return;
+            }
+
+            $fechaFinalizacion = $this->has('fecha_finalizacion')
+                ? $this->input('fecha_finalizacion')
+                : $this->valorGuardado(Experiencia::class, 'id_experiencia', 'fecha_finalizacion');
+
+            if (empty($fechaFinalizacion)) {
+                $validator->errors()->add(
+                    'fecha_finalizacion',
+                    'La fecha de finalización es obligatoria cuando el cargo ya no es el trabajo actual.'
+                );
+            }
+        });
+    }
+
     protected function failedValidation(Validator $validator)
     // Método que se ejecuta cuando la validación falla.
     {

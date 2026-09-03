@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Constants\ConstAgregarExperiencia\TrabajoActual;
 use App\Models\Aspirante\Documento;
 use App\Models\Aspirante\Estudio;
 use App\Models\Aspirante\Experiencia;
@@ -126,10 +127,12 @@ class MotorEscalafonDocenteServiceTest extends TestCase
         string $inicio,
         ?string $fin = null,
         string $estadoDoc = 'aprobado',
-        bool $esUniautonoma = true
+        bool $esUniautonoma = true,
+        string $trabajoActual = TrabajoActual::NO
     ): Experiencia {
         $experiencia = (new Experiencia())->forceFill([
             'es_uniautonoma' => $esUniautonoma,
+            'trabajo_actual' => $trabajoActual,
             'fecha_inicio' => $inicio,
             'fecha_finalizacion' => $fin,
         ]);
@@ -214,6 +217,9 @@ class MotorEscalafonDocenteServiceTest extends TestCase
         $this->assertFalse($resultado['elegible']);
         $this->assertNull($resultado['escalon_vigente']);
         $this->assertStringContainsString('no ha ingresado al escalafón', $resultado['razon']);
+        // Fuera del escalafón no hay ventana contra la cual medir producción: ambos en cero, no null.
+        $this->assertSame(0, $resultado['puntaje_total']);
+        $this->assertSame(0, $resultado['puntaje_declarado']);
     }
 
     public function test_antiguedad_insuficiente_no_asciende(): void
@@ -232,6 +238,65 @@ class MotorEscalafonDocenteServiceTest extends TestCase
         $this->assertFalse($resultado['elegible']);
         $this->assertSame(47, $resultado['meses_en_escalon']);
         $this->assertContains('antiguedad', array_column($resultado['faltantes'], 'campo'));
+    }
+
+    /**
+     * Un cargo marcado como el trabajo actual del docente no se detiene en la fecha que tenga
+     * guardada: cuenta hasta el corte.
+     *
+     * Es el caso de quien informó su vinculación vigente y de paso llenó la fecha de fin con el
+     * día en que llenó el formulario. Antes esa fecha congelaba la antigüedad ahí mismo y el
+     * docente tenía que volver a editar el registro para que el escalafón se moviera.
+     */
+    public function test_trabajo_actual_no_se_detiene_en_la_fecha_de_finalizacion_guardada(): void
+    {
+        $docente = $this->auxiliarQueCumpleTodo([
+            'historial' => [$this->tramo('Auxiliar', '2019-02-01')],
+            'experiencias' => [
+                $this->experiencia('2019-02-01', '2019-03-01', 'aprobado', true, TrabajoActual::SI),
+            ],
+        ]);
+
+        $resultado = $this->servicio->evaluarAscenso($docente, $this->periodo('2026-12-31'));
+
+        // De 2019-02-01 al cierre de 2026 son 94 meses, no el mes que decía la fecha guardada.
+        $this->assertSame(94, $resultado['meses_en_escalon']);
+        $this->assertTrue($resultado['elegible']);
+    }
+
+    /**
+     * La antigüedad de un trabajo actual avanza sola con el calendario.
+     *
+     * Al docente al que hoy le falta un día para los 48 meses que pide Asistente, mañana ya no le
+     * falta, sin que nadie toque el registro. Es la razón de ser de `fechaFinEfectiva()`.
+     */
+    public function test_antiguedad_del_trabajo_actual_avanza_con_el_calendario(): void
+    {
+        $hoy = Carbon::parse('2026-09-02');
+        // Un día después de hoy se cumplen los 48 meses exactos.
+        $desde = $hoy->copy()->addDay()->subMonths(48)->toDateString();
+
+        $docente = $this->auxiliarQueCumpleTodo([
+            'historial' => [$this->tramo('Auxiliar', $desde)],
+            'experiencias' => [
+                $this->experiencia($desde, null, 'aprobado', true, TrabajoActual::SI),
+            ],
+        ]);
+
+        // Sin periodo de ascenso el corte es hoy, que es justamente lo que debe moverse.
+        Carbon::setTestNow($hoy);
+        $hoyMismo = $this->servicio->evaluarAscenso($docente);
+
+        Carbon::setTestNow($hoy->copy()->addDay());
+        $manana = $this->servicio->evaluarAscenso($docente);
+
+        Carbon::setTestNow();
+
+        $this->assertSame(47, $hoyMismo['meses_en_escalon']);
+        $this->assertFalse($hoyMismo['elegible']);
+
+        $this->assertSame(48, $manana['meses_en_escalon']);
+        $this->assertTrue($manana['elegible']);
     }
 
     public function test_cumpliendo_todo_es_elegible_al_siguiente_escalon(): void
@@ -451,6 +516,86 @@ class MotorEscalafonDocenteServiceTest extends TestCase
 
         $this->assertSame(0, $resultado['puntaje_total']);
         $this->assertContains('produccion_academica', array_column($resultado['faltantes'], 'campo'));
+    }
+
+    // ---------------------------------------------------------------
+    // puntaje_declarado: lo que sumaría si le avalaran lo que ya subió
+    // ---------------------------------------------------------------
+
+    /**
+     * El hermano de `meses_en_escalon_declarados` para la producción.
+     *
+     * Sin él, el docente sube un producto, ve el puntaje quieto y cree que se perdió; el requisito
+     * de ascenso sigue leyendo `puntaje_total`, que no se mueve hasta que haya aval.
+     */
+    public function test_la_produccion_pendiente_suma_al_declarado_pero_no_al_total(): void
+    {
+        $avalada = $this->ambitoConPuntaje(25);
+        $enRevision = $this->ambitoConPuntaje(6);
+
+        $docente = $this->auxiliarQueCumpleTodo([
+            'producciones' => [
+                $this->produccion($avalada->id_ambito_divulgacion, '2023-03-01'),
+                $this->produccion($enRevision->id_ambito_divulgacion, '2023-04-01', null, 'pendiente'),
+            ],
+        ]);
+
+        $resultado = $this->servicio->evaluarAscenso($docente, $this->periodo('2026-12-31'));
+
+        $this->assertSame(25, $resultado['puntaje_total']);
+        $this->assertSame(31, $resultado['puntaje_declarado']);
+    }
+
+    /** Lo rechazado ya se decidió que no vale: no puede reaparecer como promesa en el declarado. */
+    public function test_la_produccion_rechazada_no_suma_ni_al_declarado(): void
+    {
+        $avalada = $this->ambitoConPuntaje(25);
+        $rechazada = $this->ambitoConPuntaje(6);
+
+        $docente = $this->auxiliarQueCumpleTodo([
+            'producciones' => [
+                $this->produccion($avalada->id_ambito_divulgacion, '2023-03-01'),
+                $this->produccion($rechazada->id_ambito_divulgacion, '2023-04-01', null, 'rechazado'),
+            ],
+        ]);
+
+        $resultado = $this->servicio->evaluarAscenso($docente, $this->periodo('2026-12-31'));
+
+        $this->assertSame(25, $resultado['puntaje_total']);
+        $this->assertSame(25, $resultado['puntaje_declarado']);
+    }
+
+    /**
+     * Sin nada en revisión los dos números coinciden: el campo no se omite ni llega null, para que
+     * el frontend pueda restarlos siempre.
+     */
+    public function test_sin_nada_pendiente_el_declarado_iguala_al_total(): void
+    {
+        $resultado = $this->servicio->evaluarAscenso(
+            $this->auxiliarQueCumpleTodo(),
+            $this->periodo('2026-12-31')
+        );
+
+        $this->assertSame(25, $resultado['puntaje_total']);
+        $this->assertSame($resultado['puntaje_total'], $resultado['puntaje_declarado']);
+    }
+
+    /**
+     * El declarado relaja el aval, no la ventana: lo divulgado antes de entrar al escalón sigue sin
+     * contar aunque esté pendiente de revisión.
+     */
+    public function test_el_declarado_respeta_la_ventana_del_escalon(): void
+    {
+        $ambito = $this->ambitoConPuntaje(25);
+
+        $docente = $this->auxiliarQueCumpleTodo([
+            'producciones' => [$this->produccion($ambito->id_ambito_divulgacion, '2018-05-01', null, 'pendiente')],
+        ]);
+
+        $resultado = $this->servicio->evaluarAscenso($docente, $this->periodo('2026-12-31'));
+
+        $this->assertSame(0, $resultado['puntaje_total']);
+        $this->assertSame(0, $resultado['puntaje_declarado']);
     }
 
     /**

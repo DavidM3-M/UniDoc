@@ -23,6 +23,21 @@ class CrearExperienciaRequest extends FormRequest
     }
 
     /**
+     * Un trabajo actual no lleva fecha de finalización: se descarta la que venga en la petición.
+     *
+     * El escalafón cuenta la antigüedad de un cargo vigente hasta la fecha de corte, así que una
+     * fecha de fin guardada en un registro marcado como actual solo puede sobrar. Limpiarla aquí
+     * —en vez de rechazar la petición— evita que el formulario tenga que acordarse de vaciar el
+     * campo cuando el docente cambia la respuesta de 'No' a 'Si'.
+     */
+    protected function prepareForValidation(): void
+    {
+        if ($this->input('trabajo_actual') === TrabajoActual::SI) {
+            $this->merge(['fecha_finalizacion' => null]);
+        }
+    }
+
+    /**
      * Get the validation rules that apply to the request.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
@@ -61,9 +76,11 @@ class CrearExperienciaRequest extends FormRequest
             'meses_trabajados'             => 'nullable|integer|min:1|max:1200',
             'fecha_inicio'                 => 'required|date', // volver este campo a requerido
             // El campo `fecha_inicio` es obligatorio y debe ser una fecha válida.
-            'fecha_finalizacion'           => 'nullable|date|after_or_equal:fecha_inicio',
-            // El campo `fecha_finalizacion` es opcional, pero si se proporciona, debe ser una fecha válida
-            // y debe ser igual o posterior a `fecha_inicio`.
+            'fecha_finalizacion'           => 'required_if:trabajo_actual,' . TrabajoActual::NO . '|nullable|date|after_or_equal:fecha_inicio',
+            // El campo `fecha_finalizacion` es obligatorio cuando el trabajo ya terminó, porque una
+            // experiencia sin fecha de fin se cuenta como vigente hasta el día de hoy y el escalafón
+            // acabaría regalando antigüedad. Si el trabajo es el actual, `prepareForValidation()` ya
+            // lo dejó en null. Cuando viene, debe ser una fecha válida igual o posterior a `fecha_inicio`.
             'fecha_expedicion_certificado' => 'nullable|date',
             // El campo `fecha_expedicion_certificado` es opcional, pero si se proporciona, debe ser una fecha válida.
             'archivo'                      => 'required|file|mimes:pdf|max:2048', // Validación del archivo

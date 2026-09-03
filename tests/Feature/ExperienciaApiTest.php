@@ -150,6 +150,44 @@ class ExperienciaApiTest extends TestCase
                  ->assertJsonPath('errors.fecha_finalizacion', fn($v) => !empty($v));
     }
 
+    /**
+     * Marcar el cargo como el trabajo actual descarta la fecha de finalización enviada.
+     *
+     * Es la condición para que el escalafón cuente la antigüedad hasta la fecha de corte y no se
+     * quede congelada en el día en que el docente llenó el formulario.
+     */
+    public function test_crear_experiencia_como_trabajo_actual_no_guarda_fecha_finalizacion(): void
+    {
+        Storage::fake('public');
+        $user   = $this->crearDocente();
+        $datos  = $this->datosExperienciaValido(); // trabajo_actual = 'Si'
+        $datos['fecha_finalizacion'] = '2026-09-02';
+        $datos['archivo']            = UploadedFile::fake()->create('cert.pdf', 100, 'application/pdf');
+
+        $this->actingAs($user, 'api')
+             ->postJson('/api/docente/crear-experiencia', $datos)
+             ->assertStatus(201);
+
+        $this->assertNull(
+            Experiencia::where('user_id', $user->id)->value('fecha_finalizacion')
+        );
+    }
+
+    /** Una experiencia que ya terminó tiene que decir cuándo: sin fecha de fin es 422. */
+    public function test_crear_experiencia_terminada_sin_fecha_finalizacion_retorna_422(): void
+    {
+        Storage::fake('public');
+        $user   = $this->crearDocente();
+        $datos  = $this->datosExperienciaValido();
+        $datos['trabajo_actual'] = 'No';
+        $datos['archivo']        = UploadedFile::fake()->create('cert.pdf', 100, 'application/pdf');
+
+        $this->actingAs($user, 'api')
+             ->postJson('/api/docente/crear-experiencia', $datos)
+             ->assertStatus(422)
+             ->assertJsonPath('errors.fecha_finalizacion', fn($v) => !empty($v));
+    }
+
     /** POST /api/docente/crear-experiencia con intensidad_horaria > 168 debe retornar 422. */
     public function test_crear_experiencia_intensidad_horaria_excesiva_retorna_422(): void
     {
@@ -285,6 +323,64 @@ class ExperienciaApiTest extends TestCase
 
         $response->assertStatus(422)
                  ->assertJsonPath('errors.tipo_experiencia', fn($v) => !empty($v));
+    }
+
+    /**
+     * Pasar un cargo cerrado a "es mi trabajo actual" borra la fecha de finalización guardada.
+     *
+     * Sin esto el registro seguiría teniendo el fin viejo y el escalafón dejaría de contar ahí,
+     * que es justamente el caso que el docente no puede corregir desde el formulario.
+     */
+    public function test_actualizar_a_trabajo_actual_limpia_la_fecha_finalizacion(): void
+    {
+        Storage::fake('public');
+        $user        = $this->crearDocente();
+        $experiencia = $this->crearExperiencia($user); // 'No', termina el 2020-12-31
+
+        $this->actingAs($user, 'api')
+             ->putJson("/api/docente/actualizar-experiencia/{$experiencia->id_experiencia}", [
+                 'trabajo_actual' => 'Si',
+             ])
+             ->assertStatus(200);
+
+        $this->assertNull($experiencia->fresh()->fecha_finalizacion);
+    }
+
+    /** Cerrar un cargo vigente sin decir en qué fecha terminó es 422. */
+    public function test_actualizar_a_trabajo_terminado_sin_fecha_finalizacion_retorna_422(): void
+    {
+        Storage::fake('public');
+        $user        = $this->crearDocente();
+        $experiencia = Experiencia::create([
+            'user_id'                 => $user->id,
+            'tipo_experiencia'        => 'Docencia universitaria',
+            'institucion_experiencia' => 'Universidad Nacional',
+            'cargo'                   => 'Profesor titular',
+            'trabajo_actual'          => 'Si',
+            'fecha_inicio'            => '2015-01-15',
+            'fecha_finalizacion'      => null,
+        ]);
+
+        $this->actingAs($user, 'api')
+             ->putJson("/api/docente/actualizar-experiencia/{$experiencia->id_experiencia}", [
+                 'trabajo_actual' => 'No',
+             ])
+             ->assertStatus(422)
+             ->assertJsonPath('errors.fecha_finalizacion', fn($v) => !empty($v));
+    }
+
+    /** La fecha ya guardada basta: no hay que reenviarla en cada actualización parcial. */
+    public function test_actualizar_experiencia_terminada_no_exige_reenviar_la_fecha_guardada(): void
+    {
+        Storage::fake('public');
+        $user        = $this->crearDocente();
+        $experiencia = $this->crearExperiencia($user); // 'No', con fecha de fin guardada
+
+        $this->actingAs($user, 'api')
+             ->putJson("/api/docente/actualizar-experiencia/{$experiencia->id_experiencia}", [
+                 'cargo' => 'Profesor asociado',
+             ])
+             ->assertStatus(200);
     }
 
     // ---------------------------------------------------------------

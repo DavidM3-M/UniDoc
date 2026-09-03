@@ -175,6 +175,7 @@ class MotorEscalafonDocenteService
             'meses_requeridos' => null,
             'estado_antiguedad' => self::SIN_EXPERIENCIA_SUFICIENTE,
             'puntaje_total' => 0,
+            'puntaje_declarado' => 0,
             'periodo_ascenso' => $periodo?->only(['id_periodo_ascenso', 'nombre']),
             'fecha_corte' => $corte->toDateString(),
         ];
@@ -194,7 +195,14 @@ class MotorEscalafonDocenteService
         // Inicio de la ventana de producción: desde que entró a este escalón. Lo anterior ya se
         // usó para llegar hasta aquí.
         $desdeEscalon = $tramo->desde->copy()->startOfDay();
+
+        // El puntaje se parte igual que los meses, y por la misma razón: `puntaje_total` es el que
+        // decide el ascenso, `puntaje_declarado` el que le dice al docente que su producción está
+        // en cola y no perdida. Nunca es menor que el total —cuenta un superconjunto de la misma
+        // producción, y `ambito_divulgacion.puntaje` no admite negativos— así que el frontend puede
+        // restarlos para dibujar el tramo pendiente sin protegerse de un resultado negativo.
         $puntaje = $this->calcularPuntaje($user, $desdeEscalon, $corte);
+        $puntajeDeclarado = $this->calcularPuntaje($user, $desdeEscalon, $corte, false);
 
         // La excepción se resuelve primero porque omite todos los requisitos del escalón que
         // otorga, incluida la antigüedad. Lo único que no omite es el calendario.
@@ -210,6 +218,7 @@ class MotorEscalafonDocenteService
                 'meses_en_escalon_declarados' => $mesesDeclarados,
                 'estado_antiguedad' => self::ELEGIBLE,
                 'puntaje_total' => $puntaje,
+                'puntaje_declarado' => $puntajeDeclarado,
             ]);
         }
 
@@ -220,6 +229,7 @@ class MotorEscalafonDocenteService
                 'meses_en_escalon' => $meses,
                 'meses_en_escalon_declarados' => $mesesDeclarados,
                 'puntaje_total' => $puntaje,
+                'puntaje_declarado' => $puntajeDeclarado,
                 'estado_antiguedad' => self::ANTIGUEDAD_CUMPLIDA,
                 'razon' => "{$vigente->nombre} es el escalón más alto configurado: no hay ascenso posible.",
             ]);
@@ -248,6 +258,7 @@ class MotorEscalafonDocenteService
             'meses_requeridos' => $objetivo->meses_minimos_escalon_anterior,
             'estado_antiguedad' => $this->estadoAntiguedad($objetivo, $meses, $mesesDeclarados, $elegible),
             'puntaje_total' => $puntaje,
+            'puntaje_declarado' => $puntajeDeclarado,
         ]);
     }
 
@@ -628,9 +639,9 @@ class MotorEscalafonDocenteService
     // ---------------------------------------------------------------
 
     /**
-     * Suma el puntaje de la producción académica aprobada que cae dentro de la ventana del escalón
-     * actual, según el puntaje configurado en su ámbito de divulgación
-     * (`ambito_divulgacion.puntaje`, administrable).
+     * Suma el puntaje de la producción académica aprobada —o también la pendiente de revisión, con
+     * `$soloAprobados` en false— que cae dentro de la ventana del escalón actual, según el puntaje
+     * configurado en su ámbito de divulgación (`ambito_divulgacion.puntaje`, administrable).
      *
      * La ventana es `[desde, hasta]` = `[historial.desde del escalón vigente, fecha_cierre]`, y un
      * producto cuenta solo si **ambas** fechas caen dentro:
@@ -646,9 +657,18 @@ class MotorEscalafonDocenteService
      * Con `$desde` y `$hasta` en null suma toda la producción aprobada, que es lo que necesitan los
      * usos informativos (hoja de vida, filtros de Apoyo Profesoral) donde no hay escalón ni periodo
      * de por medio.
+     *
+     * @param bool $soloAprobados Con `false` incluye la producción cuyo documento sigue pendiente
+     *        de revisión, igual que `mesesEnEscalon()` hace con la experiencia. Alimenta
+     *        `puntaje_declarado`, nunca el requisito de ascenso. Lo rechazado no entra en ninguno
+     *        de los dos: ya se decidió que no vale.
      */
-    public function calcularPuntaje(User $user, ?Carbon $desde = null, ?Carbon $hasta = null): int
-    {
+    public function calcularPuntaje(
+        User $user,
+        ?Carbon $desde = null,
+        ?Carbon $hasta = null,
+        bool $soloAprobados = true
+    ): int {
         $ambitoIds = $user->produccionAcademicaUsuario->pluck('ambito_divulgacion_id')->filter()->unique();
 
         if ($ambitoIds->isEmpty()) {
@@ -665,7 +685,7 @@ class MotorEscalafonDocenteService
                 continue;
             }
 
-            if (!$this->produccionEnVentana($produccion, $desde, $hasta)) {
+            if (!$this->produccionEnVentana($produccion, $desde, $hasta, $soloAprobados)) {
                 continue;
             }
 
@@ -675,11 +695,24 @@ class MotorEscalafonDocenteService
         return $total;
     }
 
-    private function produccionEnVentana($produccion, ?Carbon $desde, ?Carbon $hasta): bool
-    {
-        $documentosAprobados = $produccion->documentosProduccionAcademica->where('estado', 'aprobado');
+    /**
+     * ¿Esta producción cae dentro de la ventana, y con qué respaldo?
+     *
+     * `$soloAprobados` cambia únicamente qué documentos cuentan como respaldo; las dos fechas de la
+     * ventana se exigen igual en ambos modos. Un documento `rechazado` no respalda nada en ninguno
+     * de los dos: incluirlo en el declarado le prometería al docente puntos que ya se le negaron.
+     */
+    private function produccionEnVentana(
+        $produccion,
+        ?Carbon $desde,
+        ?Carbon $hasta,
+        bool $soloAprobados = true
+    ): bool {
+        $estadosValidos = $soloAprobados ? ['aprobado'] : ['aprobado', 'pendiente'];
+        $respaldo = $produccion->documentosProduccionAcademica
+            ->whereIn('estado', $estadosValidos);
 
-        if ($documentosAprobados->isEmpty()) {
+        if ($respaldo->isEmpty()) {
             return false;
         }
 
@@ -697,7 +730,7 @@ class MotorEscalafonDocenteService
             return false;
         }
 
-        return $documentosAprobados->contains(function ($documento) use ($desde, $hasta) {
+        return $respaldo->contains(function ($documento) use ($desde, $hasta) {
             if ($documento->created_at === null) {
                 return true;
             }
@@ -763,10 +796,9 @@ class MotorEscalafonDocenteService
             }
 
             $inicio = Carbon::parse($experiencia->fecha_inicio)->startOfDay();
-            $fin = $experiencia->fecha_finalizacion
-                ? Carbon::parse($experiencia->fecha_finalizacion)->endOfDay()
-                : $corte->copy();
-            $fin = $fin->greaterThan($corte) ? $corte->copy() : $fin;
+            // Un trabajo actual cierra en el corte, no en la fecha que tenga guardada: así la
+            // antigüedad avanza sola día a día. Ver `Experiencia::fechaFinEfectiva()`.
+            $fin = $experiencia->fechaFinEfectiva($corte);
 
             if ($inicio->lessThan($fin)) {
                 $experiencias[] = [$inicio, $fin];
