@@ -283,7 +283,13 @@ class MotorEscalafonDocenteServiceTest extends TestCase
             ],
         ]);
 
-        // Sin periodo de ascenso el corte es hoy, que es justamente lo que debe moverse.
+        // Sin periodo de ascenso el corte es hoy, que es justamente lo que debe moverse. Que no
+        // haya ninguno vigente es la precondición del test, y se declara en vez de suponerse: la
+        // base de desarrollo puede tener uno abierto —del seeder de demo, o creado por alguien
+        // probando la pantalla— y entonces el corte sería su fecha de cierre y no hoy. La
+        // transacción de la prueba lo deshace.
+        PeriodoAscenso::query()->update(['cerrado_en' => now()]);
+
         Carbon::setTestNow($hoy);
         $hoyMismo = $this->servicio->evaluarAscenso($docente);
 

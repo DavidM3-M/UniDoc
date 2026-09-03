@@ -277,9 +277,20 @@ class EscalafonAscensoApiTest extends TestCase
     {
         $periodo = $this->periodoCerrado();
 
+        // La fecha se calcula a partir del último periodo que exista, no con un `addYear()` fijo:
+        // estas pruebas corren contra la base de desarrollo, y un periodo con cierre más lejano
+        // —sembrado, o creado por alguien probando la pantalla— hacía que la petición muriera antes
+        // en el 422 de validación y nunca llegara al 409 que se quiere comprobar.
+        $ultimo = PeriodoAscenso::where('id_periodo_ascenso', '!=', $periodo->id_periodo_ascenso)
+            ->max('fecha_cierre');
+
+        $cierre = $ultimo
+            ? Carbon::parse($ultimo)->addYear()->toDateString()
+            : now()->addYear()->toDateString();
+
         $this->actingAs($this->crearApoyo(), 'api')
             ->putJson(self::PREFIJO . "/periodos/{$periodo->id_periodo_ascenso}", [
-                'fecha_cierre' => now()->addYear()->toDateString(),
+                'fecha_cierre' => $cierre,
             ])
             ->assertStatus(409);
     }

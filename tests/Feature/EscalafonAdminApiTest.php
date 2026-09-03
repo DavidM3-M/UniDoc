@@ -94,6 +94,24 @@ class EscalafonAdminApiTest extends TestCase
         return EscalonDocente::where('nombre', $nombre)->firstOrFail();
     }
 
+    /**
+     * Una fecha de cierre que el backend acepte: tiene que ser futura y posterior a la del último
+     * periodo que exista.
+     *
+     * No se fija a mano porque estas pruebas corren contra la base de desarrollo, con lo que haya
+     * sembrado el seeder de demo y con lo que alguien haya creado probando la pantalla. Un
+     * `now()->addMonths(6)` funciona hasta el día en que aparece un periodo con cierre más lejano,
+     * y entonces el test falla por 422 sin que nada del código se haya roto.
+     */
+    private function cierrePosteriorAlUltimo(): string
+    {
+        $ultimo = PeriodoAscenso::max('fecha_cierre');
+
+        return $ultimo
+            ? Carbon::parse($ultimo)->addYear()->toDateString()
+            : now()->addMonths(6)->toDateString();
+    }
+
     private function documento(string $tipo, int $id, string $estado = 'aprobado', string $subidoEn = '2020-01-01'): Documento
     {
         $documento = Documento::create([
@@ -165,7 +183,7 @@ class EscalafonAdminApiTest extends TestCase
         $this->actingAs($this->crearAdmin(), 'api')
              ->postJson(self::PREFIJO . '/periodos', [
                  'nombre' => 'Periodo admin ' . uniqid(),
-                 'fecha_cierre' => now()->addMonths(6)->toDateString(),
+                 'fecha_cierre' => $this->cierrePosteriorAlUltimo(),
              ])
              ->assertStatus(201)
              ->assertJsonPath('status', 'success');
