@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Usuario\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth;
 use App\Mail\ResetPasswordMail;
 use Illuminate\Support\Facades\Mail;
@@ -86,6 +87,34 @@ class AuthController
      * @param Request $request Solicitud HTTP con las credenciales del usuario.
      * @return \Illuminate\Http\JsonResponse Respuesta JSON con token de acceso, rol del usuario o mensaje de error.
      */
+    /**
+     * Dice si un correo o un número de identificación ya están registrados.
+     *
+     * El formulario de registro lo consulta al salir del campo, para avisar en el momento en vez
+     * de dejar que el usuario complete cinco pasos y se encuentre el rechazo al final.
+     *
+     * Dos cautelas:
+     *
+     * - El campo llega por nombre, así que se valida contra una lista cerrada. Sin eso, el
+     *   parámetro acabaría siendo un nombre de columna arbitrario en la consulta.
+     * - Solo devuelve un booleano. No confirma ni niega nada más del usuario, y la ruta lleva
+     *   un `throttle` estrecho porque este endpoint permite sondear si alguien está registrado.
+     */
+    public function verificarDisponibilidad(Request $request)
+    {
+        $datos = $request->validate([
+            'campo' => ['required', 'string', Rule::in(['email', 'numero_identificacion'])],
+            'valor' => ['required', 'string', 'max:100'],
+        ]);
+
+        $existe = User::where($datos['campo'], trim($datos['valor']))->exists();
+
+        return response()->json([
+            'campo'      => $datos['campo'],
+            'disponible' => !$existe,
+        ]);
+    }
+
     public function iniciarSesion(Request $request)
     {
         try {
