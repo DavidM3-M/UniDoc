@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\RequestApoyoProfesoral\RequestEscalafon;
 
+use App\Constants\ClavePrimaria;
 use App\Models\PeriodoAscenso;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -35,7 +36,17 @@ class ActualizarPeriodoAscensoRequest extends FormRequest
     private function posteriorAlAnterior(): callable
     {
         return function (string $atributo, $valor, callable $fallar) {
-            $anterior = PeriodoAscenso::where('id_periodo_ascenso', '!=', $this->route('id'))
+            $enEdicion = $this->route('id');
+
+            // El `!=` se omite cuando el ID de la ruta no puede corresponder a ningún periodo. La
+            // regla se evalúa antes que el 404 del controlador, y meter un ID fuera del rango de la
+            // clave `smallint` en la consulta la aborta con SQLSTATE 22003: la API devolvía 500
+            // donde correspondía 404. Ver `ClavePrimaria::fueraDeRango()`. Omitirlo no cambia el
+            // resultado: no hay ninguna fila con ese ID que excluir.
+            $anterior = PeriodoAscenso::when(
+                !ClavePrimaria::fueraDeRango($enEdicion),
+                fn ($consulta) => $consulta->where('id_periodo_ascenso', '!=', $enEdicion)
+            )
                 ->orderByDesc('fecha_cierre')
                 ->first();
 

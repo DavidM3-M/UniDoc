@@ -221,13 +221,24 @@ class EscalafonDocenteController
         }
     }
 
-    /** Detalle de un docente: su evaluación de ascenso más el historial completo de sus tramos. */
+    /**
+     * Detalle de un docente: su evaluación de ascenso más el historial completo de sus tramos.
+     *
+     * Comprueba el rol igual que lo hacen la bandeja (`User::role('Docente')`) y el ingreso manual:
+     * el escalafón es de los docentes, y sin el filtro esta ruta contestaba con el nombre de
+     * cualquier usuario del sistema —el propio Administrador incluido— y una evaluación fabricada
+     * sobre una ficha que no significa nada.
+     */
     public function verDocente(Request $request, $userId)
     {
         try {
+            if (!$this->idDeUsuarioValido($userId)) {
+                return response()->json(['status' => 'error', 'message' => 'Docente no encontrado.'], 404);
+            }
+
             $docente = User::with($this->relacionesParaEvaluar())->find($userId);
 
-            if (!$docente) {
+            if (!$docente || !$docente->hasRole('Docente')) {
                 return response()->json(['status' => 'error', 'message' => 'Docente no encontrado.'], 404);
             }
 
@@ -280,6 +291,10 @@ class EscalafonDocenteController
     public function ascender(AscenderEscalonRequest $request, $userId)
     {
         try {
+            if (!$this->idDeUsuarioValido($userId)) {
+                return response()->json(['status' => 'error', 'message' => 'Docente no encontrado.'], 404);
+            }
+
             $docente = User::find($userId);
 
             if (!$docente) {
@@ -362,6 +377,20 @@ class EscalafonDocenteController
     private function buscarPeriodo($id): ?PeriodoAscenso
     {
         return ClavePrimaria::fueraDeRango($id) ? null : PeriodoAscenso::find($id);
+    }
+
+    /**
+     * ¿Puede este ID de ruta corresponder a algún usuario?
+     *
+     * `users.id` es `bigIncrements`, así que no aplica el tope de `ClavePrimaria::fueraDeRango()`,
+     * pensado para las claves `smallint` de los catálogos. Lo que sí hay que descartar es lo que la
+     * columna no sabe comparar: un `find('abc')` contra un `bigint` aborta la consulta con
+     * SQLSTATE 22P02 y la excepción salía por el `catch` genérico como un 500 en vez del 404 que
+     * corresponde. Mismo criterio que `revertir()`.
+     */
+    private function idDeUsuarioValido($id): bool
+    {
+        return is_numeric($id) && $id >= 1;
     }
 
     /**

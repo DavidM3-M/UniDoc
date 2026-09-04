@@ -203,6 +203,8 @@ class AscensoEscalafonService
     public function revertir(HistorialEscalonDocente $tramo, User $ejecutor, string $motivo): HistorialEscalonDocente
     {
         return DB::transaction(function () use ($tramo, $ejecutor, $motivo) {
+            $tramo = $this->bloquear($tramo);
+
             if ($tramo->estaRevertido()) {
                 throw new AscensoEscalafonException('Este tramo del escalafón ya estaba revertido.');
             }
@@ -214,13 +216,16 @@ class AscensoEscalafonService
             ]);
 
             // El tramo que estaba vigente antes de este: el de `hasta` más reciente entre los que
-            // siguen contando. Se reabre para que el docente vuelva a donde estaba.
+            // siguen contando. Se reabre para que el docente vuelva a donde estaba. Va bloqueado
+            // porque reabrirlo es lo que puede dejar al docente con dos tramos abiertos si otra
+            // reversión de la misma cadena lo está mirando a la vez.
             $anterior = HistorialEscalonDocente::where('user_id', $tramo->user_id)
                 ->whereKeyNot($tramo->getKey())
                 ->noRevertidos()
                 ->whereNotNull('hasta')
                 ->orderByDesc('hasta')
                 ->orderByDesc('id_historial_escalon')
+                ->lockForUpdate()
                 ->first();
 
             $anterior?->update(['hasta' => null]);
@@ -357,6 +362,8 @@ class AscensoEscalafonService
         string $motivo
     ): HistorialEscalonDocente {
         return DB::transaction(function () use ($tramo, $cambios, $ejecutor, $motivo) {
+            $tramo = $this->bloquear($tramo);
+
             if ($tramo->estaRevertido()) {
                 throw new AscensoEscalafonException(
                     'Este tramo está revertido: es el registro de un acto que se deshizo y no se corrige. '
@@ -364,8 +371,8 @@ class AscensoEscalafonService
                 );
             }
 
-            // Bloquea los tramos del docente antes de decidir nada: las invariantes se comprueban
-            // contra la cadena entera, no contra el tramo aislado.
+            // Bloquea el resto de tramos del docente antes de decidir nada: las invariantes se
+            // comprueban contra la cadena entera, no contra el tramo aislado.
             $vecinos = $this->tramosBloqueados($tramo->user_id, $tramo->id_historial_escalon);
             $antes = $this->instantanea($tramo);
 
@@ -502,6 +509,28 @@ class AscensoEscalafonService
                 );
             }
         }
+    }
+
+    /**
+     * Relee el tramo con `SELECT ... FOR UPDATE` antes de comprobar nada sobre él.
+     *
+     * El controlador carga el tramo **fuera** de la transacción y lo pasa ya materializado. Sin
+     * volver a leerlo con el candado puesto, N peticiones simultáneas sobre el mismo tramo ven todas
+     * la misma instancia sin revertir —bajo READ COMMITTED cada transacción lee el estado confirmado
+     * al empezar— y las N pasan la guarda de `estaRevertido()`: seis reversiones se daban por buenas
+     * y `revertido_por`, `revertido_en` y `motivo_reversion` se sobrescribían seis veces, dejando en
+     * la auditoría solo el último motivo y disparando seis notificaciones por un único acto.
+     *
+     * El índice único parcial de `historial_escalon_docente` impedía que la carrera llegara a dejar
+     * al docente con dos escalones vigentes, pero eso es la última línea de defensa: aborta la
+     * transacción con un error de base de datos que el usuario recibe como «Server Error». El
+     * candado es lo que convierte la carrera en el 409 que corresponde.
+     */
+    private function bloquear(HistorialEscalonDocente $tramo): HistorialEscalonDocente
+    {
+        return HistorialEscalonDocente::whereKey($tramo->getKey())
+            ->lockForUpdate()
+            ->firstOrFail();
     }
 
     /**

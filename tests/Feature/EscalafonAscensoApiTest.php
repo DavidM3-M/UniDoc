@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Exceptions\AscensoEscalafonException;
 use App\Models\Aspirante\Documento;
 use App\Models\Aspirante\Estudio;
 use App\Models\Aspirante\Experiencia;
@@ -16,6 +17,7 @@ use App\Models\PeriodoAscenso;
 use App\Models\TalentoHumano\Contratacion;
 use App\Models\TiposProductoAcademico\AmbitoDivulgacion;
 use App\Models\Usuario\User;
+use App\Services\AscensoEscalafonService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Hash;
@@ -874,6 +876,123 @@ class EscalafonAscensoApiTest extends TestCase
         $this->assertDatabaseMissing('historial_escalon_docente', [
             'user_id' => $docente->id,
             'escalon_id' => $this->escalon('Asistente')->id_escalon,
+        ]);
+    }
+
+    // ---------------------------------------------------------------
+    // Identificadores que no corresponden a ninguna fila
+    //
+    // Todos comparten la misma causa: un ID de la ruta que llega a la consulta sin filtrar. La
+    // columna no puede almacenarlo, así que PostgreSQL aborta en vez de no encontrar nada, y la
+    // excepción salía por el `catch` genérico como un 500 donde correspondía un 404.
+    // ---------------------------------------------------------------
+
+    public function test_el_detalle_de_un_docente_con_id_no_numerico_retorna_404(): void
+    {
+        $this->actingAs($this->crearApoyo(), 'api')
+            ->getJson(self::PREFIJO . '/docentes/abc')
+            ->assertStatus(404);
+    }
+
+    public function test_ascender_a_un_docente_con_id_no_numerico_retorna_404(): void
+    {
+        $this->actingAs($this->crearApoyo(), 'api')
+            ->postJson(self::PREFIJO . '/docentes/abc/ascender', [
+                'periodo_ascenso_id' => $this->periodoCerrado()->id_periodo_ascenso,
+            ])
+            ->assertStatus(404);
+    }
+
+    /**
+     * La regla que compara la fecha con la del periodo anterior excluye el que se está editando, y
+     * ese `!=` es el que llevaba el ID de la ruta hasta una columna `smallint`. Se evalúa antes que
+     * el 404 del controlador, así que el ID fuera de rango tiene que descartarse en la propia regla.
+     */
+    public function test_actualizar_un_periodo_con_id_fuera_del_rango_de_la_clave_retorna_404(): void
+    {
+        // El cuerpo tiene que pasar la validación entera: las reglas del atributo no llevan `bail`,
+        // así que un 422 por la fecha no impediría que la regla del periodo anterior se ejecutara,
+        // pero sí escondería el 404 que se quiere comprobar. La fecha se calcula contra lo que haya
+        // en la base —estas pruebas corren contra la de desarrollo— y se fuerza a futuro.
+        $ultimo = PeriodoAscenso::max('fecha_cierre');
+        $cierre = Carbon::parse($ultimo ?? now())->addYear();
+
+        if (!$cierre->isFuture()) {
+            $cierre = now()->addYear();
+        }
+
+        $this->actingAs($this->crearApoyo(), 'api')
+            ->putJson(self::PREFIJO . '/periodos/999999', ['fecha_cierre' => $cierre->toDateString()])
+            ->assertStatus(404);
+    }
+
+    // ---------------------------------------------------------------
+    // Aislamiento del detalle
+    // ---------------------------------------------------------------
+
+    /**
+     * El escalafón es de los docentes. Sin comprobar el rol, esta ruta contestaba 200 con el nombre
+     * completo de cualquier usuario del sistema y una evaluación fabricada sobre una ficha vacía.
+     * La escritura ya lo comprobaba (`ingresarManual()` rechaza a quien no es Docente); la lectura
+     * no.
+     */
+    public function test_el_detalle_no_expone_a_un_usuario_que_no_es_docente(): void
+    {
+        $apoyo = $this->crearApoyo();
+        $otroFuncionario = $this->crearApoyo();
+
+        $this->actingAs($apoyo, 'api')
+            ->getJson(self::PREFIJO . "/docentes/{$otroFuncionario->id}")
+            ->assertStatus(404);
+    }
+
+    // ---------------------------------------------------------------
+    // Concurrencia en la reversión
+    // ---------------------------------------------------------------
+
+    /**
+     * La guarda de «ya estaba revertido» tiene que leer la base de datos, no la instancia recibida.
+     *
+     * El controlador carga el tramo antes de abrir la transacción, así que dos peticiones
+     * simultáneas entran al servicio con sendas copias sin revertir. Aquí se reproduce con dos
+     * instancias del mismo tramo: la segunda reversión tiene que rebotar aunque su copia en memoria
+     * siga diciendo que el tramo está vigente. Sin releerlo con `lockForUpdate()` pasaba la guarda y
+     * sobrescribía la firma y el motivo de quien lo revirtió de verdad.
+     */
+    public function test_revertir_con_una_copia_desactualizada_del_tramo_rebota(): void
+    {
+        $apoyo = $this->crearApoyo();
+        $docente = $this->crearDocente();
+        $tramo = $this->auxiliarDesde($docente, '2019-02-01');
+
+        $servicio = app(AscensoEscalafonService::class);
+
+        // La copia que tendría en la mano la segunda petición: cargada antes de que nadie revirtiera.
+        $copiaDesactualizada = HistorialEscalonDocente::findOrFail($tramo->id_historial_escalon);
+
+        $servicio->revertir(
+            HistorialEscalonDocente::findOrFail($tramo->id_historial_escalon),
+            $apoyo,
+            'Reversión legítima'
+        );
+
+        $this->assertFalse(
+            $copiaDesactualizada->estaRevertido(),
+            'La copia en memoria tiene que seguir creyendo que el tramo está vigente; si no, el test no prueba nada.'
+        );
+
+        try {
+            $servicio->revertir($copiaDesactualizada, $apoyo, 'Reversión duplicada');
+            $this->fail('La segunda reversión debía rebotar con AscensoEscalafonException.');
+        } catch (AscensoEscalafonException $e) {
+            // Es lo que el controlador traduce a 409.
+        }
+
+        // La auditoría conserva el motivo del único acto que ocurrió.
+        $this->assertDatabaseHas('historial_escalon_docente', [
+            'id_historial_escalon' => $tramo->id_historial_escalon,
+            'motivo_reversion' => 'Reversión legítima',
+            'revertido_por' => $apoyo->id,
         ]);
     }
 }

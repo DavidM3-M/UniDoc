@@ -25,7 +25,7 @@ class ActualizarEscalonDocenteRequest extends FormRequest
                 'required',
                 'string',
                 'max:50',
-                Rule::unique('escalones_docente', 'nombre')->ignore($this->route('id'), 'id_escalon'),
+                Rule::unique('escalones_docente', 'nombre')->ignore($this->escalonEnEdicion(), 'id_escalon'),
             ],
             'orden' => 'sometimes|required|integer|min:1|max:100',
 
@@ -60,6 +60,21 @@ class ActualizarEscalonDocenteRequest extends FormRequest
 
             'activo' => 'sometimes|boolean',
         ];
+    }
+
+    /**
+     * Escalón que se está editando, o null si el ID de la ruta no puede corresponder a ninguno.
+     *
+     * `ignore()` termina en un `id_escalon != <id>` contra una columna `smallint`. La validación
+     * corre antes que el 404 del controlador, así que con un ID fuera de rango PostgreSQL abortaba
+     * la consulta (SQLSTATE 22003) y la API devolvía 500. Con null, `unique` no excluye nada, que es
+     * lo correcto cuando el ID no identifica a ninguna fila. Ver `ClavePrimaria::fueraDeRango()`.
+     */
+    private function escalonEnEdicion(): ?int
+    {
+        $id = $this->route('id');
+
+        return ClavePrimaria::fueraDeRango($id) ? null : (int) $id;
     }
 
     public function messages(): array

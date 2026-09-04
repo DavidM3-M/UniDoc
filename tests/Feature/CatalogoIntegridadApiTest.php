@@ -401,4 +401,20 @@ class CatalogoIntegridadApiTest extends TestCase
 
         $this->assertDatabaseMissing('escalones_docente', ['id_escalon' => $escalon->id_escalon]);
     }
+
+    /**
+     * `GET` y `DELETE` ya devolvían 404 con un ID fuera del rango de `smallint`; `PUT` devolvía 500.
+     *
+     * La diferencia estaba en que la validación corre antes que el 404 del controlador, y la regla
+     * `unique` del nombre metía el ID de la ruta en un `id_escalon != 999999` contra la columna
+     * `smallint`: PostgreSQL aborta la consulta con SQLSTATE 22003 en vez de no encontrar filas.
+     */
+    public function test_actualizar_escalon_con_id_fuera_del_rango_de_la_clave_retorna_404(): void
+    {
+        $admin = $this->crearUsuarioConRol('Administrador');
+
+        $this->actingAs($admin, 'api')
+             ->putJson('/api/admin/escalones-docente/999999', ['nombre' => 'Escalon inexistente ' . uniqid()])
+             ->assertStatus(404);
+    }
 }
