@@ -5,6 +5,7 @@ namespace App\Http\Controllers\ApoyoProfesoral;
 use App\Constants\ConstDocumentos\EstadoDocumentos; // Constantes de estados válidos para documentos.
 use App\Http\Controllers\TalentoHumano\NotificacionController;
 use App\Models\Aspirante\Documento; // Modelo Documento, representa los documentos en la base de datos.
+use App\Models\MovimientoExpediente;
 use App\Models\Usuario\User; // Modelo User, representa a los usuarios del sistema.
 use Illuminate\Support\Facades\Storage; // Facade para interactuar con el sistema de archivos.
 use Illuminate\Http\Request; // Clase para manejar solicitudes HTTP.
@@ -413,16 +414,27 @@ class VerificacionDocumentosController
 
             $documento->save();
 
-            // Notificar al propietario del documento si fue rechazado
-            if ($request->estado === EstadoDocumentos::RECHAZADO) {
-                try {
-                    $propietario = $this->resolverPropietarioDocumento($documento);
-                    if ($propietario) {
-                        $rol = $request->user()?->getRoleNames()->first();
-                        NotificacionController::documentoRechazado($propietario, $request->motivo_rechazo, $rol);
-                    }
-                } catch (\Exception $notifEx) {
-                    Log::error("Error al notificar rechazo de documento {$documento_id}: " . $notifEx->getMessage());
+            // Se registra el movimiento en vez de mandar un correo por cada documento.
+            //
+            // Antes solo el rechazo avisaba, con el texto «uno de tus documentos ha sido rechazado»
+            // que nunca decia cual, y la aprobacion no avisaba nada. Revisando el expediente
+            // completo de un docente en una sesion, eso eran cuatro correos identicos y sin dato
+            // util la misma tarde, y ninguna noticia de lo que si salio bien.
+            //
+            // `expediente:resumen-diario` agrupa estos movimientos y manda uno solo con todo,
+            // nombrando cada registro. Ver MovimientoExpediente.
+            if (in_array($request->estado, [EstadoDocumentos::APROBADO, EstadoDocumentos::RECHAZADO], true)) {
+                $propietario = $this->resolverPropietarioDocumento($documento);
+
+                if ($propietario) {
+                    MovimientoExpediente::registrar(
+                        userId: $propietario->id,
+                        accion: $request->estado,
+                        categoria: $this->categoriaLegible($documento),
+                        descripcion: $this->describirDocumento($documento),
+                        motivo: $request->estado === EstadoDocumentos::RECHAZADO ? $request->motivo_rechazo : null,
+                        rol: $request->user()?->getRoleNames()->first(),
+                    );
                 }
             }
 
@@ -434,6 +446,49 @@ class VerificacionDocumentosController
                 'message' => 'Error al actualizar el estado del documento.',
             ], 500);
         }
+    }
+
+    /**
+     * Nombre de la categoria tal como la reconoce el docente, no el nombre de la clase.
+     */
+    private function categoriaLegible(Documento $documento): string
+    {
+        $clase = class_basename((string) $documento->documentable_type);
+
+        return match ($clase) {
+            'Estudio'             => 'Estudio',
+            'Experiencia'         => 'Experiencia',
+            'Idioma'              => 'Idioma',
+            'ProduccionAcademica' => 'Produccion academica',
+            'Rut'                 => 'RUT',
+            'Eps'                 => 'EPS',
+            'InformacionContacto' => 'Informacion de contacto',
+            'User'                => 'Documento de identidad',
+            default               => $clase ?: 'Documento',
+        };
+    }
+
+    /**
+     * El registro concreto, para que el docente sepa de cual de sus documentos se habla.
+     *
+     * Es el dato que faltaba: cada modelo guarda su titulo en un campo distinto, asi que se prueba
+     * el que corresponda y se cae al nombre del archivo cuando ninguno aplica.
+     */
+    private function describirDocumento(Documento $documento): string
+    {
+        $d = $documento->documentable;
+
+        if (!$d) {
+            return basename((string) $documento->archivo);
+        }
+
+        foreach (['titulo_estudio', 'titulo', 'cargo', 'idioma', 'nombre_idioma', 'institucion'] as $campo) {
+            if (!empty($d->$campo)) {
+                return (string) $d->$campo;
+            }
+        }
+
+        return basename((string) $documento->archivo);
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Constants\ConstDocumentos\EstadoDocumentos;
 use App\Http\Controllers\TalentoHumano\NotificacionController;
 use App\Models\Aspirante\ProduccionAcademica;
+use App\Models\MovimientoExpediente;
 use App\Models\Usuario\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -32,7 +33,21 @@ class AvalProduccionService
      */
     public function avalar(ProduccionAcademica $produccion, User $evaluador): int
     {
-        return $this->aplicar($produccion, EstadoDocumentos::APROBADO, $evaluador, null);
+        $afectados = $this->aplicar($produccion, EstadoDocumentos::APROBADO, $evaluador, null);
+
+        // El aval era el unico acto del modulo que no avisaba nada. Se registra como movimiento
+        // para que entre en el resumen diario del docente junto al resto de su expediente, en vez
+        // de mandar un correo suelto por cada produccion avalada.
+        MovimientoExpediente::registrar(
+            userId: $produccion->user_id,
+            accion: MovimientoExpediente::APROBADO,
+            categoria: 'Produccion academica',
+            descripcion: (string) $produccion->titulo,
+            motivo: null,
+            rol: $evaluador->getRoleNames()->first(),
+        );
+
+        return $afectados;
     }
 
     /**
@@ -45,9 +60,13 @@ class AvalProduccionService
      */
     public function rechazar(ProduccionAcademica $produccion, User $evaluador, string $motivo): int
     {
+        // Se mira ANTES de aplicar: despues del cambio ya no habria forma de saber si lo que se
+        // deshizo era un aval vigente o si la produccion nunca llego a estar aprobada.
+        $eraAvalada = $produccion->estadoAval() === EstadoDocumentos::APROBADO;
+
         $afectados = $this->aplicar($produccion, EstadoDocumentos::RECHAZADO, $evaluador, $motivo);
 
-        $this->notificarRechazo($produccion, $evaluador, $motivo);
+        $this->notificarRechazo($produccion, $evaluador, $motivo, $eraAvalada);
 
         return $afectados;
     }
@@ -83,8 +102,12 @@ class AvalProduccionService
      * Un fallo del correo no puede tumbar la decisión: el estado ya está escrito y confirmado en
      * base de datos cuando esto corre. Se registra en el log y se sigue.
      */
-    private function notificarRechazo(ProduccionAcademica $produccion, User $evaluador, string $motivo): void
-    {
+    private function notificarRechazo(
+        ProduccionAcademica $produccion,
+        User $evaluador,
+        string $motivo,
+        bool $eraAvalada = false
+    ): void {
         try {
             $docente = $produccion->usuarioProduccionAcademica;
 
@@ -94,7 +117,34 @@ class AvalProduccionService
 
             $rol = $evaluador->getRoleNames()->first();
 
-            NotificacionController::documentoRechazado($docente, $motivo, $rol);
+            // Retirar un aval y rechazar algo que nunca lo tuvo no son lo mismo para el docente, y
+            // hasta ahora los dos casos usaban el mismo texto: el de `documentoRechazado()`, que le
+            // pide «ingresar un nuevo documento valido». En una reversion esa instruccion no aplica
+            // —no le rechazaron nada que subiera, le quitaron puntaje que ya tenia— y lo dejaba sin
+            // saber que hacer.
+            if ($eraAvalada) {
+                NotificacionController::avalProduccionRevertido(
+                    $docente,
+                    $produccion->titulo,
+                    (int) ($produccion->ambitoDivulgacionProduccionAcademica?->puntaje ?? 0),
+                    $motivo,
+                    $rol
+                );
+
+                return;
+            }
+
+            // Rechazo de algo que nunca estuvo avalado: entra al resumen diario como un movimiento
+            // mas, con el titulo de la produccion. El correo generico de `documentoRechazado()` no
+            // decia cual era.
+            MovimientoExpediente::registrar(
+                userId: $docente->id,
+                accion: MovimientoExpediente::RECHAZADO,
+                categoria: 'Produccion academica',
+                descripcion: (string) $produccion->titulo,
+                motivo: $motivo,
+                rol: $rol,
+            );
         } catch (\Exception $e) {
             Log::error(
                 "Error al notificar el rechazo de la producción {$produccion->id_produccion_academica}: " . $e->getMessage()

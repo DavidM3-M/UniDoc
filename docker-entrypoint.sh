@@ -58,6 +58,19 @@ php artisan config:cache  || true
 php artisan route:cache   || true
 php artisan view:cache    || true
 
+# ─── Reciclar los workers que sigan vivos ───────────────────────────────
+# `queue:work` carga las clases PHP en memoria al arrancar y no vuelve a leer los archivos: tras un
+# despliegue seguiría ejecutando el código anterior sin dar ninguna señal de que algo va mal. Es un
+# fallo silencioso y costó encontrarlo: un job corregido seguía produciendo el mismo error porque el
+# worker aún tenía en memoria la versión vieja.
+#
+# Esto no mata a nadie: deja una marca en caché que los workers consultan, para terminar en cuanto
+# acaben el trabajo que tengan entre manos. El bucle de más abajo los relanza ya con el código nuevo.
+#
+# Va ANTES de arrancar el worker a propósito. Si fuera después, el worker recién nacido leería su
+# propia marca, terminaría de inmediato y el bucle lo relanzaría una y otra vez hasta que caducara.
+php artisan queue:restart || true
+
 # ─── Worker de colas ────────────────────────────────────────────────────
 # La carga masiva del SNIES no importa nada durante la petición: SniesImportacionController
 # guarda el .xlsx, despacha ImportarSniesJob y responde de inmediato. QUEUE_CONNECTION no está
@@ -88,6 +101,33 @@ if [ "${RUN_QUEUE_WORKER:-true}" = "true" ]; then
             php /var/www/html/artisan queue:work \
                 --tries=3 --timeout=1800 --sleep=3 --max-time=3600
             echo ">> El worker de colas terminó; reiniciando en 5 s"
+            sleep 5
+        done
+    ' &
+fi
+
+# ─── Planificador de tareas ─────────────────────────────────────────────
+# El worker de arriba ejecuta lo que alguien encola; este ejecuta lo que marca el reloj. Son
+# cosas distintas y hacen falta las dos.
+#
+# Los avisos del ciclo de ascenso —«faltan 30 días para el cierre», «quedan N documentos sin
+# revisar»— no los provoca ninguna acción: nadie hace clic el día que toca enviarlos, y puede que
+# ese día no entre nadie al sistema. PHP solo vive mientras atiende una petición, así que sin un
+# proceso permanente mirando la hora, esos correos no saldrían nunca.
+#
+# `schedule:work` se queda vivo y consulta cada minuto lo declarado en routes/console.php.
+#
+# RUN_SCHEDULER=false lo apaga. Hay que apagarlo en cuanto este contenedor se replique para
+# repartir tráfico: cada réplica traería su propio planificador y los mismos correos saldrían
+# tantas veces como réplicas haya. En ese escenario el planificador va en un contenedor aparte,
+# uno solo.
+if [ "${RUN_SCHEDULER:-true}" = "true" ]; then
+    echo ">> Iniciando planificador de tareas en segundo plano"
+
+    su -s /bin/sh www-data -c '
+        while true; do
+            php /var/www/html/artisan schedule:work
+            echo ">> El planificador terminó; reiniciando en 5 s"
             sleep 5
         done
     ' &

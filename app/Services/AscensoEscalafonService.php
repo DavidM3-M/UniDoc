@@ -4,7 +4,7 @@ namespace App\Services;
 
 use App\Constants\ConstTalentoHumano\TipoContratacion;
 use App\Exceptions\AscensoEscalafonException;
-use App\Http\Controllers\TalentoHumano\NotificacionController;
+use App\Jobs\EnviarNotificacionJob;
 use App\Models\EscalonDocente;
 use App\Models\HistorialEscalonBitacora;
 use App\Models\HistorialEscalonDocente;
@@ -108,6 +108,7 @@ class AscensoEscalafonService
             ]);
 
             $this->sincronizarCache($docente, $escalon->nombre);
+            $this->notificarIngreso($docente, $escalon, $tramo, null, null);
 
             return $tramo;
         });
@@ -182,7 +183,7 @@ class AscensoEscalafonService
             ]);
 
             $this->sincronizarCache($docente, $objetivo->nombre);
-            $this->notificarAscenso($docente, $objetivo->nombre, $ejecutor);
+            $this->notificarAscenso($docente, $objetivo->nombre, $ejecutor, $tramo->id_historial_escalon);
 
             return $tramo;
         });
@@ -232,7 +233,8 @@ class AscensoEscalafonService
 
             $docente = $tramo->docente;
             $this->sincronizarCache($docente, $anterior?->escalon?->nombre);
-            $this->notificarReversion($docente, $tramo->escalon?->nombre, $anterior?->escalon?->nombre, $motivo, $ejecutor);
+            $this->notificarReversion($docente, $tramo->escalon?->nombre, $anterior?->escalon?->nombre, $motivo, $ejecutor, $tramo->id_historial_escalon);
+            $this->notificarAuditoriaReversion($tramo, $docente, $anterior?->escalon?->nombre, $motivo, $ejecutor);
 
             return $tramo->refresh();
         });
@@ -322,6 +324,7 @@ class AscensoEscalafonService
             );
 
             $this->sincronizarCache($docente, $escalon->nombre);
+            $this->notificarIngreso($docente, $escalon, $tramo, $motivo, $ejecutor);
 
             return $tramo;
         });
@@ -418,7 +421,7 @@ class AscensoEscalafonService
                 ->first();
 
             $this->sincronizarCache($docente, $vigente?->escalon?->nombre);
-            $this->notificarCorreccion($docente, $antes, $this->instantanea($tramo), $motivo, $ejecutor);
+            $this->notificarCorreccion($docente, $antes, $this->instantanea($tramo), $motivo, $ejecutor, $tramo->id_historial_escalon);
 
             return $tramo;
         });
@@ -688,12 +691,127 @@ class AscensoEscalafonService
      * rutas de `/admin` ejecutan este mismo acto. Sin él, el mensaje seguiría diciendo que lo
      * registró Apoyo Profesoral incluso cuando lo firmó el Administrador.
      */
-    private function notificarAscenso(User $docente, string $escalon, User $ejecutor): void
+    private function notificarAscenso(User $docente, string $escalon, User $ejecutor, int $tramoId): void
     {
+        $this->despachar(
+            clave: "escalafon.ascenso:tramo:{$tramoId}",
+            tipo: 'escalafon.ascenso',
+            metodo: 'escalonOtorgado',
+            args: [$escalon, $ejecutor->getRoleNames()->first()],
+            destinatarioId: $docente->id,
+        );
+    }
+
+    /**
+     * C13 — avisa a quien registro el ascenso de que otra persona lo deshizo.
+     *
+     * Revertir deshace una decision firmada por alguien, y hasta ahora esa persona no se enteraba:
+     * Apoyo Profesoral otorgaba un ascenso, el Administrador lo revertia, y el primero seguia
+     * creyendo que su decision estaba en pie.
+     *
+     * No se avisa a quien ejecuta la reversion —ya lo sabe— ni se duplica si el que otorgo es el
+     * mismo que revierte. Los Administradores reciben copia porque el escalafon es suyo.
+     */
+    private function notificarAuditoriaReversion(
+        HistorialEscalonDocente $tramo,
+        User $docente,
+        ?string $escalonRestituido,
+        string $motivo,
+        User $ejecutor
+    ): void {
+        $nombreDocente = trim("{$docente->primer_nombre} {$docente->primer_apellido}");
+
+        $destinatarios = User::role('Administrador')->get();
+
+        if ($tramo->otorgado_por && $tramo->otorgado_por !== $ejecutor->id) {
+            $autor = User::find($tramo->otorgado_por);
+
+            if ($autor) {
+                $destinatarios = $destinatarios->push($autor);
+            }
+        }
+
+        foreach ($destinatarios->unique('id') as $destinatario) {
+            if ($destinatario->id === $ejecutor->id) {
+                continue;
+            }
+
+            $this->despachar(
+                clave: "escalafon.auditoria-reversion:tramo:{$tramo->id_historial_escalon}:user:{$destinatario->id}",
+                tipo: 'escalafon.auditoria-reversion',
+                metodo: 'tramoRevertidoAuditoria',
+                args: [
+                    $nombreDocente,
+                    $tramo->escalon?->nombre,
+                    $escalonRestituido,
+                    $motivo,
+                    $ejecutor->getRoleNames()->first(),
+                ],
+                destinatarioId: $destinatario->id,
+            );
+        }
+    }
+
+    /**
+     * C2 — el aviso de ingreso al escalafón, para las dos vías.
+     *
+     * Era el silencio mas grande del modulo: un docente entraba al escalafon y no se enteraba
+     * nunca, ni por la via automatica de la contratacion ni por el registro manual del
+     * Administrador. Desde esa fecha cuentan su antiguedad y la ventana de produccion que puntua.
+     *
+     * `$ejecutor` es null en el ingreso automatico: no lo decidio nadie, lo disparo el contrato.
+     */
+    private function notificarIngreso(
+        User $docente,
+        EscalonDocente $escalon,
+        HistorialEscalonDocente $tramo,
+        ?string $motivo,
+        ?User $ejecutor
+    ): void {
+        $siguiente = EscalonDocente::activos()
+            ->where('orden', '>', $escalon->orden)
+            ->orderBy('orden')
+            ->first();
+
+        $this->despachar(
+            clave: "escalafon.ingreso:tramo:{$tramo->id_historial_escalon}",
+            tipo: 'escalafon.ingreso',
+            metodo: 'ingresoAlEscalafon',
+            args: [
+                $escalon->nombre,
+                $tramo->desde?->format('d/m/Y') ?? '',
+                $siguiente?->nombre,
+                $motivo,
+                $ejecutor?->getRoleNames()->first(),
+            ],
+            destinatarioId: $docente->id,
+        );
+    }
+
+    /**
+     * Pone la notificacion en la cola en vez de enviarla aqui mismo.
+     *
+     * `afterCommit()` arregla el defecto de fondo: hasta ahora estos envios ocurrian dentro del
+     * `DB::transaction()`, asi que una transaccion que se revirtiera despues dejaba al docente con
+     * el correo de un ascenso que nunca existio. Con esto, el trabajo solo entra a la cola si la
+     * transaccion confirma.
+     *
+     * La `clave` identifica el hecho, no el envio: dos reversiones concurrentes del mismo tramo
+     * generan la misma clave y `NotificacionEnviada::reservar()` deja pasar una sola.
+     */
+    private function despachar(
+        string $clave,
+        string $tipo,
+        string $metodo,
+        array $args,
+        ?int $destinatarioId = null
+    ): void {
         try {
-            NotificacionController::escalonOtorgado($docente, $escalon, $ejecutor->getRoleNames()->first());
+            EnviarNotificacionJob::dispatch($clave, $tipo, $metodo, $args, $destinatarioId)
+                ->afterCommit();
         } catch (\Throwable $e) {
-            Log::error("Error al notificar el ascenso del docente {$docente->id}: " . $e->getMessage());
+            // Ni siquiera encolar puede tumbar un acto ya escrito y confirmado en base de datos.
+            Log::error("No se pudo encolar la notificacion {$clave}: " . $e->getMessage());
         }
     }
 
@@ -710,19 +828,16 @@ class AscensoEscalafonService
         array $antes,
         array $despues,
         string $motivo,
-        User $ejecutor
+        User $ejecutor,
+        int $tramoId
     ): void {
-        try {
-            NotificacionController::escalonCorregido(
-                $docente,
-                $antes,
-                $despues,
-                $motivo,
-                $ejecutor->getRoleNames()->first()
-            );
-        } catch (\Throwable $e) {
-            Log::error("Error al notificar la corrección de escalafón del docente {$docente->id}: " . $e->getMessage());
-        }
+        $this->despachar(
+            clave: "escalafon.correccion:tramo:{$tramoId}:" . md5(json_encode($despues)),
+            tipo: 'escalafon.correccion',
+            metodo: 'escalonCorregido',
+            args: [$antes, $despues, $motivo, $ejecutor->getRoleNames()->first()],
+            destinatarioId: $docente->id,
+        );
     }
 
     private function notificarReversion(
@@ -730,18 +845,15 @@ class AscensoEscalafonService
         ?string $escalonRevertido,
         ?string $escalonRestituido,
         string $motivo,
-        User $ejecutor
+        User $ejecutor,
+        int $tramoId
     ): void {
-        try {
-            NotificacionController::escalonRevertido(
-                $docente,
-                $escalonRevertido,
-                $escalonRestituido,
-                $motivo,
-                $ejecutor->getRoleNames()->first()
-            );
-        } catch (\Throwable $e) {
-            Log::error("Error al notificar la reversión de escalafón del docente {$docente->id}: " . $e->getMessage());
-        }
+        $this->despachar(
+            clave: "escalafon.reversion:tramo:{$tramoId}",
+            tipo: 'escalafon.reversion',
+            metodo: 'escalonRevertido',
+            args: [$escalonRevertido, $escalonRestituido, $motivo, $ejecutor->getRoleNames()->first()],
+            destinatarioId: $docente->id,
+        );
     }
 }

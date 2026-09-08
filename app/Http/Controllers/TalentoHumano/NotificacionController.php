@@ -631,4 +631,428 @@ class NotificacionController extends Controller
             ], 500);
         }
     }
+    /**
+     * Avisa a un rol operativo de que su cola de revisión bloquea ascensos ante un cierre próximo.
+     *
+     * Lo comparten Apoyo Profesoral y el Evaluador de Producción porque el problema es el mismo:
+     * lo que no alcancen a revisar antes de la fecha de cierre no cuenta para el periodo, aunque el
+     * docente lo haya subido a tiempo. Cambia qué se revisa —documentos en un caso, producción
+     * académica en el otro— no el mensaje.
+     *
+     * Es un aviso agregado a propósito: un correo con el conteo, no uno por cada registro pendiente.
+     */
+    public static function colaPendienteAnteCierre(
+        User $usuario,
+        string $nombrePeriodo,
+        string $fechaCierre,
+        int $diasRestantes,
+        int $pendientes,
+        array $detalles = []
+    ): void {
+        $asunto  = "{$pendientes} pendientes antes del cierre del {$fechaCierre} – UniDoc";
+        $mensaje = "Quedan {$diasRestantes} días para el cierre del periodo «{$nombrePeriodo}». "
+                 . "Hay {$pendientes} registros esperando tu revisión. Lo que siga sin revisar el "
+                 . "{$fechaCierre} no cuenta para este periodo, aunque el docente lo haya subido a tiempo.";
+
+        try {
+            Mail::to($usuario->email)->send(
+                new NotificacionMail($asunto, $mensaje, $usuario->primer_nombre, $detalles)
+            );
+            $usuario->notify(new NotificacionGeneral($mensaje));
+        } catch (\Exception $e) {
+            Log::error("Error al avisar de la cola pendiente a {$usuario->email}: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Recuerda al docente que el periodo de ascenso está por cerrar.
+     *
+     * El cierre es el corte con el que se congela su expediente: lo que quede pendiente de revisión
+     * ese día no cuenta, y el siguiente periodo puede tardar un año. Es el único correo del sistema
+     * capaz de cambiar el resultado de alguien mientras todavía hay tiempo de reaccionar.
+     */
+    public static function cierrePeriodoProximo(
+        User $usuario,
+        string $nombrePeriodo,
+        string $fechaCierre,
+        int $diasRestantes
+    ): void {
+        $asunto  = "Faltan {$diasRestantes} días para el cierre del periodo de ascenso – UniDoc";
+        $mensaje = "El periodo «{$nombrePeriodo}» cierra el {$fechaCierre}. Tienes hasta esa fecha para "
+                 . 'completar tu expediente: los estudios, idiomas, experiencia y producción académica '
+                 . 'que registres y te sean aprobados antes del cierre son los que se tendrán en cuenta. '
+                 . 'Lo que quede pendiente de revisión ese día no cuenta para este periodo.';
+
+        $detalles = [
+            'Periodo'   => $nombrePeriodo,
+            'Cierra el' => $fechaCierre,
+            'Faltan'    => "{$diasRestantes} días",
+        ];
+
+        try {
+            Mail::to($usuario->email)->send(
+                new NotificacionMail($asunto, $mensaje, $usuario->primer_nombre, $detalles)
+            );
+            $usuario->notify(new NotificacionGeneral($mensaje));
+        } catch (\Exception $e) {
+            Log::error("Error al recordar el cierre del periodo a {$usuario->email}: " . $e->getMessage());
+        }
+    }
+    /**
+     * C2 — Avisa al docente de que entró al escalafón.
+     *
+     * Era el silencio más grande del módulo: un docente ingresaba —por su contratación de planta o
+     * porque el Administrador lo registró— y nunca se enteraba. Desde ese día empiezan a contar su
+     * antigüedad y la ventana de producción que puntúa, así que es la fecha desde la que se mide
+     * todo lo demás.
+     *
+     * `$motivo` solo viene en el ingreso manual: ahí hubo una decisión humana y el docente tiene
+     * derecho a leer por qué. El automático no lo lleva porque no lo decidió nadie.
+     */
+    public static function ingresoAlEscalafon(
+        User $usuario,
+        string $escalon,
+        string $desde,
+        ?string $siguiente = null,
+        ?string $motivo = null,
+        ?string $rol = null
+    ): void {
+        $manual = $motivo !== null;
+
+        $asunto  = $manual
+            ? 'Se registró tu ingreso al escalafón docente – UniDoc'
+            : 'Ingresaste al escalafón docente – UniDoc';
+
+        $mensaje = $manual
+            ? ($rol ?? 'La Universidad') . " registró tu ingreso al escalafón docente en la categoría {$escalon}, "
+              . "con fecha del {$desde}. Desde esa fecha cuenta tu antigüedad en la categoría. Si algo no "
+              . 'corresponde con tu situación real, comunícate con Apoyo Profesoral.'
+            : "Tu contratación de planta te acredita como docente de planta y con ella ingresaste al escalafón "
+              . "en la categoría {$escalon}. Desde esta fecha empiezan a contar tu antigüedad y el puntaje de "
+              . 'producción académica que se tendrán en cuenta para tu próximo ascenso.';
+
+        $detalles = ['Categoría' => $escalon, 'Desde' => $desde];
+
+        if ($siguiente) {
+            $detalles['Siguiente categoría'] = $siguiente;
+        }
+        if ($manual) {
+            $detalles['Motivo'] = $motivo;
+            $detalles['Registrado por'] = $rol ?? 'La Universidad';
+        }
+
+        try {
+            Mail::to($usuario->email)->send(
+                new NotificacionMail($asunto, $mensaje, $usuario->primer_nombre, $detalles)
+            );
+            $usuario->notify(new NotificacionGeneral($mensaje));
+        } catch (\Exception $e) {
+            Log::error("Error al notificar el ingreso al escalafón a {$usuario->email}: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * C10 — Avisa al docente de que se le retiró el aval de una producción académica.
+     *
+     * Existe porque hasta ahora este caso reutilizaba `documentoRechazado()`, cuyo texto le pide
+     * «ingresar un nuevo documento válido». Eso no aplica: no le rechazaron algo que subió, le
+     * quitaron un aval que ya tenía, y su puntaje de producción bajó. La instrucción era incorrecta
+     * y el docente no podía saber qué hacer con ella.
+     */
+    public static function avalProduccionRevertido(
+        User $usuario,
+        string $titulo,
+        int $puntajePerdido,
+        string $motivo,
+        ?string $rol = null
+    ): void {
+        $asunto  = 'Se retiró el aval de una de tus producciones – UniDoc';
+        $mensaje = ($rol ?? 'La Universidad') . " retiró el aval de tu producción académica «{$titulo}». "
+                 . "Con ello tu puntaje de producción baja en {$puntajePerdido} puntos, lo que puede afectar "
+                 . 'tu elegibilidad para el próximo ascenso. Abajo está el motivo.';
+
+        $detalles = [
+            'Producción'      => $titulo,
+            'Puntaje retirado' => "{$puntajePerdido} puntos",
+            'Motivo'          => $motivo,
+        ];
+
+        if ($rol) {
+            $detalles['Revertido por'] = $rol;
+        }
+
+        try {
+            Mail::to($usuario->email)->send(
+                new NotificacionMail($asunto, $mensaje, $usuario->primer_nombre, $detalles)
+            );
+            $usuario->notify(new NotificacionGeneral($mensaje));
+        } catch (\Exception $e) {
+            Log::error("Error al notificar la reversión de aval a {$usuario->email}: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * C13 — Avisa a quien registró un ascenso de que otra persona lo deshizo.
+     *
+     * Es el acto más delicado del módulo: deshace una decisión firmada por alguien. Hasta ahora
+     * Apoyo Profesoral podía otorgar un ascenso y que el Administrador lo revirtiera sin que
+     * quedara ningún aviso para el primero, que seguiría creyendo que su decisión sigue en pie.
+     *
+     * Es informativo y no pide nada: el docente ya fue notificado por `escalonRevertido()`.
+     */
+    public static function tramoRevertidoAuditoria(
+        User $usuario,
+        string $nombreDocente,
+        ?string $escalonRevertido,
+        ?string $escalonRestituido,
+        string $motivo,
+        ?string $rol = null
+    ): void {
+        $asunto  = 'Se revirtió un ascenso que registraste – UniDoc';
+        $mensaje = ($rol ?? 'Otro funcionario') . " revirtió el ascenso a "
+                 . ($escalonRevertido ?? 'una categoría') . " de {$nombreDocente}, que tú habías registrado. "
+                 . 'El docente ya fue notificado. Este aviso es informativo y no requiere ninguna acción de tu parte.';
+
+        $detalles = [
+            'Docente'            => $nombreDocente,
+            'Categoría revertida' => $escalonRevertido ?? 'Ingreso al escalafón',
+            'Categoría vigente ahora' => $escalonRestituido ?? 'Fuera del escalafón',
+            'Motivo'             => $motivo,
+        ];
+
+        if ($rol) {
+            $detalles['Revertido por'] = $rol;
+        }
+
+        try {
+            Mail::to($usuario->email)->send(
+                new NotificacionMail($asunto, $mensaje, $usuario->primer_nombre, $detalles)
+            );
+            $usuario->notify(new NotificacionGeneral($mensaje));
+        } catch (\Exception $e) {
+            Log::error("Error al notificar la auditoría de reversión a {$usuario->email}: " . $e->getMessage());
+        }
+    }
+    /**
+     * C3 — Anuncia al docente que se abrio un periodo de ascenso.
+     *
+     * Es el unico correo del sistema que va al padron completo, y se justifica porque abrir un
+     * periodo es la senal de «tienes hasta esta fecha para completar tu expediente». En una
+     * plataforma que se usa una vez al ano, quien no se entera pierde el ciclo entero.
+     *
+     * Si el periodo nace con poco margen, el mensaje lo dice: el recordatorio de 30 dias no llegara
+     * a dispararse nunca y esta es la unica advertencia que ese docente va a recibir con tiempo.
+     */
+    public static function periodoAscensoAbierto(
+        User $usuario,
+        string $nombrePeriodo,
+        string $fechaCierre,
+        int $diasDePlazo
+    ): void {
+        $asunto = "Abierto el periodo de ascenso {$nombrePeriodo} – UniDoc";
+
+        $urgencia = $diasDePlazo <= 30
+            ? " Ten en cuenta que el plazo es corto: solo quedan {$diasDePlazo} dias."
+            : '';
+
+        $mensaje = "Se abrio el periodo de ascenso «{$nombrePeriodo}», que cierra el {$fechaCierre}. "
+                 . 'Tienes hasta esa fecha para completar tu expediente: los estudios, idiomas, experiencia '
+                 . 'y produccion academica que registres y te sean aprobados antes del cierre son los que se '
+                 . 'tendran en cuenta. Lo que quede pendiente de revision ese dia no cuenta para este periodo.'
+                 . $urgencia;
+
+        $detalles = [
+            'Periodo'   => $nombrePeriodo,
+            'Cierra el' => $fechaCierre,
+            'Plazo'     => "{$diasDePlazo} dias",
+        ];
+
+        try {
+            Mail::to($usuario->email)->send(
+                new NotificacionMail($asunto, $mensaje, $usuario->primer_nombre, $detalles)
+            );
+            $usuario->notify(new NotificacionGeneral($mensaje));
+        } catch (\Exception $e) {
+            Log::error("Error al anunciar el periodo de ascenso a {$usuario->email}: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * C11 — Avisa a Apoyo Profesoral de que el periodo cerro y hay elegibles esperando decision.
+     *
+     * Es un aviso agregado a proposito: un correo con el conteo, no uno por cada docente elegible.
+     * La diferencia entre un mensaje y cuarenta y cinco.
+     *
+     * El expediente de cada docente queda congelado con corte a la fecha de cierre, asi que este
+     * correo marca el momento en que empieza el trabajo de decidir.
+     */
+    public static function periodoCerradoConElegibles(
+        User $usuario,
+        string $nombrePeriodo,
+        string $fechaCierre,
+        int $elegibles,
+        array $porCategoria = [],
+        int $noElegibles = 0
+    ): void {
+        $asunto = "Cerro {$nombrePeriodo}: {$elegibles} docentes elegibles – UniDoc";
+
+        $mensaje = "El periodo «{$nombrePeriodo}» cerro el {$fechaCierre} y ya se pueden ejecutar los "
+                 . 'ascensos. El expediente de cada docente quedo congelado con corte a esa fecha: lo que '
+                 . "suban despues cuenta para el periodo siguiente. Hay {$elegibles} docentes elegibles "
+                 . 'esperando decision en la bandeja de ascensos.';
+
+        $detalles = [
+            'Periodo'   => "{$nombrePeriodo}, cerrado el {$fechaCierre}",
+            'Elegibles' => "{$elegibles} docentes",
+        ];
+
+        if ($porCategoria) {
+            $detalles['Por categoria'] = collect($porCategoria)
+                ->map(fn ($n, $cat) => "{$n} a {$cat}")
+                ->implode(' · ');
+        }
+
+        if ($noElegibles > 0) {
+            $detalles['No elegibles'] = "{$noElegibles} docentes";
+        }
+
+        try {
+            Mail::to($usuario->email)->send(
+                new NotificacionMail($asunto, $mensaje, $usuario->primer_nombre, $detalles)
+            );
+            $usuario->notify(new NotificacionGeneral($mensaje));
+        } catch (\Exception $e) {
+            Log::error("Error al avisar del cierre del periodo a {$usuario->email}: " . $e->getMessage());
+        }
+    }
+    /**
+     * C1 — Un solo correo con todo lo que se movio hoy en el expediente del docente.
+     *
+     * Sustituye seis avisos que antes iban por separado —documento aprobado, documento rechazado,
+     * produccion avalada, produccion rechazada, evaluacion asignada y evaluacion modificada—. En
+     * una plataforma que se usa una vez al ano, esos seis llegaban el mismo martes.
+     *
+     * El asunto lleva delante lo que exige accion: si hay rechazos se nombran primero y con su
+     * numero, porque son lo unico que el docente tiene que corregir antes del cierre.
+     *
+     * @param array $aprobados  Cada uno: ['categoria' => ..., 'descripcion' => ...]
+     * @param array $rechazados Cada uno: ['categoria' => ..., 'descripcion' => ..., 'motivo' => ...]
+     */
+    public static function resumenDiarioExpediente(
+        User $usuario,
+        array $aprobados,
+        array $rechazados,
+        ?string $nombrePeriodo = null,
+        ?string $fechaCierre = null,
+        ?int $diasRestantes = null
+    ): void {
+        $nA = count($aprobados);
+        $nR = count($rechazados);
+        $total = $nA + $nR;
+
+        if ($total === 0) {
+            return;
+        }
+
+        // El asunto se construye para que se lea en la bandeja sin abrirlo.
+        if ($nR > 0) {
+            $asunto = $nA > 0
+                ? "{$nR} " . ($nR === 1 ? 'documento rechazado' : 'documentos rechazados')
+                  . " y {$nA} " . ($nA === 1 ? 'aprobado' : 'aprobados') . ' en tu expediente – UniDoc'
+                : "{$nR} " . ($nR === 1 ? 'documento rechazado' : 'documentos rechazados') . ' en tu expediente – UniDoc';
+        } else {
+            $asunto = "{$nA} " . ($nA === 1 ? 'registro aprobado' : 'registros aprobados') . ' en tu expediente – UniDoc';
+        }
+
+        $mensaje = "Hoy se revisaron {$total} " . ($total === 1 ? 'registro' : 'registros') . ' de tu expediente. ';
+
+        if ($nR > 0) {
+            $mensaje .= ($nR === 1 ? 'Uno fue rechazado y necesita que lo corrijas. ' : "{$nR} fueron rechazados y necesitan que los corrijas. ");
+        }
+
+        if ($nA > 0) {
+            $mensaje .= ($nA === 1 ? 'El otro quedo aprobado y ya cuenta ' : 'Los demas quedaron aprobados y ya cuentan ')
+                      . 'para tu evaluacion. ';
+        }
+
+        if ($nombrePeriodo && $fechaCierre) {
+            $mensaje .= "Tienes hasta el {$fechaCierre}, cuando cierra el periodo «{$nombrePeriodo}».";
+        }
+
+        // Los rechazos van primero: son lo unico accionable. Cada linea dice de que registro se
+        // habla, que es exactamente lo que faltaba en el correo generico anterior.
+        $detalles = [];
+
+        foreach ($rechazados as $i => $r) {
+            $clave = $nR === 1 ? 'Rechazado' : 'Rechazado ' . ($i + 1);
+            $detalles[$clave] = "{$r['categoria']} — {$r['descripcion']}"
+                              . (!empty($r['motivo']) ? "\nMotivo: {$r['motivo']}" : '');
+        }
+
+        foreach ($aprobados as $i => $a) {
+            $clave = $nA === 1 ? 'Aprobado' : 'Aprobado ' . ($i + 1);
+            $detalles[$clave] = "{$a['categoria']} — {$a['descripcion']}";
+        }
+
+        if ($fechaCierre && $diasRestantes !== null) {
+            $detalles['Cierra el'] = "{$fechaCierre} — faltan {$diasRestantes} dias";
+        }
+
+        try {
+            Mail::to($usuario->email)->send(
+                new NotificacionMail($asunto, $mensaje, $usuario->primer_nombre, $detalles)
+            );
+            $usuario->notify(new NotificacionGeneral($mensaje));
+        } catch (\Exception $e) {
+            Log::error("Error al enviar el resumen del expediente a {$usuario->email}: " . $e->getMessage());
+        }
+    }
+    /**
+     * C7 — Le dice al docente que no ascendio y exactamente que le falto.
+     *
+     * Sale solo a quien estuvo cerca. A quien le faltaban cuatro criterios este correo no le aporta
+     * nada y se lee como una mala noticia masiva; a quien le faltaba uno le dice donde poner el
+     * esfuerzo del proximo ciclo, que en una plataforma anual es un ano de diferencia.
+     *
+     * El desglose ya lo calcula `MotorEscalafonDocenteService::evaluarAscenso()`: hasta ahora solo
+     * se veia si el docente entraba a mirar la pantalla.
+     *
+     * @param array $faltantes Cada uno: ['criterio' => ..., 'detalle' => ...]
+     */
+    public static function ascensoNoAlcanzado(
+        User $usuario,
+        string $nombrePeriodo,
+        string $fechaCierre,
+        string $escalonVigente,
+        ?string $escalonObjetivo,
+        array $faltantes,
+        array $cumplidos = []
+    ): void {
+        $asunto  = "Resultado del periodo de ascenso {$nombrePeriodo} – UniDoc";
+
+        $mensaje = "El periodo «{$nombrePeriodo}» cerro el {$fechaCierre} y tu expediente no alcanzo los "
+                 . 'requisitos para la categoria ' . ($escalonObjetivo ?? 'siguiente') . ", asi que continuas "
+                 . "como {$escalonVigente}. Abajo esta el detalle de lo que falto, medido con corte a la fecha "
+                 . 'de cierre. Lo que registres desde ahora cuenta para el siguiente periodo.';
+
+        $detalles = [];
+
+        foreach ($faltantes as $f) {
+            $detalles[$f['criterio']] = $f['detalle'];
+        }
+
+        // Los cumplidos van despues y marcados: el correo no puede leerse como si nada sirviera.
+        foreach ($cumplidos as $c) {
+            $detalles[$c] = 'Cumplido';
+        }
+
+        try {
+            Mail::to($usuario->email)->send(
+                new NotificacionMail($asunto, $mensaje, $usuario->primer_nombre, $detalles)
+            );
+            $usuario->notify(new NotificacionGeneral($mensaje));
+        } catch (\Exception $e) {
+            Log::error("Error al notificar el resultado del periodo a {$usuario->email}: " . $e->getMessage());
+        }
+    }
 }
