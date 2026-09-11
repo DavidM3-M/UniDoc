@@ -797,7 +797,7 @@ class AscensoEscalafonService
      * transaccion confirma.
      *
      * La `clave` identifica el hecho, no el envio: dos reversiones concurrentes del mismo tramo
-     * generan la misma clave y `NotificacionEnviada::reservar()` deja pasar una sola.
+     * generan la misma clave y el trabajo de correo deja pasar una sola entrega.
      */
     private function despachar(
         string $clave,

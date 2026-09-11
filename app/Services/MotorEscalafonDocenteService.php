@@ -311,7 +311,13 @@ class MotorEscalafonDocenteService
             $cumple['formacion'] = $this->tieneFormacionAprobada($user, $escalon->formacion_minima, $corte);
         }
         if ($escalon->nivel_mcer_minimo !== null) {
-            $cumple['idioma'] = $this->cumpleNivelMcer($user, $escalon->nivel_mcer_minimo, $escalon->idioma?->nombre_idioma, $corte);
+            $cumple['idioma'] = $this->cumpleNivelMcer(
+                $user,
+                $escalon->nivel_mcer_minimo,
+                $escalon->idioma?->nombre_idioma,
+                $corte,
+                $escalon->idioma_catalogo_id,
+            );
         }
         if ($escalon->puntaje_minimo !== null) {
             $cumple['puntaje'] = $puntaje >= $escalon->puntaje_minimo;
@@ -449,7 +455,15 @@ class MotorEscalafonDocenteService
             $info['idioma'] = [
                 'mensaje' => "Debe certificar {$nombreIdioma} nivel mínimo {$objetivo->nivel_mcer_minimo}, con documento aprobado.",
                 'requerido' => $objetivo->nivel_mcer_minimo,
-                'actual' => $this->nivelMcerMaximoAprobado($user, $objetivo->idioma?->nombre_idioma, $corte),
+                // Mismos argumentos que usa la evaluación: si aquí se comparara por nombre y allá
+                // por id, el mensaje podría decir «tienes B2» mientras el requisito sale sin
+                // cumplir, o al revés.
+                'actual' => $this->nivelMcerMaximoAprobado(
+                    $user,
+                    $objetivo->idioma?->nombre_idioma,
+                    $corte,
+                    $objetivo->idioma_catalogo_id,
+                ),
             ];
         }
         if (array_key_exists('puntaje', $cumple)) {
@@ -581,21 +595,29 @@ class MotorEscalafonDocenteService
      *
      * Si `$idiomaNombre` viene informado (desde el catálogo de idiomas, ej. "Inglés"), solo cuenta
      * los idiomas del usuario cuyo nombre coincide. `idiomas.idioma` sigue siendo texto libre en el
-     * formulario del docente/aspirante —no está enlazado al catálogo por FK todavía—, así que esta
-     * comparación es la misma que usa `tieneFormacionAprobada()` contra `Estudio.tipo_estudio`.
+     * formulario del docente/aspirante —la mayoría de registros tienen `idioma_catalogo_id` en
+     * null—, así que la coincidencia tiene que hacerse por el nombre.
+     *
+     * Y por eso se comparan **sin tildes**: `strtoupper('Ingles')` nunca es igual a `'INGLÉS'`, así
+     * que un docente que escribió su idioma sin acento no cumplía nunca el requisito del escalón y
+     * no había forma de que lo notara — el aviso solo decía «Debe certificar Inglés nivel B1».
      */
-    public function nivelMcerMaximoAprobado(User $user, ?string $idiomaNombre = null, ?Carbon $corte = null): ?string
-    {
+    public function nivelMcerMaximoAprobado(
+        User $user,
+        ?string $idiomaNombre = null,
+        ?Carbon $corte = null,
+        ?int $idiomaCatalogoId = null
+    ): ?string {
         $maximo = null;
         $maximoValor = 0;
-        $idiomaNormalizado = $idiomaNombre !== null ? strtoupper(trim($idiomaNombre)) : null;
+        $idiomaNormalizado = $idiomaNombre !== null ? self::compararNombre($idiomaNombre) : null;
 
         foreach ($user->idiomasUsuario as $idioma) {
             if (!$this->tieneDocumentoAprobado($idioma->documentosIdioma, $corte)) {
                 continue;
             }
 
-            if ($idiomaNormalizado !== null && strtoupper(trim($idioma->idioma ?? '')) !== $idiomaNormalizado) {
+            if (!$this->esElIdiomaExigido($idioma, $idiomaCatalogoId, $idiomaNormalizado)) {
                 continue;
             }
 
@@ -611,9 +633,56 @@ class MotorEscalafonDocenteService
         return $maximo;
     }
 
-    private function cumpleNivelMcer(User $user, string $nivelRequerido, ?string $idiomaNombre = null, ?Carbon $corte = null): bool
+    /**
+     * ¿El idioma del docente es el que exige el escalón?
+     *
+     * Se compara primero por `idioma_catalogo_id`, que es la referencia real al catálogo, y solo
+     * si a alguno de los dos lados le falta se cae al nombre.
+     *
+     * El orden importa: `idiomas.idioma` guarda una **copia** del nombre que tenía el catálogo el
+     * día en que el docente registró su certificado. Si el Administrador renombra ese idioma
+     * —«Inglés» a «Inglés británico», por ejemplo—, el escalón pasa a exigir el nombre nuevo
+     * mientras las filas ya guardadas conservan el viejo, y el requisito dejaría de cumplirse para
+     * todos los docentes a la vez sin que nada lo advirtiera. Comparando por id, renombrar el
+     * catálogo no rompe nada.
+     */
+    private function esElIdiomaExigido($idioma, ?int $idiomaCatalogoId, ?string $nombreNormalizado): bool
     {
-        $maximo = $this->nivelMcerMaximoAprobado($user, $idiomaNombre, $corte);
+        // Sin idioma exigido, cualquiera cuenta.
+        if ($idiomaCatalogoId === null && $nombreNormalizado === null) {
+            return true;
+        }
+
+        if ($idiomaCatalogoId !== null && $idioma->idioma_catalogo_id !== null) {
+            return (int) $idioma->idioma_catalogo_id === $idiomaCatalogoId;
+        }
+
+        if ($nombreNormalizado === null) {
+            return false;
+        }
+
+        return self::compararNombre($idioma->idioma ?? '') === $nombreNormalizado;
+    }
+
+    /**
+     * Deja un nombre de idioma listo para compararlo: sin tildes, sin espacios sobrantes, en
+     * mayúsculas. «Inglés», «ingles» e «INGLES» son el mismo idioma.
+     */
+    private static function compararNombre(string $nombre): string
+    {
+        $sinTildes = \Illuminate\Support\Str::ascii(trim($nombre));
+
+        return mb_strtoupper($sinTildes);
+    }
+
+    private function cumpleNivelMcer(
+        User $user,
+        string $nivelRequerido,
+        ?string $idiomaNombre = null,
+        ?Carbon $corte = null,
+        ?int $idiomaCatalogoId = null
+    ): bool {
+        $maximo = $this->nivelMcerMaximoAprobado($user, $idiomaNombre, $corte, $idiomaCatalogoId);
         $requerido = self::NIVELES_MCER[strtoupper(trim($nivelRequerido))] ?? null;
 
         if ($maximo === null || $requerido === null) {

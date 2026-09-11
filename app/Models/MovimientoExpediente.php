@@ -19,6 +19,7 @@ class MovimientoExpediente extends Model
     protected $primaryKey = 'id_movimiento';
 
     public const APROBADO  = 'aprobado';
+    public const ACTUALIZADO = 'actualizado';
     public const RECHAZADO = 'rechazado';
 
     protected $fillable = [
@@ -29,6 +30,7 @@ class MovimientoExpediente extends Model
         'motivo',
         'revisado_por_rol',
         'notificado_en',
+        'lote_notificacion',
     ];
 
     protected $casts = [
@@ -47,7 +49,11 @@ class MovimientoExpediente extends Model
         string $categoria,
         string $descripcion,
         ?string $motivo = null,
-        ?string $rol = null
+        ?string $rol = null,
+        // Los documentos avisan al instante, así que su movimiento nace ya notificado: sigue
+        // sirviendo de historial, pero `expediente:resumen-diario` lo salta y el docente no
+        // recibe a las 18:00 un segundo aviso de lo que ya leyó por la mañana.
+        ?\DateTimeInterface $notificadoEn = null
     ): void {
         try {
             static::create([
@@ -59,6 +65,7 @@ class MovimientoExpediente extends Model
                 'descripcion'      => mb_substr($descripcion, 0, 255),
                 'motivo'           => $motivo,
                 'revisado_por_rol' => $rol,
+                'notificado_en'    => $notificadoEn,
             ]);
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error(

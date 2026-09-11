@@ -19,7 +19,7 @@ class RectoriaSeeder extends Seeder
         $rectoria = User::firstOrCreate([
             'email' => 'rectoria@universidad.com'
         ], [
-            'municipio_id'           => 703,
+            'municipio_id'           => Ubicaciones::municipio(),
             'tipo_identificacion'    => 'Cédula de ciudadanía',
             'numero_identificacion'  => '700000001',
             'genero'                 => 'Femenino',

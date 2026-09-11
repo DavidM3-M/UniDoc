@@ -19,7 +19,7 @@ class AdministrativoSeeder extends Seeder
         $administrativo = User::firstOrCreate([
             'email' => 'administrativo@universidad.com'
         ], [
-            'municipio_id'           => 703,
+            'municipio_id'           => Ubicaciones::municipio(),
             'tipo_identificacion'    => 'Cédula de ciudadanía',
             'numero_identificacion'  => '700000003',
             'genero'                 => 'Femenino',

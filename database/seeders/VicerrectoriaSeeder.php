@@ -19,7 +19,7 @@ class VicerrectoriaSeeder extends Seeder
         $vicerrectoria = User::firstOrCreate([
             'email' => 'vicerrectoria@universidad.com'
         ], [
-            'municipio_id'           => 703,
+            'municipio_id'           => Ubicaciones::municipio(),
             'tipo_identificacion'    => 'Cédula de ciudadanía',
             'numero_identificacion'  => '700000002',
             'genero'                 => 'Masculino',

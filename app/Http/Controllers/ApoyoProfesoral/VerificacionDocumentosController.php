@@ -4,6 +4,7 @@ namespace App\Http\Controllers\ApoyoProfesoral;
 // Se importan las clases y dependencias necesarias para el funcionamiento del controlador.
 use App\Constants\ConstDocumentos\EstadoDocumentos; // Constantes de estados válidos para documentos.
 use App\Http\Controllers\TalentoHumano\NotificacionController;
+use App\Jobs\EnviarNotificacionJob;
 use App\Models\Aspirante\Documento; // Modelo Documento, representa los documentos en la base de datos.
 use App\Models\MovimientoExpediente;
 use App\Models\Usuario\User; // Modelo User, representa a los usuarios del sistema.
@@ -414,27 +415,49 @@ class VerificacionDocumentosController
 
             $documento->save();
 
-            // Se registra el movimiento en vez de mandar un correo por cada documento.
+            // El docente se entera en cuanto se decide, no al final del dia.
             //
-            // Antes solo el rechazo avisaba, con el texto «uno de tus documentos ha sido rechazado»
-            // que nunca decia cual, y la aprobacion no avisaba nada. Revisando el expediente
-            // completo de un docente en una sesion, eso eran cuatro correos identicos y sin dato
-            // util la misma tarde, y ninguna noticia de lo que si salio bien.
+            // Hubo una version intermedia que solo acumulaba el movimiento y dejaba que
+            // `expediente:resumen-diario` avisara a las 18:00. Agrupar el correo evitaba cuatro
+            // mensajes identicos por una misma sesion de revision, pero de paso silenciaba la
+            // campana: el docente entraba a la plataforma, veia su documento rechazado y no tenia
+            // ninguna señal de que eso hubiera pasado.
             //
-            // `expediente:resumen-diario` agrupa estos movimientos y manda uno solo con todo,
-            // nombrando cada registro. Ver MovimientoExpediente.
+            // Ahora el aviso sale al momento y nombra el documento, asi que los correos dejan de
+            // ser intercambiables entre si. El movimiento se sigue guardando como historial, pero
+            // nace con `notificado_en` puesto para que el resumen no lo repita esa tarde.
             if (in_array($request->estado, [EstadoDocumentos::APROBADO, EstadoDocumentos::RECHAZADO], true)) {
                 $propietario = $this->resolverPropietarioDocumento($documento);
 
                 if ($propietario) {
+                    $categoria   = $this->categoriaLegible($documento);
+                    $descripcion = $this->describirDocumento($documento);
+                    $motivo      = $request->estado === EstadoDocumentos::RECHAZADO
+                        ? $request->motivo_rechazo
+                        : null;
+                    $rol         = $request->user()?->getRoleNames()->first();
+
                     MovimientoExpediente::registrar(
                         userId: $propietario->id,
                         accion: $request->estado,
-                        categoria: $this->categoriaLegible($documento),
-                        descripcion: $this->describirDocumento($documento),
-                        motivo: $request->estado === EstadoDocumentos::RECHAZADO ? $request->motivo_rechazo : null,
-                        rol: $request->user()?->getRoleNames()->first(),
+                        categoria: $categoria,
+                        descripcion: $descripcion,
+                        motivo: $motivo,
+                        rol: $rol,
+                        notificadoEn: now(),
                     );
+
+                    // Se encola: la respuesta al revisor no debe esperar al servidor SMTP, y si el
+                    // envio falla el job lo reintenta en vez de perderse dentro de este request.
+                    // La clave lleva el documento, el estado y el instante, asi que un doble clic
+                    // no duplica el correo pero una correccion posterior si vuelve a avisar.
+                    EnviarNotificacionJob::dispatch(
+                        "documento.revisado:{$documento->id_documento}:{$request->estado}:" . now()->timestamp,
+                        'documento.revisado',
+                        'documentoRevisado',
+                        [$request->estado, $categoria, $descripcion, $motivo, $rol],
+                        $propietario->id,
+                    )->afterCommit();
                 }
             }
 

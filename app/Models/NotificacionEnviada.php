@@ -5,7 +5,6 @@ namespace App\Models;
 use App\Models\Usuario\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\QueryException;
 
 /**
  * Una notificación que el sistema ya se comprometió a enviar.
@@ -33,35 +32,6 @@ class NotificacionEnviada extends Model
         'enviado_en' => 'datetime',
         'intentos'   => 'integer',
     ];
-
-    /**
-     * Reserva el derecho a enviar esta notificación.
-     *
-     * Devuelve el registro si nadie lo había reservado, o `null` si ya existía —es decir, si otro
-     * proceso ya se está encargando o ya se encargó—. Quien recibe `null` no debe enviar nada.
-     *
-     * Se apoya en la restricción de base de datos y no en un `exists()` previo a propósito: entre
-     * comprobar y crear cabe otra petición, que es exactamente el hueco por el que se colaron las
-     * seis reversiones simultáneas de las pruebas.
-     */
-    public static function reservar(string $clave, string $tipo, ?int $userId = null): ?self
-    {
-        try {
-            return static::create([
-                'clave'   => $clave,
-                'tipo'    => $tipo,
-                'user_id' => $userId,
-            ]);
-        } catch (QueryException $e) {
-            // 23505 es la violación de unicidad en PostgreSQL. Cualquier otro error de base de
-            // datos sí es un problema real y debe subir.
-            if ($e->getCode() === '23505') {
-                return null;
-            }
-
-            throw $e;
-        }
-    }
 
     public function marcarEnviada(): void
     {

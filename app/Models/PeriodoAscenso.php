@@ -57,7 +57,7 @@ class PeriodoAscenso extends Model
 
     public function estaCerrado(): bool
     {
-        return $this->cerrado_en !== null || $this->fecha_cierre->isPast();
+        return $this->cerrado_en !== null || $this->fecha_cierre->copy()->endOfDay()->isPast();
     }
 
     public function creador(): BelongsTo

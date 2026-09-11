@@ -46,3 +46,8 @@ Schedule::command('expediente:resumen-diario')
     ->dailyAt('18:00')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/expediente-resumen.log'));
+
+Schedule::command('escalafon:notificar-cierres')
+    ->dailyAt('07:05')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/escalafon-cierres.log'));

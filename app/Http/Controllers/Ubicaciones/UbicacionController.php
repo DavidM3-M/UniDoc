@@ -119,11 +119,29 @@ class UbicacionController
 
     
     // Obtener departamentos por país
+    /**
+     * Departamentos de un país.
+     *
+     * Solo Colombia tiene su división cargada: el catálogo `departamentos` guarda los 32 más
+     * Bogotá D.C. Para cualquier otro de los 249 países de la norma ISO la consulta sale vacía, y
+     * entonces se devuelve el centinela «Sin Departamento».
+     *
+     * Sin él, quien nació fuera de Colombia quedaba atrapado en el formulario de registro: el
+     * desplegable de departamento salía vacío pero seguía siendo obligatorio, igual que el de
+     * municipio que cuelga de él, y no había ninguna opción que pudiera elegir para continuar.
+     * `users.municipio_id` es NOT NULL, así que el centinela no es un adorno: es la única forma
+     * de representar «no aplica» sin cambiar el esquema.
+     */
     public function obtenerDepartamentosPorPais($pais_id)
     {
-        // Buscar los departamentos por país
-        $departamentos = Departamento::where('pais_id', $pais_id)->get();
-        // Devolver respuesta
+        $departamentos = Departamento::where('pais_id', $pais_id)
+            ->whereNotNull('codigo_divipola')
+            ->get();
+
+        if ($departamentos->isEmpty()) {
+            $departamentos = Departamento::whereNull('codigo_divipola')->get();
+        }
+
         return response()->json($departamentos, 200);
     }
 

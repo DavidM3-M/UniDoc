@@ -142,7 +142,12 @@ class EvaluacionDocenteController
                 $datos['asignado_por'] = $request->user()->id;
                 $datos['fecha_asignacion'] = now();
 
-                return EvaluacionDocente::create($datos);
+                $evaluacion = EvaluacionDocente::create($datos);
+                \App\Models\MovimientoExpediente::registrar(
+                    $docente->id, \App\Models\MovimientoExpediente::ACTUALIZADO, 'Evaluación docente',
+                    'Evaluación asignada: ' . $evaluacion->estado_evaluacion_docente . '. Promedio: ' . $evaluacion->promedio_evaluacion_docente
+                );
+                return $evaluacion;
             });
 
             return response()->json([
@@ -194,6 +199,10 @@ class EvaluacionDocenteController
                 $datos['fecha_asignacion'] = now();
 
                 $evaluacion->update($datos);
+                \App\Models\MovimientoExpediente::registrar(
+                    $evaluacion->user_id, \App\Models\MovimientoExpediente::ACTUALIZADO, 'Evaluación docente',
+                    'Evaluación actualizada: ' . $evaluacion->estado_evaluacion_docente . '. Promedio: ' . $evaluacion->promedio_evaluacion_docente
+                );
             });
 
             return response()->json([

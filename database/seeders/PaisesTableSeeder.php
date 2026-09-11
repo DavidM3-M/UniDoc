@@ -19,7 +19,9 @@ class PaisesTableSeeder extends Seeder
             if (!$firstline) {
                 Pais::create([
                     "id_pais" => "$data[0]",
-                    "nombre" => "$data[1]"
+                    "nombre" => "$data[1]",
+                    // Codigo alfa-2 de la ISO 3166-1. Ver la migracion que lo anade.
+                    "codigo_alfa2" => $data[2] !== "" ? $data[2] : null,
                 ]);
             }
             $firstline = false;

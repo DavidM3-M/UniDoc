@@ -30,14 +30,16 @@ class ResetPasswordMail extends Mailable
     public function build()
     // Método que construye el correo electrónico.
     {
+        $nombre = htmlspecialchars((string) $this->user->primer_nombre, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $enlace = htmlspecialchars($this->resetLink, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         return $this->subject('Restablecimiento de Contraseña')
             ->html("
             <div style='font-family: Arial, sans-serif; color: #333; padding: 20px;'>
                 <h1 style='color: #3498db;'>UniDoc</h1>
-                <h2 style='color: #2c3e50;'>Hola, {$this->user->primer_nombre}</h2>
+                <h2 style='color: #2c3e50;'>Hola, {$nombre}</h2>
                 <p>Recibimos una solicitud para <strong>restablecer tu contraseña</strong>.</p>
                 <p>
-                    <a href='{$this->resetLink}' style='
+                    <a href='{$enlace}' style='
                         background-color: #3498db;
                         color: white;
                         padding: 10px 20px;
@@ -47,9 +49,9 @@ class ResetPasswordMail extends Mailable
                     '>Haz clic aquí para restablecer tu contraseña</a>
                 </p>
                 <p style='margin-top: 20px;'>O copia y pega este enlace en tu navegador:</p>
-                <p><a href='{$this->resetLink}' style='color: #3498db;'>{$this->resetLink}</a></p>
+                <p><a href='{$enlace}' style='color: #3498db;'>{$enlace}</a></p>
                 <p style='margin-top: 30px;'>Si no solicitaste este cambio, puedes ignorar este correo.</p>
-                <p>Gracias,<br>El equipo de UniDoc</p>
+                <p>El enlace vence en 5 minutos y solo puede usarse una vez.</p><p>Gracias,<br>El equipo de UniDoc</p>
             </div>
         ");
     }

@@ -14,7 +14,7 @@ class DemoAspirantesSeeder extends Seeder
         $aspirantes = [
             [
                 'user' => [
-                    'municipio_id'          => 703,
+                    'municipio_id'          => Ubicaciones::municipio(),
                     'tipo_identificacion'   => 'Cédula de ciudadanía',
                     'numero_identificacion' => '1012345678',
                     'genero'                => 'Femenino',
@@ -250,7 +250,7 @@ class DemoAspirantesSeeder extends Seeder
             ],
             [
                 'user' => [
-                    'municipio_id'          => 703,
+                    'municipio_id'          => Ubicaciones::municipio(),
                     'tipo_identificacion'   => 'Cédula de ciudadanía',
                     'numero_identificacion' => '1045678901',
                     'genero'                => 'Masculino',
@@ -508,7 +508,7 @@ class DemoAspirantesSeeder extends Seeder
             ],
             [
                 'user' => [
-                    'municipio_id'          => 703,
+                    'municipio_id'          => Ubicaciones::municipio(),
                     'tipo_identificacion'   => 'Cédula de ciudadanía',
                     'numero_identificacion' => '1078901234',
                     'genero'                => 'Femenino',
@@ -744,7 +744,7 @@ class DemoAspirantesSeeder extends Seeder
             ],
             [
                 'user' => [
-                    'municipio_id'          => 703,
+                    'municipio_id'          => Ubicaciones::municipio(),
                     'tipo_identificacion'   => 'Cédula de ciudadanía',
                     'numero_identificacion' => '1001234567',
                     'genero'                => 'Masculino',

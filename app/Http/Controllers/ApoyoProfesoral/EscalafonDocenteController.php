@@ -44,14 +44,6 @@ use Illuminate\Support\Facades\Log;
  */
 class EscalafonDocenteController
 {
-    /**
-     * Hasta cuantos criterios sin cumplir se considera que el docente «estuvo cerca».
-     *
-     * Con mas que esto, el correo de «no ascendiste» deja de ser util y pasa a ser una mala
-     * noticia sin nada que hacer con ella.
-     */
-    private const MAX_FALTANTES_PARA_AVISAR = 2;
-
     public function __construct(
         private readonly MotorEscalafonDocenteService $motor,
         private readonly AscensoEscalafonService $ascensos,
@@ -176,90 +168,6 @@ class EscalafonDocenteController
     }
 
     /**
-     * C7 — le dice al docente que no ascendio y exactamente que le falto.
-     *
-     * **Solo a quien estuvo cerca**: uno o dos criterios sin cumplir. A quien le faltaban cuatro,
-     * este correo no le aporta nada accionable y se lee como una mala noticia masiva. El limite es
-     * la unica parte de esta notificacion que es criterio y no calculo, y por eso esta aqui a la
-     * vista en vez de escondido en el motor.
-     *
-     * El desglose ya lo produce `evaluarAscenso()`; hasta ahora solo se veia si el docente entraba
-     * a mirar la pantalla.
-     */
-    private function avisarNoAlcanzado(User $docente, PeriodoAscenso $periodo, array $evaluacion): void
-    {
-        $faltantes = $evaluacion['faltantes'] ?? [];
-
-        if (count($faltantes) === 0 || count($faltantes) > self::MAX_FALTANTES_PARA_AVISAR) {
-            return;
-        }
-
-        $lineas = array_map(fn ($f) => [
-            'criterio' => ucfirst(str_replace('_', ' ', (string) ($f['campo'] ?? 'Requisito'))),
-            'detalle'  => trim(
-                ($f['actual'] !== null ? "Tienes {$f['actual']} de {$f['requerido']}. " : '')
-                . (string) ($f['mensaje'] ?? '')
-            ),
-        ], $faltantes);
-
-        EnviarNotificacionJob::dispatch(
-            "escalafon.no-ascendio:periodo:{$periodo->id_periodo_ascenso}:user:{$docente->id}",
-            'escalafon.no-ascendio',
-            'ascensoNoAlcanzado',
-            [
-                $periodo->nombre,
-                $periodo->fecha_cierre->format('d/m/Y'),
-                $evaluacion['escalon_vigente'] ?? 'tu categoria actual',
-                $evaluacion['escalon_objetivo'] ?? null,
-                $lineas,
-                [],
-            ],
-            $docente->id
-        );
-    }
-
-    /**
-     * C11 — avisa a Apoyo Profesoral de que hay elegibles esperando.
-     *
-     * El conteo se hace aqui y no en el correo para que el mensaje llegue con el numero ya resuelto:
-     * calcularlo dentro del envio obligaria a repetir la evaluacion por cada destinatario.
-     */
-    private function avisarCierreAApoyoProfesoral(PeriodoAscenso $periodo): void
-    {
-        $porCategoria = [];
-        $elegibles = 0;
-        $noElegibles = 0;
-
-        $docentes = User::role('Docente')
-            ->with($this->relacionesParaEvaluar())
-            ->whereHas('historialEscalonUsuario', fn ($q) => $q->whereNull('hasta')->whereNull('revertido_en'))
-            ->get();
-
-        foreach ($docentes as $docente) {
-            $evaluacion = $this->motor->evaluarAscenso($docente, $periodo);
-
-            if (!empty($evaluacion['elegible'])) {
-                $elegibles++;
-                $objetivo = $evaluacion['escalon_objetivo'] ?? 'sin categoria';
-                $porCategoria[$objetivo] = ($porCategoria[$objetivo] ?? 0) + 1;
-            } else {
-                $noElegibles++;
-                $this->avisarNoAlcanzado($docente, $periodo, $evaluacion);
-            }
-        }
-
-        foreach (User::role('Apoyo Profesoral')->get() as $responsable) {
-            EnviarNotificacionJob::dispatch(
-                "escalafon.periodo-cerrado:periodo:{$periodo->id_periodo_ascenso}:user:{$responsable->id}",
-                'escalafon.periodo-cerrado',
-                'periodoCerradoConElegibles',
-                [$periodo->nombre, $periodo->fecha_cierre->format('d/m/Y'), $elegibles, $porCategoria, $noElegibles],
-                $responsable->id
-            );
-        }
-    }
-
-    /**
      * Cierre anticipado.
      *
      * Marca `cerrado_en` pero NO toca `fecha_cierre`: el corte de los requisitos sigue siendo la
@@ -281,7 +189,7 @@ class EscalafonDocenteController
 
             $periodo->update(['cerrado_en' => now()]);
 
-            $this->avisarCierreAApoyoProfesoral($periodo);
+            app(\App\Services\NotificacionesPeriodoService::class)->avisarCierre($periodo);
 
             return response()->json([
                 'status' => 'success',

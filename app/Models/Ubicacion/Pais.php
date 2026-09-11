@@ -18,8 +18,12 @@ class Pais extends Model
     //definimos la clave primaria de la tabla
     protected $primaryKey = 'id_pais';
     //definimos los campos de la tabla paises que se pueden llenar
+    // `id_pais` va en la lista porque los CSV de siembra fijan el identificador: sin esto,
+    // Eloquent lo descartaria en silencio y la numeracion dependeria del autoincremento.
     protected $fillable = [
-        'nombre'
+        'id_pais',
+        'nombre',
+        'codigo_alfa2',
     ];
 
     //relacion de uno a muchos con la tabla departamentos
