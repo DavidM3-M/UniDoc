@@ -2,48 +2,48 @@
 
 namespace App\Http\Controllers\Docente;
 
-use App\Services\CalculoPuntajeDocenteService;
+use App\Services\MotorEscalafonDocenteService;
 use Illuminate\Http\Request;
 
-// Este controlador maneja la evaluación y el puntaje de los docentes.
-// Permite evaluar el puntaje del docente y guardar el resultado en la base de datos.
+/**
+ * Consulta de escalafón del docente autenticado.
+ *
+ * **Ya no persiste nada.** Antes este endpoint llamaba a `EscalafonDocenteService::evaluarYPersistir()`
+ * y le escribía la categoría al docente en el momento en que la consultaba: el docente se
+ * autoascendía. Con el nuevo reglamento el ascenso es un acto de Apoyo Profesoral
+ * (`ApoyoProfesoral\EscalafonDocenteController`), así que aquí solo se informa.
+ *
+ * Lo que devuelve es el avance hacia el **siguiente** escalón, medido contra la fecha de cierre del
+ * periodo de ascenso vigente: qué le falta, cuántos meses lleva en su categoría actual y cuánto
+ * puntaje de producción académica acumula desde que la tiene.
+ */
 class PuntajeController
 {
     /**
-     * Evaluar al docente autenticado y guardar su puntaje total.
+     * Estado del escalafón del docente autenticado.
      *
-     * Este método utiliza el servicio `CalculoPuntajeDocenteService` para calcular el puntaje total
-     * del docente autenticado, basándose en la información relacionada cargada previamente
-     * (estudios, idiomas, experiencias, producción académica, evaluación docente, etc.).
-     * Luego, guarda o actualiza el puntaje total en la base de datos mediante la relación `puntajeUsuario`.
-     * Finalmente, retorna una respuesta JSON con el resultado de la evaluación.
+     * La ruta sigue siendo `GET /docente/evaluar-puntaje` para no romper el frontend, aunque el
+     * nombre ya no describa bien lo que hace: no evalúa para otorgar, informa.
      *
      * @param Request $request Solicitud HTTP con el usuario autenticado.
-     * @param CalculoPuntajeDocenteService $servicio Servicio responsable de realizar el cálculo del puntaje docente.
-     * @return \Illuminate\Http\JsonResponse Respuesta JSON con mensaje de éxito y resultado de la evaluación.
+     * @param MotorEscalafonDocenteService $motor Resuelve la elegibilidad, sin escribir.
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function evaluarYGuardarPuntaje(Request $request, CalculoPuntajeDocenteService $servicio)
+    public function consultarEstadoEscalafon(Request $request, MotorEscalafonDocenteService $motor)
     {
-        $user = $request->user(); // Obtener el usuario autenticado
-        $user->load([ // Cargar relaciones necesarias para la evaluación
-            'contratacionUsuario',
+        $user = $request->user();
+        $user->load([
             'estudiosUsuario.documentosEstudio',
             'idiomasUsuario.documentosIdioma',
-            'experienciasUsuario.documentosExperiencia',
+            'experienciasUsuario.documentosExperiencia', // Antigüedad Uniautónoma
             'produccionAcademicaUsuario.documentosProduccionAcademica',
             'evaluacionDocenteUsuario',
+            'historialEscalonUsuario.escalon', // Escalón vigente y desde cuándo lo tiene
         ]);
 
-        $resultado = $servicio->evaluar($user); // Evaluar el puntaje del docente utilizando el servicio
-
-        $user->puntajeUsuario()->updateOrCreate( // Actualizar o crear el puntaje del usuario
-            ['user_id' => $user->id],
-            ['puntaje_total' => $resultado['puntaje_total']]
-        );
-
-        return response()->json([ // Retornar la respuesta JSON con el resultado de la evaluación
-            'mensaje' => 'Evaluación completada.',
-            'resultado' => $resultado
+        return response()->json([
+            'mensaje' => 'Consulta completada.',
+            'resultado' => $motor->evaluarAscenso($user),
         ], 200);
     }
 }

@@ -4,7 +4,9 @@ namespace App\Http\Controllers\ApoyoProfesoral;
 // Se importan las clases y dependencias necesarias para el funcionamiento del controlador.
 use App\Constants\ConstDocumentos\EstadoDocumentos; // Constantes de estados válidos para documentos.
 use App\Http\Controllers\TalentoHumano\NotificacionController;
+use App\Jobs\EnviarNotificacionJob;
 use App\Models\Aspirante\Documento; // Modelo Documento, representa los documentos en la base de datos.
+use App\Models\MovimientoExpediente;
 use App\Models\Usuario\User; // Modelo User, representa a los usuarios del sistema.
 use Illuminate\Support\Facades\Storage; // Facade para interactuar con el sistema de archivos.
 use Illuminate\Http\Request; // Clase para manejar solicitudes HTTP.
@@ -219,7 +221,6 @@ class VerificacionDocumentosController
         } catch (\Exception $e) {
             return response()->json([ // Si ocurre cualquier excepción, retorna un mensaje de error y el detalle de la excepción.
                 'message' => 'Error al obtener documentos.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -257,7 +258,6 @@ class VerificacionDocumentosController
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al obtener los docentes.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -295,7 +295,6 @@ class VerificacionDocumentosController
         } catch (\Exception $e) {
             return response()->json([    // Si ocurre cualquier excepción, retorna un mensaje de error y el detalle de la excepción.
                 'message' => 'Error al obtener los documentos del usuario.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -358,7 +357,6 @@ class VerificacionDocumentosController
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al obtener los documentos por categoría.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -368,6 +366,9 @@ class VerificacionDocumentosController
      *
      * Este método recibe una solicitud HTTP para actualizar el estado de un documento identificado por su ID.
      * Valida la entrada, realiza la actualización y responde en formato JSON.
+     *
+     * No atiende documentos de producción académica: esa decisión pasó al rol Evaluador de
+     * Producción. Ver el 403 más abajo.
      */
 
     public function actualizarEstadoDocumento(Request $request, $documento_id)
@@ -386,6 +387,19 @@ class VerificacionDocumentosController
             }
 
             $documento = Documento::findOrFail($documento_id);
+
+            // La producción académica la avala el Evaluador de Producción, no Apoyo Profesoral.
+            // El bloqueo tiene que estar acá y no solo en la pantalla: esconder los botones de
+            // VerProduccionAcademicaDocente.tsx deja el endpoint abierto a una petición directa, y
+            // aprobar una producción otorga puntos de escalafón
+            // (MotorEscalafonDocenteService::calcularPuntaje). La lectura sigue permitida: Apoyo
+            // Profesoral necesita la producción para filtros, certificados y hoja de vida.
+            if (str_contains((string) $documento->documentable_type, 'ProduccionAcademica')) {
+                return response()->json([
+                    'message' => 'La producción académica la avala el rol Evaluador de Producción.',
+                ], 403);
+            }
+
             $documento->estado = $request->estado;
 
             if ($request->estado === EstadoDocumentos::RECHAZADO) {
@@ -394,18 +408,56 @@ class VerificacionDocumentosController
                 $documento->motivo_rechazo = null;
             }
 
+            // Quién decidió y cuándo. `documentos` es polimórfica, así que esto da trazabilidad a
+            // estudios, idiomas y experiencia igual que al aval de producción académica.
+            $documento->revisado_por = $request->user()?->id;
+            $documento->revisado_en  = now();
+
             $documento->save();
 
-            // Notificar al propietario del documento si fue rechazado
-            if ($request->estado === EstadoDocumentos::RECHAZADO) {
-                try {
-                    $propietario = $this->resolverPropietarioDocumento($documento);
-                    if ($propietario) {
-                        $rol = $request->user()?->getRoleNames()->first();
-                        NotificacionController::documentoRechazado($propietario, $request->motivo_rechazo, $rol);
-                    }
-                } catch (\Exception $notifEx) {
-                    Log::error("Error al notificar rechazo de documento {$documento_id}: " . $notifEx->getMessage());
+            // El docente se entera en cuanto se decide, no al final del dia.
+            //
+            // Hubo una version intermedia que solo acumulaba el movimiento y dejaba que
+            // `expediente:resumen-diario` avisara a las 18:00. Agrupar el correo evitaba cuatro
+            // mensajes identicos por una misma sesion de revision, pero de paso silenciaba la
+            // campana: el docente entraba a la plataforma, veia su documento rechazado y no tenia
+            // ninguna señal de que eso hubiera pasado.
+            //
+            // Ahora el aviso sale al momento y nombra el documento, asi que los correos dejan de
+            // ser intercambiables entre si. El movimiento se sigue guardando como historial, pero
+            // nace con `notificado_en` puesto para que el resumen no lo repita esa tarde.
+            if (in_array($request->estado, [EstadoDocumentos::APROBADO, EstadoDocumentos::RECHAZADO], true)) {
+                $propietario = $this->resolverPropietarioDocumento($documento);
+
+                if ($propietario) {
+                    $categoria   = $this->categoriaLegible($documento);
+                    $descripcion = $this->describirDocumento($documento);
+                    $motivo      = $request->estado === EstadoDocumentos::RECHAZADO
+                        ? $request->motivo_rechazo
+                        : null;
+                    $rol         = $request->user()?->getRoleNames()->first();
+
+                    MovimientoExpediente::registrar(
+                        userId: $propietario->id,
+                        accion: $request->estado,
+                        categoria: $categoria,
+                        descripcion: $descripcion,
+                        motivo: $motivo,
+                        rol: $rol,
+                        notificadoEn: now(),
+                    );
+
+                    // Se encola: la respuesta al revisor no debe esperar al servidor SMTP, y si el
+                    // envio falla el job lo reintenta en vez de perderse dentro de este request.
+                    // La clave lleva el documento, el estado y el instante, asi que un doble clic
+                    // no duplica el correo pero una correccion posterior si vuelve a avisar.
+                    EnviarNotificacionJob::dispatch(
+                        "documento.revisado:{$documento->id_documento}:{$request->estado}:" . now()->timestamp,
+                        'documento.revisado',
+                        'documentoRevisado',
+                        [$request->estado, $categoria, $descripcion, $motivo, $rol],
+                        $propietario->id,
+                    )->afterCommit();
                 }
             }
 
@@ -415,9 +467,51 @@ class VerificacionDocumentosController
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al actualizar el estado del documento.',
-                'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Nombre de la categoria tal como la reconoce el docente, no el nombre de la clase.
+     */
+    private function categoriaLegible(Documento $documento): string
+    {
+        $clase = class_basename((string) $documento->documentable_type);
+
+        return match ($clase) {
+            'Estudio'             => 'Estudio',
+            'Experiencia'         => 'Experiencia',
+            'Idioma'              => 'Idioma',
+            'ProduccionAcademica' => 'Produccion academica',
+            'Rut'                 => 'RUT',
+            'Eps'                 => 'EPS',
+            'InformacionContacto' => 'Informacion de contacto',
+            'User'                => 'Documento de identidad',
+            default               => $clase ?: 'Documento',
+        };
+    }
+
+    /**
+     * El registro concreto, para que el docente sepa de cual de sus documentos se habla.
+     *
+     * Es el dato que faltaba: cada modelo guarda su titulo en un campo distinto, asi que se prueba
+     * el que corresponda y se cae al nombre del archivo cuando ninguno aplica.
+     */
+    private function describirDocumento(Documento $documento): string
+    {
+        $d = $documento->documentable;
+
+        if (!$d) {
+            return basename((string) $documento->archivo);
+        }
+
+        foreach (['titulo_estudio', 'titulo', 'cargo', 'idioma', 'nombre_idioma', 'institucion'] as $campo) {
+            if (!empty($d->$campo)) {
+                return (string) $d->$campo;
+            }
+        }
+
+        return basename((string) $documento->archivo);
     }
 
     /**
@@ -475,7 +569,6 @@ class VerificacionDocumentosController
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al obtener el documento.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }

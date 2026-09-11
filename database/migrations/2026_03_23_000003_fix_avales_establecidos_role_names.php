@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
@@ -7,27 +7,27 @@ use Illuminate\Support\Facades\DB;
  * Normalises role-name strings stored in JSON columns so they match the
  * Spatie role names used throughout the application (no accent marks).
  *
- * Before: 'Vicerrector├¡a', 'Rector├¡a'
+ * Before: 'Vicerrectoría', 'Rectoría'
  * After : 'Vicerrectoria', 'Rectoria'
  */
 return new class extends Migration
 {
     public function up(): void
     {
-        $this->normalizeConvocatoriaAvalesEstablecidos('Vicerrector├¡a', 'Vicerrectoria');
-        $this->normalizeConvocatoriaAvalesEstablecidos('Rector├¡a', 'Rectoria');
+        $this->normalizeConvocatoriaAvalesEstablecidos('Vicerrectoría', 'Vicerrectoria');
+        $this->normalizeConvocatoriaAvalesEstablecidos('Rectoría', 'Rectoria');
 
-        DB::statement("UPDATE convocatoria_avales SET aval = 'Vicerrectoria' WHERE aval = 'Vicerrector├¡a'");
-        DB::statement("UPDATE convocatoria_avales SET aval = 'Rectoria' WHERE aval = 'Rector├¡a'");
+        DB::statement("UPDATE convocatoria_avales SET aval = 'Vicerrectoria' WHERE aval = 'Vicerrectoría'");
+        DB::statement("UPDATE convocatoria_avales SET aval = 'Rectoria' WHERE aval = 'Rectoría'");
     }
 
     public function down(): void
     {
-        $this->normalizeConvocatoriaAvalesEstablecidos('Vicerrectoria', 'Vicerrector├¡a');
-        $this->normalizeConvocatoriaAvalesEstablecidos('Rectoria', 'Rector├¡a');
+        $this->normalizeConvocatoriaAvalesEstablecidos('Vicerrectoria', 'Vicerrectoría');
+        $this->normalizeConvocatoriaAvalesEstablecidos('Rectoria', 'Rectoría');
 
-        DB::statement("UPDATE convocatoria_avales SET aval = 'Vicerrector├¡a' WHERE aval = 'Vicerrectoria'");
-        DB::statement("UPDATE convocatoria_avales SET aval = 'Rector├¡a' WHERE aval = 'Rectoria'");
+        DB::statement("UPDATE convocatoria_avales SET aval = 'Vicerrectoría' WHERE aval = 'Vicerrectoria'");
+        DB::statement("UPDATE convocatoria_avales SET aval = 'Rectoría' WHERE aval = 'Rectoria'");
     }
 
     private function normalizeConvocatoriaAvalesEstablecidos(string $search, string $replace): void

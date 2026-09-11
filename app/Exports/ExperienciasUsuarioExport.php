@@ -51,6 +51,7 @@ class ExperienciasUsuarioExport implements FromCollection, WithHeadings, WithTit
                     'cargo' => $experiencia->cargo,
                     'trabajo_actual' => $experiencia->trabajo_actual,
                     'intesidad_horaria' => $experiencia->intensidad_horaria,
+                    'meses_trabajados' => $experiencia->meses_trabajados,
                     'fecha_inicio' => $experiencia->fecha_inicio,
                     'fecha-finalizacion' => $experiencia->fecha_finalizacion,
                     'fecha_expedicion_certificado' => $experiencia->fecha_expedicion_certificado,
@@ -67,6 +68,7 @@ class ExperienciasUsuarioExport implements FromCollection, WithHeadings, WithTit
             'Cargo',
             'Trabajo Actual',
             'Intensidad Horaria',
+            'Meses Trabajados',
             'Fecha de Inicio',
             'Fecha de Finalizacion',
             'Fecha de Expedicion del Certificado'

@@ -4,6 +4,17 @@ namespace App\Constants\ConstAgregarExperiencia;
 
 // Esta clase define constantes para representar los diferentes tipos de **experiencia laboral o profesional**
 // que un aspirante puede registrar, especialmente en el contexto académico o educativo.
+//
+// Las categorias siguen las de experiencia calificada del Decreto 1279 de 2002, art. 12:
+// investigacion, docencia universitaria, direccion academico-administrativa y ejercicio
+// profesional. Se retiro 'Profesoral', que era indistinguible de 'Docencia universitaria' y
+// obligaba a elegir entre dos opciones que significaban lo mismo.
+//
+// OJO: esta clase ya NO se usa para validar. El catálogo de tipos de experiencia vive ahora en la
+// tabla `tipo_experiencias` (modelo `App\Models\TipoExperiencia`), administrable por el rol
+// Administrador. Lo único que queda aquí es la lista inicial que `TipoExperienciaSeeder` siembra en
+// esa tabla, y se conserva justamente porque los registros históricos de `experiencias` guardan
+// estos strings exactos.
 class TiposExperiencia
 {
     // Constante para experiencia en **proyectos de investigación**
@@ -12,8 +23,11 @@ class TiposExperiencia
     public const DOCENCIA_UNIVERSITARIA = 'Docencia universitaria';
     // Constante para experiencia en **docencia no universitaria** (colegios, institutos, etc.)
     public const DOCENCIA_NO_UNIVERSITARIA = 'Docencia no universitaria';
-    // Constante para experiencia en funciones **profesorales**, no necesariamente en universidades
-    public const PROFESORAL = 'Profesoral';
+    // Experiencia profesional fuera de la academia, ejerciendo la profesion del titulo.
+    public const PROFESIONAL = 'Experiencia profesional';
+    // Cargos de gestion dentro de una institucion de educacion superior: decanatura, jefatura de
+    // departamento, secretaria academica. El Decreto 1279 la cuenta aparte de la docencia.
+    public const ADMINISTRATIVA_UNIVERSITARIA = 'Administrativa universitaria';
     // Constante para experiencia en **dirección académica** (como coordinador, director de programa, decano, etc.)
     public const DIRECCION_ACADEMICA = 'Dirección académica';
     // Constante para cualquier otro tipo de experiencia que no encaje en las categorías anteriores
@@ -28,7 +42,8 @@ class TiposExperiencia
             self::INVESTIGACION,
             self::DOCENCIA_UNIVERSITARIA,
             self::DOCENCIA_NO_UNIVERSITARIA,
-            self::PROFESORAL,
+            self::PROFESIONAL,
+            self::ADMINISTRATIVA_UNIVERSITARIA,
             self::DIRECCION_ACADEMICA,
             self::OTRA,
         ];

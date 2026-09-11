@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers\Aspirante;
 
+use Illuminate\Support\Facades\Log;
+
+use App\Constants\ClavePrimaria;
 use App\Http\Requests\RequestAspirante\RequestExperiencia\ActualizarExperienciaRequest;
 use Illuminate\Http\Request;
 use App\Models\Aspirante\Experiencia;
@@ -57,9 +60,9 @@ class ExperienciaController
                 'message' => 'Experiencia creada exitosamente',
             ], 201);
         } catch (\Exception $e) {
+            Log::error('ExperienciaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([ // En caso de error, se retorna un mensaje con el detalle.
                 'message' => 'Error al crear la experiencia.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -102,9 +105,9 @@ class ExperienciaController
             return response()->json(['experiencias' => $experiencias], 200); // Se retorna la lista de experiencias.
 
         } catch (\Exception $e) {
+            Log::error('ExperienciaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([ // En caso de error, se retorna una respuesta con el mensaje.
                 'message' => 'Error al obtener las experiencias.',
-                'error' => $e->getMessage()
             ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
@@ -125,6 +128,10 @@ class ExperienciaController
     {
         try {
 
+            if (ClavePrimaria::fueraDeRango($id)) { // Un ID que no cabe en la columna no identifica a ninguna fila.
+                return response()->json(['message' => 'Experiencia no encontrada.'], 404);
+            }
+
             $user = $request->user(); // Se obtiene el usuario autenticado.
             $experiencia = Experiencia::where('id_experiencia', $id) // Se busca la experiencia por ID y usuario.
                 ->where('user_id', $user->id)
@@ -140,11 +147,12 @@ class ExperienciaController
             return response()->json(['experiencia' => $experiencia], 200); // Se retorna la experiencia encontrada.
 
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            Log::error('ExperienciaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json(['message' => 'Experiencia no encontrada.'], 404);
         } catch (\Exception $e) {
+            Log::error('ExperienciaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([ // En caso de error, se retorna un mensaje detallado.
                 'message' => 'Error al obtener la experiencia.',
-                'error' => $e->getMessage()
             ], is_numeric($e->getCode()) && $e->getCode() >= 400 ? (int) $e->getCode() : 500);
         }
     }
@@ -166,6 +174,10 @@ class ExperienciaController
     public function actualizarExperiencia(ActualizarExperienciaRequest $request, $id)
     {
         try {
+            if (ClavePrimaria::fueraDeRango($id)) { // Un ID que no cabe en la columna no identifica a ninguna fila.
+                return response()->json(['message' => 'Experiencia no encontrada.'], 404);
+            }
+
             DB::transaction(function () use ($request, $id) { // Se ejecuta una transacción para asegurar la integridad de los datos.
                 $user = $request->user(); // Se obtiene el usuario autenticado.
                 $experiencia = Experiencia::where('id_experiencia', $id) // Se busca la experiencia por ID y usuario.
@@ -175,18 +187,32 @@ class ExperienciaController
                 $datos = $request->validated(); // Se validan los datos enviados en la solicitud.
                 $experiencia->update($datos); // Se actualiza la experiencia con los nuevos datos.
 
-                if ($request->hasFile('archivo')) { // Si hay un nuevo archivo, se actualiza el documento.
+                $archivoNuevo = $request->hasFile('archivo');
+
+                if ($archivoNuevo) { // Si hay un nuevo archivo, se actualiza el documento.
                     $this->archivoService->actualizarArchivoDocumento($request->file('archivo'), $experiencia, 'Experiencias');
+                }
+
+                // El aval anterior se dio sobre los datos viejos: si algo cambió, la experiencia
+                // vuelve a la bandeja del revisor. Un guardado que no modifica nada no reabre
+                // la revisión.
+                if ($experiencia->wasChanged() || $archivoNuevo) {
+                    $this->archivoService->reabrirRevisionDocumentos($experiencia);
                 }
             });
 
             return response()->json([ // Se retorna la experiencia actualizada y un mensaje de éxito.
                 'message' => 'Experiencia actualizada correctamente',
             ], 200);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            Log::error('ExperienciaController: ' . $e->getMessage(), ['excepcion' => $e]);
+            // Mismo criterio que obtener y eliminar: si la experiencia no existe (o no es del
+            // usuario autenticado) es un 404, no un fallo del servidor.
+            return response()->json(['message' => 'Experiencia no encontrada.'], 404);
         } catch (\Exception $e) {
+            Log::error('ExperienciaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([ // En caso de error, se retorna el mensaje correspondiente.
                 'message' => 'Error al actualizar la experiencia.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -208,6 +234,10 @@ class ExperienciaController
     {
         try {
 
+            if (ClavePrimaria::fueraDeRango($id)) { // Un ID que no cabe en la columna no identifica a ninguna fila.
+                return response()->json(['message' => 'Experiencia no encontrada.'], 404);
+            }
+
             $user = $request->user(); // Obtener el usuario autenticado desde la solicitud.
             $experiencia = Experiencia::where('id_experiencia', $id) // Buscar la experiencia por su ID y asegurarse de que pertenezca al usuario autenticado.
                 ->where('user_id', $user->id)
@@ -221,11 +251,12 @@ class ExperienciaController
             return response()->json(['message' => 'Experiencia eliminada correctamente'], 200); // Retornar una respuesta JSON indicando que la experiencia fue eliminada correctamente.
 
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            Log::error('ExperienciaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json(['message' => 'Experiencia no encontrada.'], 404);
         } catch (\Exception $e) {
+            Log::error('ExperienciaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([ // Manejo de errores: retornar una respuesta JSON con el mensaje de error y el código 500.
                 'message' => 'Error al eliminar la experiencia.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }

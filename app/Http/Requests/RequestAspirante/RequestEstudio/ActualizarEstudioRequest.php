@@ -3,15 +3,20 @@
 namespace App\Http\Requests\RequestAspirante\RequestEstudio;
 
 use Illuminate\Foundation\Http\FormRequest;
-use App\Constants\ConstAgregarEstudio\TiposEstudio;
+use App\Http\Requests\Concerns\ConservaValorDelCatalogo;
+use App\Models\Aspirante\Estudio;
+use App\Constants\ClavePrimaria;
 use App\Constants\ConstAgregarEstudio\Graduado;
 use App\Constants\ConstAgregarEstudio\TituloConvalidado;
+use App\Constants\TextoLibre;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Validation\Rule;
 
 class ActualizarEstudioRequest extends FormRequest
 {
+    use ConservaValorDelCatalogo;
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -31,15 +36,21 @@ class ActualizarEstudioRequest extends FormRequest
     {
         return [
             
-            'tipo_estudio'              => ['sometimes','required','string', Rule::in( TiposEstudio::all())],
-             // Valida que `tipo_estudio` sea opcional (`sometimes`), requerido si está presente y que su valor esté
-            // dentro de los valores definidos en la constante `TiposEstudio`.
+            'tipo_estudio'              => ['sometimes','required','string', $this->reglaCatalogoVigente(
+                'niveles_formacion_academica',
+                'nivel_formacion',
+                $this->valorGuardado(Estudio::class, 'id_estudio', 'tipo_estudio')
+            )],
+             // Valida que `tipo_estudio` sea opcional (`sometimes`), requerido si está presente y que su valor
+            // exista en el catálogo real `niveles_formacion_academica` (activo).
+            'nivel_formacion_academica_id' => 'bail|sometimes|nullable|integer|min:1|max:' . ClavePrimaria::SMALLINT_MAXIMO . '|exists:niveles_formacion_academica,id_nivel_formacion_academica',
             'graduado'                  => ['sometimes','required','string', Rule::in(Graduado::all())],
              // Valida que `graduado` sea opcional (`sometimes`), requerido si está presente y que su valor esté
             // dentro de los valores definidos en la constante `Graduado`.
-            'institucion'               => 'sometimes|required|string|min:7|max:100|regex:/^[\pL\pN\s\-]+$/u',
+            'institucion'               => 'sometimes|required|string|min:7|max:100|' . TextoLibre::SIN_EMOJIS,
               // Valida que `institucion` sea opcional (`sometimes`), requerido si está presente, de tipo `string`,
             // con un mínimo de 7 caracteres, un máximo de 100 caracteres y que coincida con el patrón de letras, números, espacios y guiones.
+            'programa_formacion_educativa_id' => 'bail|sometimes|nullable|integer|min:1|exists:programas_formacion_educativa,id_programa',
             'fecha_graduacion'          => 'sometimes|nullable|date',
              // Valida que `fecha_graduacion` sea opcional (`sometimes`), puede ser nulo (`nullable`) y de tipo `date`.
             'titulo_convalidado'        => ['sometimes','required','string', Rule::in(TituloConvalidado::all())],
@@ -47,12 +58,12 @@ class ActualizarEstudioRequest extends FormRequest
             // dentro de los valores definidos en la constante `TituloConvalidado`.
             'fecha_convalidacion'       => 'sometimes|nullable|date',
             // Valida que `fecha_convalidacion` sea opcional (`sometimes`), puede ser nulo (`nullable`) y de tipo `date`.
-            'resolucion_convalidacion'  => 'sometimes|nullable|string|min:7|max:100|regex:/^[\pL\pN\s\-]+$/u',
+            'resolucion_convalidacion'  => 'sometimes|nullable|string|min:7|max:100|' . TextoLibre::SIN_EMOJIS,
              // Valida que `resolucion_convalidacion` sea opcional (`sometimes`), puede ser nulo (`nullable`), de tipo `string`,
             // con un mínimo de 7 caracteres, un máximo de 100 caracteres y que coincida con el patrón de letras, números, espacios y guiones.
             'posible_fecha_graduacion'  => 'sometimes|nullable|date',
             // Valida que `posible_fecha_graduacion` sea opcional (`sometimes`), puede ser nulo (`nullable`) y de tipo `date`.
-            'titulo_estudio'            => 'sometimes|required|string|min:7|max:100|regex:/^[\pL\pN\s\-]+$/u',
+            'titulo_estudio'            => 'sometimes|required|string|min:7|max:100|' . TextoLibre::SIN_EMOJIS,
              // Valida que `titulo_estudio` sea opcional (`sometimes`), puede ser nulo (`nullable`), de tipo `string`,
             // con un mínimo de 7 caracteres, un máximo de 100 caracteres y que coincida con el patrón de letras, números, espacios y guiones.
             'fecha_inicio'              => 'sometimes|required|date', // volver este campo a requerido

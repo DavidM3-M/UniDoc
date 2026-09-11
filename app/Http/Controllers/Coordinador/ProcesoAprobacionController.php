@@ -40,7 +40,6 @@ class ProcesoAprobacionController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al obtener evaluaciones.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -92,7 +91,6 @@ class ProcesoAprobacionController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al registrar la evaluación.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -123,7 +121,6 @@ class ProcesoAprobacionController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error inesperado al obtener la evaluación.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -163,7 +160,6 @@ class ProcesoAprobacionController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al actualizar la evaluación.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -185,7 +181,6 @@ class ProcesoAprobacionController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al obtener plantillas.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -216,7 +211,6 @@ class ProcesoAprobacionController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al crear la plantilla.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -235,7 +229,6 @@ class ProcesoAprobacionController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al obtener la plantilla.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -263,7 +256,6 @@ class ProcesoAprobacionController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al actualizar la plantilla.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -310,7 +302,6 @@ class ProcesoAprobacionController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al obtener postulaciones por convocatoria.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -349,7 +340,6 @@ class ProcesoAprobacionController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al obtener aspirantes aprobados por Talento Humano.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -401,7 +391,6 @@ class ProcesoAprobacionController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al obtener convocatorias con aspirantes.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -507,7 +496,6 @@ class ProcesoAprobacionController extends Controller
             Log::error('Error al obtener aspirante (coordinador): ' . $e->getMessage());
             return response()->json([
                 'mensaje' => 'Error al obtener información del aspirante',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -534,7 +522,6 @@ class ProcesoAprobacionController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al obtener evaluaciones con usuarios.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }

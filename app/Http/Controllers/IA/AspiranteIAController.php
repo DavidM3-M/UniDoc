@@ -241,7 +241,7 @@ class AspiranteIAController extends Controller
         $lines[] = "";
         $lines[] = "EXPERIENCIA LABORAL:";
         foreach ($user->experienciasUsuario as $exp) {
-            $hasta   = $exp->trabajo_actual ? 'Actual' : ($exp->fecha_finalizacion ?? 'N/D');
+            $hasta   = $exp->esTrabajoActual() ? 'Actual' : ($exp->fecha_finalizacion ?? 'N/D');
             $lines[] = "  - {$exp->tipo_experiencia}: {$exp->cargo} en {$exp->institucion_experiencia} ({$exp->fecha_inicio} - {$hasta})";
             foreach ($exp->documentosExperiencia as $doc) {
                 if (!empty($doc->archivo)) {
@@ -406,7 +406,7 @@ class AspiranteIAController extends Controller
             if ($user->experienciasUsuario->isNotEmpty()) {
                 $lines[] = "  EXPERIENCIA LABORAL:";
                 foreach ($user->experienciasUsuario as $exp) {
-                    $hasta   = $exp->trabajo_actual ? 'Actual' : ($exp->fecha_finalizacion ?? 'N/D');
+                    $hasta   = $exp->esTrabajoActual() ? 'Actual' : ($exp->fecha_finalizacion ?? 'N/D');
                     $lines[] = "    · {$exp->tipo_experiencia}: {$exp->cargo} en {$exp->institucion_experiencia} ({$exp->fecha_inicio} – {$hasta})";
                     foreach ($exp->documentosExperiencia as $doc) {
                         if (!empty($doc->archivo)) {

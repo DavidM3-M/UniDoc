@@ -161,9 +161,9 @@ class PuntajeAspiranteService
         foreach ($experiencias as $exp) {
             try {
                 $inicio = Carbon::parse($exp->fecha_inicio);
-                $fin    = ($exp->trabajo_actual ?? false)
-                    ? Carbon::now()
-                    : ($exp->fecha_finalizacion ? Carbon::parse($exp->fecha_finalizacion) : Carbon::now());
+                // Un cargo vigente cuenta hasta hoy y su antigüedad crece sola; uno terminado se
+                // detiene en su fecha de fin. Ver `Experiencia::fechaFinEfectiva()`.
+                $fin    = $exp->fechaFinEfectiva();
 
                 $anios = max(0, $inicio->floatDiffInYears($fin));
             } catch (\Exception $e) {

@@ -13,7 +13,7 @@ class CoordinadorSeeder extends Seeder
         $coordinador = User::firstOrCreate([
             'email' => 'coordinador@universidad.com'
         ], [
-            'municipio_id'           => 703,
+            'municipio_id'           => Ubicaciones::municipio(),
             'tipo_identificacion'    => 'Cédula de ciudadanía',
             'numero_identificacion'  => '987654321',
             'genero'                 => 'Masculino',

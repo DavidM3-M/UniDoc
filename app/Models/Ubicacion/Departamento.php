@@ -24,8 +24,10 @@ class Departamento extends Model
  
     // definimos los campos de la tabla departamentos que se pueden llenar
      protected $fillable = [
+        'id_departamento',
         'nombre',
         'pais_id',
+        'codigo_divipola',
     ];
 
     // relacion de muchos a uno con la tabla paises

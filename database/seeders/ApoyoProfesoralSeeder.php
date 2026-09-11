@@ -15,7 +15,7 @@ class ApoyoProfesoralSeeder extends Seeder
         $apoyoProfesoral = User::firstOrCreate([
             'email' => 'apoyoprofesoral@universidad.com'
         ], [
-            'municipio_id'           => 703, // Cambia este valor según el municipio en tu DB
+            'municipio_id'           => Ubicaciones::municipio(),
             'tipo_identificacion'    => 'Cédula de ciudadanía', // Cambia según los valores en TipoIdentificacion::all()
             'numero_identificacion'  => '910111213', // Cambia según necesidad
             'genero'                 => 'Femenino', // Cambia según los valores en Genero::all()

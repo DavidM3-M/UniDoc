@@ -38,14 +38,17 @@ class NotificacionMail extends Mailable
 
     public function content(): Content
     {
+        $nombre = htmlspecialchars($this->nombreDestinatario, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $mensaje = nl2br(htmlspecialchars($this->mensaje, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
         $saludo = $this->nombreDestinatario
-            ? "<h2 style='color: #2c3e50; margin-bottom: 6px;'>Hola, {$this->nombreDestinatario}</h2>"
+            ? "<h2 style='color: #2c3e50; margin-bottom: 6px;'>Hola, {$nombre}</h2>"
             : '';
 
         $detallesHtml = '';
         if (!empty($this->detalles)) {
             $filas = '';
             foreach ($this->detalles as $clave => $valor) {
+                $clave = htmlspecialchars((string) $clave, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
                 $valorEsc = nl2br(htmlspecialchars((string) $valor, ENT_QUOTES, 'UTF-8'));
                 $filas .= "<tr>
                     <td style='padding: 9px 14px; font-weight: 600; color: #555; width: 38%;
@@ -68,7 +71,7 @@ class NotificacionMail extends Mailable
             <h1 style='color: #3498db; margin-bottom: 4px;'>UniDoc</h1>
             <hr style='border: 1px solid #e0e0e0; margin-bottom: 20px;'>
             {$saludo}
-            <p style='font-size: 15px; line-height: 1.6; margin-top: 8px;'>{$this->mensaje}</p>
+            <p style='font-size: 15px; line-height: 1.6; margin-top: 8px;'>{$mensaje}</p>
             {$detallesHtml}
             <hr style='border: 1px solid #e0e0e0; margin-top: 30px;'>
             <p style='color: #999; font-size: 12px;'>

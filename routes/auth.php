@@ -14,6 +14,11 @@ Route::group([
     // Ruta para registrar un nuevo usuario
     Route::post('registrar-usuario', [AuthController::class, 'registrar'])
         ->middleware('throttle:10,1');
+    // Disponibilidad de correo y cédula, para avisar en el propio campo del registro.
+    // Throttle estrecho a propósito: permite sondear si alguien está registrado, así que se
+    // limita bastante más que el propio registro.
+    Route::post('verificar-disponibilidad', [AuthController::class, 'verificarDisponibilidad'])
+        ->middleware('throttle:30,1');
     // Ruta para iniciar sesión (máx 10 intentos por minuto por IP)
     Route::post('iniciar-sesion', [AuthController::class, 'iniciarSesion'])
         ->middleware('throttle:10,1');

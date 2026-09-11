@@ -2,12 +2,29 @@
 
 namespace App\Http\Requests\RequestAspirante\RequestProduccionAcademica;
 
+use App\Constants\ClavePrimaria;
 use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\Concerns\ConservaValorDelCatalogo;
+use App\Http\Requests\Concerns\NormalizaIdentificadoresProduccion;
+use App\Models\Aspirante\ProduccionAcademica;
+use App\Constants\TextoLibre;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Validation\Rule;
 
 class ActualizarProduccionAcademicaRequest extends FormRequest
 {
+    use ConservaValorDelCatalogo;
+    use NormalizaIdentificadoresProduccion;
+
+    /**
+     * Deja el DOI sin el resolvedor y los campos vacíos en null antes de validar.
+     */
+    protected function prepareForValidation(): void
+    {
+        $this->merge($this->normalizarIdentificadores());
+    }
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -26,16 +43,36 @@ class ActualizarProduccionAcademicaRequest extends FormRequest
     public function rules(): array
     // Método que define las reglas de validación para los datos enviados en la solicitud.
     {
-        return [
-            'ambito_divulgacion_id' => 'sometimes|required|integer|exists:ambito_divulgacions,id_ambito_divulgacion',
+        return array_merge($this->reglasIdentificadores(parcial: true), [
+            'ambito_divulgacion_id' => [
+                // `bail` + `max` antes del `exists`: `id_ambito_divulgacion` es un smallint y un
+                // valor fuera de rango haría fallar la consulta en vez de no encontrar la fila.
+                'bail',
+                'sometimes',
+                'required',
+                'integer',
+                'min:1',
+                'max:' . ClavePrimaria::SMALLINT_MAXIMO,
+                $this->reglaCatalogoVigente(
+                    'ambito_divulgacions',
+                    'id_ambito_divulgacion',
+                    $this->valorGuardado(
+                        ProduccionAcademica::class,
+                        'id_produccion_academica',
+                        'ambito_divulgacion_id'
+                    )
+                ),
+            ],
             // El campo `ambito_divulgacion_id` es opcional (`sometimes`), pero si está presente, es obligatorio (`required`).
-            // Debe ser un número entero (`integer`) y debe existir en la tabla `ambito_divulgacions` en la columna `id_ambito_divulgacion`.
-            'titulo' => 'sometimes|required|string|max:255|regex:/^[\pL\pN\s\-]+$/u',
+            // Debe ser un número entero (`integer`) y debe existir en la tabla `ambito_divulgacions` como ámbito
+            // **activo**: un ámbito retirado del catálogo no se puede asignar, aunque las producciones que ya
+            // lo referencian conservan su valor mientras no se edite ese campo.
+            'titulo' => 'sometimes|required|string|max:255|' . TextoLibre::SIN_EMOJIS,
               // El campo `titulo` es opcional, pero si está presente, es obligatorio. Debe ser una cadena (`string`)
             // con un máximo de 255 caracteres y cumplir con un patrón regex que permite letras, números, espacios y guiones.
-            'numero_autores' => 'sometimes|required|integer',
+            'numero_autores' => 'sometimes|required|integer|min:1|max:127',
             // El campo `numero_autores` es opcional, pero si está presente, es obligatorio. Debe ser un número entero (`integer`).
-            'medio_divulgacion' => 'sometimes|required|string|max:255|regex:/^[\pL\pN\s\-]+$/u',
+            'medio_divulgacion' => 'sometimes|required|string|max:255|' . TextoLibre::SIN_EMOJIS,
             // El campo `medio_divulgacion` es opcional, pero si está presente, es obligatorio. Debe ser una cadena
             // con un máximo de 255 caracteres y cumplir con un patrón regex que permite letras, números, espacios y guiones.
             'fecha_divulgacion' => 'sometimes|nullable|date',// volver este campo a requerido
@@ -44,8 +81,20 @@ class ActualizarProduccionAcademicaRequest extends FormRequest
             'archivo' => 'sometimes|nullable|file|mimes:pdf|max:2048',
             // El campo `archivo` es opcional, pero si está presente, debe ser un archivo (`file`) con extensiones permitidas
             // (`pdf`, `doc`, `docx`) y su tamaño no debe exceder los 2048 KB.
-        ];
+
+            // `doi`, `issn_isbn` y `url_publicacion` los aporta reglasIdentificadores(parcial: true):
+            // el docente puede completarlos después, sin volver a enviar el resto del formulario.
+        ]);
     }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return $this->mensajesIdentificadores();
+    }
+
     protected function failedValidation(Validator $validator)
     // Método que se ejecuta cuando la validación falla.
     {

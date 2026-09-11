@@ -30,8 +30,20 @@ class ProductoAcademico extends Model
 
     protected $fillable = [
         'nombre_producto_academico',
+        'activo',
     ];
     // Define los campos que se pueden asignar masivamente (mass assignment).
+
+    protected $casts = [
+        'activo' => 'boolean',
+    ];
+    // Convierte `activo` a booleano al leerlo, para que el JSON devuelva true/false y no 1/0.
+
+    public function scopeActivos($query)
+    // Filtra solo los productos académicos vigentes, los que deben aparecer en los desplegables.
+    {
+        return $query->where('activo', true);
+    }
 
     public function ambitoDivulgacionsProductoAcademico(): HasMany
     // Define una relación "tiene muchos" con el modelo `AmbitoDivulgacion`.

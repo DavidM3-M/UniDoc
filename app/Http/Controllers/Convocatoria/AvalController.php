@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 namespace App\Http\Controllers\Convocatoria;
 
@@ -20,7 +20,7 @@ class AvalController extends Controller
     {
     }
 
-    /** Mapea rol ÔåÆ nombre de aval almacenado en convocatoria_avales */
+    /** Mapea rol → nombre de aval almacenado en convocatoria_avales */
     private const ROLE_AVAL = [
         'Talento Humano' => 'talento_humano',
         'Coordinador' => 'coordinador',
@@ -33,9 +33,9 @@ class AvalController extends Controller
     {
         return match ($aval) {
             'talento_humano' => ['talento_humano', 'Talento Humano', 'talento humano'],
-            'coordinador' => ['coordinador', 'Coordinador', 'Coordinaci├│n', 'coordinacion'],
-            'vicerrectoria' => ['vicerrectoria', 'Vicerrectoria', 'Vicerrector├¡a'],
-            'rectoria' => ['rectoria', 'Rectoria', 'Rector├¡a'],
+            'coordinador' => ['coordinador', 'Coordinador', 'Coordinación', 'coordinacion'],
+            'vicerrectoria' => ['vicerrectoria', 'Vicerrectoria', 'Vicerrectoría'],
+            'rectoria' => ['rectoria', 'Rectoria', 'Rectoría'],
             default => [$aval],
         };
     }
@@ -50,7 +50,7 @@ class AvalController extends Controller
             ->exists();
     }
 
-    /** Valida si el aspirante puede tener m├║ltiples contratos */
+    /** Valida si el aspirante puede tener múltiples contratos */
     private function validarDobleContratacion(int $userId, int $convocatoriaId): bool
     {
         $convocatoria = Convocatoria::find($convocatoriaId);
@@ -73,16 +73,16 @@ class AvalController extends Controller
         if ($contratosActivos > 0 && !$permiteDobleContratacion) {
             throw new \Exception(
                 'El aspirante ya tiene un contrato activo. '
-                . 'Esta convocatoria no permite doble contrataci├│n.',
+                . 'Esta convocatoria no permite doble contratación.',
                 403
             );
         }
 
-        // L├¡mite m├íximo de contratos simult├íneos
+        // Límite máximo de contratos simultáneos
         $maxContratos = config('unidoc.max_contratos_simultaneos', 2);
         if ($contratosActivos >= $maxContratos) {
             throw new \Exception(
-                "El aspirante ha alcanzado el m├íximo de contratos simult├íneos ({$maxContratos}).",
+                "El aspirante ha alcanzado el máximo de contratos simultáneos ({$maxContratos}).",
                 403
             );
         }
@@ -172,11 +172,11 @@ class AvalController extends Controller
 
             return response()->json(['data' => $this->appendPuntajes($usuarios)]);
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Error al obtener usuarios.', 'error' => $e->getMessage()], 500);
+            return response()->json(['message' => 'Error al obtener usuarios.'], 500);
         }
     }
 
-    /** Inyecta puntaje_aspirante en cada elemento de la colecci├│n / array. */
+    /** Inyecta puntaje_aspirante en cada elemento de la colección / array. */
     private function appendPuntajes($usuarios): array
     {
         $result = [];
@@ -212,9 +212,9 @@ class AvalController extends Controller
                 switch ($role) {
                     case 'Rectoria':
                         if (!$this->tieneAval($user->id, $convocatoriaId, 'vicerrectoria')) {
-                            throw new \Exception('El aspirante no cuenta con el aval de Vicerrector├¡a para esta convocatoria.', 403);
+                            throw new \Exception('El aspirante no cuenta con el aval de Vicerrectoría para esta convocatoria.', 403);
                         }
-                        // Validar doble contrataci├│n
+                        // Validar doble contratación
                         $this->validarDobleContratacion($user->id, $convocatoriaId);
                         break;
                     case 'Coordinador':
@@ -227,7 +227,7 @@ class AvalController extends Controller
                             !$this->tieneAval($user->id, $convocatoriaId, 'talento_humano')
                             || !$this->tieneAval($user->id, $convocatoriaId, 'coordinador')
                         ) {
-                            throw new \Exception('El aspirante no cuenta con el aval de Talento Humano o Coordinaci├│n para esta convocatoria.', 403);
+                            throw new \Exception('El aspirante no cuenta con el aval de Talento Humano o Coordinación para esta convocatoria.', 403);
                         }
                         break;
                     case 'Talento Humano':
@@ -254,7 +254,7 @@ class AvalController extends Controller
                     ]
                 );
 
-                // Tambi├®n actualizar flags globales para compatibilidad con listarUsuarios fallback
+                // También actualizar flags globales para compatibilidad con listarUsuarios fallback
                 $flagUpdate = match ($role) {
                     'Talento Humano' => ['aval_talento_humano' => true, 'aval_talento_humano_by' => $request->user()->id, 'aval_talento_humano_at' => now()],
                     'Coordinador' => ['aval_coordinador' => true, 'aval_coordinador_by' => $request->user()->id, 'aval_coordinador_at' => now()],
@@ -294,7 +294,7 @@ class AvalController extends Controller
                         break;
                 }
             } catch (\Exception $notifEx) {
-                Log::error("Error al enviar notificaci├│n de aval [{$role}] para usuario {$user->id}: " . $notifEx->getMessage());
+                Log::error("Error al enviar notificación de aval [{$role}] para usuario {$user->id}: " . $notifEx->getMessage());
             }
 
             return response()->json(['message' => "Aval registrado exitosamente por {$role}"], 201);
@@ -304,13 +304,13 @@ class AvalController extends Controller
             if ($status < 400 || $status > 499) {
                 $status = 500;
             }
-            return response()->json(['message' => $e->getMessage() ?: 'Error al registrar aval.', 'error' => $e->getMessage()], $status);
+            return response()->json(['message' => $e->getMessage() ?: 'Error al registrar aval.'], $status);
         }
     }
 
     /**
      * Ver avales de un usuario.
-     * Si se pasa convocatoria_id, retorna los avales espec├¡ficos de esa convocatoria.
+     * Si se pasa convocatoria_id, retorna los avales específicos de esa convocatoria.
      */
     public function verAvales(Request $request, $userId)
     {
@@ -350,7 +350,7 @@ class AvalController extends Controller
                 ]
             ]);
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Error al obtener avales.', 'error' => $e->getMessage()], 500);
+            return response()->json(['message' => 'Error al obtener avales.'], 500);
         }
     }
 
@@ -393,7 +393,7 @@ class AvalController extends Controller
                             break;
                         case 'Rectoria':
                             if (!$this->tieneAval($user->id, $convocatoriaId, 'vicerrectoria')) {
-                                throw new \Exception('El aspirante no cuenta con el aval de Vicerrector├¡a para esta convocatoria.', 403);
+                                throw new \Exception('El aspirante no cuenta con el aval de Vicerrectoría para esta convocatoria.', 403);
                             }
                             break;
                     }
@@ -407,7 +407,7 @@ class AvalController extends Controller
                     if ($avalActual && $avalActual->estado === 'aprobado') {
                         throw new \Exception(
                             "El aval de {$role} ya fue aprobado para esta convocatoria. "
-                            . "No se puede rechazar una decisi├│n ya tomada.",
+                            . "No se puede rechazar una decisión ya tomada.",
                             409
                         );
                     }
@@ -418,7 +418,7 @@ class AvalController extends Controller
                         ['estado' => 'rechazado', 'aprobador_id' => $request->user()->id, 'comentario' => $request->motivo_rechazo, 'fecha_aprobacion' => now()]
                     );
 
-                    // Marcar la postulaci├│n de ESA convocatoria como rechazada
+                    // Marcar la postulación de ESA convocatoria como rechazada
                     $user->postulacionesUsuario()
                         ->where('convocatoria_id', $convocatoriaId)
                         ->whereIn('estado_postulacion', ['Enviada', 'Faltan documentos', 'Aprobada', 'Aceptada'])
@@ -443,7 +443,7 @@ class AvalController extends Controller
                 $user->refresh();
                 NotificacionController::avalRechazado($user, $request->motivo_rechazo, $role);
             } catch (\Exception $notifEx) {
-                Log::error("Error al enviar notificaci├│n de rechazo de aval [{$role}] para usuario {$user->id}: " . $notifEx->getMessage());
+                Log::error("Error al enviar notificación de rechazo de aval [{$role}] para usuario {$user->id}: " . $notifEx->getMessage());
             }
 
             return response()->json(['message' => "Rechazo registrado exitosamente por {$role}."], 200);
@@ -453,7 +453,7 @@ class AvalController extends Controller
             if ($status < 400 || $status > 499) {
                 $status = 500;
             }
-            return response()->json(['message' => $e->getMessage() ?: 'Error al registrar el rechazo.', 'error' => $e->getMessage()], $status);
+            return response()->json(['message' => $e->getMessage() ?: 'Error al registrar el rechazo.'], $status);
         }
     }
 }

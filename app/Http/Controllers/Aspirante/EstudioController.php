@@ -2,10 +2,15 @@
 
 namespace App\Http\Controllers\Aspirante;
 
+use Illuminate\Support\Facades\Log;
+
+use App\Constants\ClavePrimaria;
 use App\Http\Requests\RequestAspirante\RequestEstudio\ActualizarEstudioRequest;
 use App\Http\Requests\RequestAspirante\RequestEstudio\CrearEstudioRequest;
 use Illuminate\Http\Request;
 use App\Models\Aspirante\Estudio;
+use App\Models\NivelFormacionAcademica;
+use App\Models\ProgramaFormacionEducativa;
 use App\Services\ArchivoService;
 use Illuminate\Support\Facades\DB;
 
@@ -31,6 +36,44 @@ class EstudioController
     }
 
     /**
+     * El servidor es la autoridad, no el cliente: cuando llega un id de catálogo
+     * (`nivel_formacion_academica_id` o `programa_formacion_educativa_id`), este método
+     * sobreescribe los campos de texto derivados (`tipo_estudio`, `institucion`,
+     * `titulo_estudio`) con los valores reales del catálogo, sin confiar en lo que el cliente
+     * haya mandado además en esos campos. Así el texto guardado nunca queda desincronizado del
+     * id.
+     *
+     * El programa SNIES resuelve los tres campos a la vez (institución, título y, de forma
+     * transitiva vía `programa->nivelFormacionAcademica`, también el nivel de formación), así
+     * que se resuelve primero y el nivel de formación explícito solo aplica si no vino programa.
+     */
+    private function resolverCatalogos(array $datos): array
+    {
+        if (!empty($datos['programa_formacion_educativa_id'])) {
+            $programa = ProgramaFormacionEducativa::with(['institucion', 'nivelFormacionAcademica'])
+                ->find($datos['programa_formacion_educativa_id']);
+
+            if ($programa) {
+                $datos['institucion'] = $programa->institucion->nombre_institucion;
+                $datos['titulo_estudio'] = $programa->titulo_otorgado ?: $programa->nombre_programa;
+
+                if ($programa->nivelFormacionAcademica) {
+                    $datos['nivel_formacion_academica_id'] = $programa->nivel_formacion_academica_id;
+                    $datos['tipo_estudio'] = $programa->nivelFormacionAcademica->nivel_formacion;
+                }
+            }
+        } elseif (!empty($datos['nivel_formacion_academica_id'])) {
+            $nivel = NivelFormacionAcademica::find($datos['nivel_formacion_academica_id']);
+
+            if ($nivel) {
+                $datos['tipo_estudio'] = $nivel->nivel_formacion;
+            }
+        }
+
+        return $datos;
+    }
+
+    /**
      * Registrar un nuevo estudio académico para el usuario autenticado.
      *
      * Este método permite crear un nuevo registro de estudio asociado al usuario que realiza la solicitud.
@@ -48,7 +91,7 @@ class EstudioController
 
             DB::transaction(function () use ($request) { // Ejecuta dentro de una transacción para asegurar integridad de datos
 
-                $datos = $request->validated();
+                $datos = $this->resolverCatalogos($request->validated());
                 $datos['user_id'] = $request->user()->id; // Asigna el ID del usuario autenticado al estudio
                 $estudio = Estudio::create($datos); // Crea el registro del estudio
 
@@ -61,6 +104,7 @@ class EstudioController
                 'message' => 'Estudio y documento creados exitosamente',
             ], 201);
         } catch (\Exception $e) {
+            Log::error('EstudioController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([ // Manejo de errores
                 'message' => 'Error al crear el estudio o subir el archivo.',
                 'error'   => $e->getMessage()
@@ -106,9 +150,9 @@ class EstudioController
 
             return response()->json(['estudios' => $estudios], 200); // Devuelve los estudios encontrados
         } catch (\Exception $e) {
+            Log::error('EstudioController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([ // Manejo de errores
                 'message' => 'Error al obtener los estudios',
-                'error' => $e->getMessage(),
             ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
@@ -128,6 +172,10 @@ class EstudioController
     public function obtenerEstudioPorId(Request $request, $id)
     {
         try {
+            if (ClavePrimaria::fueraDeRango($id)) { // Un ID que no cabe en la columna no identifica a ningún registro.
+                return response()->json(['message' => 'Estudio no encontrado.'], 404);
+            }
+
             $user = $request->user(); // Obtiene el usuario autenticado
 
             if (!$user) { // Verifica autenticación
@@ -147,8 +195,10 @@ class EstudioController
 
             return response()->json(['estudio' => $estudio], 200); // Devuelve el estudio encontrado
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            Log::error('EstudioController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json(['message' => 'Estudio no encontrado.'], 404);
         } catch (\Exception $e) {
+            Log::error('EstudioController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([ // Manejo de errores
                 'message' => 'Error al obtener el estudio',
                 'error'   => $e->getMessage()
@@ -172,6 +222,10 @@ class EstudioController
     public function actualizarEstudio(ActualizarEstudioRequest $request, $id)
     {
         try {
+            if (ClavePrimaria::fueraDeRango($id)) { // Un ID que no cabe en la columna no identifica a ningún registro.
+                return response()->json(['message' => 'Estudio no encontrado.'], 404);
+            }
+
             $user = $request->user(); // Usuario autenticado
 
             $estudio = Estudio::where('id_estudio', $id) // Busca el estudio del usuario
@@ -185,11 +239,20 @@ class EstudioController
             }
 
             DB::transaction(function () use ($request, $estudio) {
-                $datos = $request->validated(); // Valida y obtiene los datos
+                $datos = $this->resolverCatalogos($request->validated()); // Valida, resuelve catálogos y obtiene los datos
                 $estudio->update($datos); // Actualiza los datos del estudio
 
-                if ($request->hasFile('archivo')) {
+                $archivoNuevo = $request->hasFile('archivo');
+
+                if ($archivoNuevo) {
                     $this->archivoService->actualizarArchivoDocumento($request->file('archivo'), $estudio, 'Estudios'); // Si se adjuntó nuevo archivo, lo actualiza
+                }
+
+                // El aval anterior se dio sobre los datos viejos: si algo cambió, el estudio
+                // vuelve a la bandeja del revisor. Un guardado que no modifica nada no reabre
+                // la revisión, para no invalidar avales por abrir y cerrar el formulario.
+                if ($estudio->wasChanged() || $archivoNuevo) {
+                    $this->archivoService->reabrirRevisionDocumentos($estudio);
                 }
             });
             // Respuesta exitosa con datos actualizados
@@ -197,8 +260,10 @@ class EstudioController
                 'message' => 'Estudio actualizado correctamente',
             ], 200);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            Log::error('EstudioController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json(['message' => 'Estudio no encontrado.'], 404);
         } catch (\Exception $e) {
+            Log::error('EstudioController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([ // Manejo de errores
                 'message' => 'Error al actualizar el estudio',
                 'error'   => $e->getMessage()
@@ -222,6 +287,10 @@ class EstudioController
     public function eliminarEstudio(Request $request, $id)
     {
         try {
+            if (ClavePrimaria::fueraDeRango($id)) { // Un ID que no cabe en la columna no identifica a ningún registro.
+                return response()->json(['message' => 'Estudio no encontrado.'], 404);
+            }
+
             $user = $request->user(); // Usuario autenticado
 
             $estudio = Estudio::where('id_estudio', $id) // Busca el estudio del usuario
@@ -242,8 +311,10 @@ class EstudioController
             return response()->json(['message' => 'Estudio eliminado correctamente'], 200); // Respuesta exitosa
 
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            Log::error('EstudioController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json(['message' => 'Estudio no encontrado.'], 404);
         } catch (\Exception $e) {
+            Log::error('EstudioController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([ // Manejo de errores
                 'message' => 'Error al eliminar el estudio',
                 'error'   => $e->getMessage()

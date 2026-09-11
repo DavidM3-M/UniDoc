@@ -14,7 +14,7 @@ class AdminSeeder extends Seeder
         $admin = User::firstOrCreate([
             'email' => 'adminunidoc@universidad.com'
         ], [
-            'municipio_id'           => 703, // Cambia este valor según el municipio en tu DB
+            'municipio_id'           => Ubicaciones::municipio(),
             'tipo_identificacion'    => 'Cédula de ciudadanía', // Cambia según los valores en TipoIdentificacion::all()
             'numero_identificacion'  => '123456789', // Cambia según necesidad
             'genero'                 => 'Masculino', // Cambia según los valores en Genero::all()

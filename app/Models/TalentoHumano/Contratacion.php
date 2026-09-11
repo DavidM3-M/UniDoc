@@ -3,10 +3,18 @@
 namespace App\Models\TalentoHumano;
 
 use App\Models\Usuario\User;
+use App\Observers\ContratacionObserver;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * El observer mete al docente al escalafón cuando el contrato es de planta. Va en el modelo y no en
+ * `ContratacionController` a propósito: los contratos se crean también desde el Administrador y los
+ * seeders, y la regla tiene que valer para todos.
+ */
+#[ObservedBy(ContratacionObserver::class)]
 class Contratacion extends Model
 {
     protected $table = 'contratacions';

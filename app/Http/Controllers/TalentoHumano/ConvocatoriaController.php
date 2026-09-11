@@ -138,7 +138,6 @@ class ConvocatoriaController
         } catch (\Exception $e) { // manejamos cualquier excepción que ocurra durante la transacción
             return response()->json([
                 'mensaje' => 'Error al crear la convocatoria',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -206,7 +205,6 @@ class ConvocatoriaController
         } catch (\Exception $e) { // manejamos cualquier excepción que
             return response()->json([
                 'mensaje' => 'Error al actualizar la convocatoria',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -238,7 +236,6 @@ class ConvocatoriaController
         } catch (\Exception $e) { // manejamos cualquier excepción que ocurra durante la transacción
             return response()->json([
                 'mensaje' => 'Error al eliminar la convocatoria',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -333,7 +330,6 @@ public function obtenerConvocatorias()
 
         return response()->json([
             'mensaje' => 'Error al obtener las convocatorias',
-            'error' => $e->getMessage(),
             'trace' => $e->getTraceAsString()
         ], 500);
     }
@@ -428,7 +424,6 @@ public function obtenerConvocatorias()
 
         return response()->json([
             'mensaje' => 'Error al obtener la convocatoria',
-            'error' => $e->getMessage()
         ], 500);
     }
 }
@@ -607,7 +602,6 @@ public function exportarConvocatoriasExcel()
     } catch (\Exception $e) {
         return response()->json([
             'mensaje' => 'Error al exportar convocatorias a Excel',
-            'error' => $e->getMessage()
         ], 500);
     }
 }
@@ -693,7 +687,6 @@ public function obtenerConvocatoriaPublicaPorId($id_convocatoria)
 
         return response()->json([
             'mensaje' => 'Error al obtener la convocatoria',
-            'error' => $e->getMessage(),
             'file' => $e->getFile(),
             'line' => $e->getLine()
         ], 500);
@@ -711,7 +704,6 @@ public function obtenerConvocatoriaPublicaPorId($id_convocatoria)
         } catch (\Exception $e) {
             return response()->json([
                 'mensaje' => 'Error al obtener tipos de cargo',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -727,7 +719,6 @@ public function obtenerConvocatoriaPublicaPorId($id_convocatoria)
         } catch (\Exception $e) {
             return response()->json([
                 'mensaje' => 'Error al obtener facultades',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -747,7 +738,6 @@ public function obtenerConvocatoriaPublicaPorId($id_convocatoria)
         } catch (\Exception $e) {
             return response()->json([
                 'mensaje' => 'Error al obtener tipos de convocatoria',
-                'error' => $e->getMessage()
             ], 500);
         }
     }

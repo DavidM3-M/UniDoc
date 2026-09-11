@@ -20,7 +20,9 @@ class DepartamentosTableSeeder extends Seeder
                 Departamento::create([
                     "id_departamento" => "$data[0]",
                     "nombre" => "$data[1]",
-                    "pais_id" => "$data[2]"
+                    "pais_id" => "$data[2]",
+                    // Vacio solo en el centinela "Sin Departamento".
+                    "codigo_divipola" => $data[3] !== "" ? $data[3] : null,
                 ]);
             }
             $firstline = false;

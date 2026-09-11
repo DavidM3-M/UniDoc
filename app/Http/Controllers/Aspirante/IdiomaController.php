@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers\Aspirante;
 
+use App\Constants\ClavePrimaria;
 use App\Http\Requests\RequestAspirante\RequestIdioma\ActualizarIdiomaRequest;
 use Illuminate\Http\Request;
 use App\Models\Aspirante\Idioma;
+use App\Models\ExamenIdioma;
+use App\Models\Idioma as IdiomaCatalogo;
 use App\Services\ArchivoService;
 use App\Http\Requests\RequestAspirante\RequestIdioma\CrearIdiomaRequest;
 use Illuminate\Support\Facades\DB;
@@ -29,6 +32,69 @@ class IdiomaController
     }
 
     /**
+     * El servidor es la autoridad, no el cliente: cuando llegan ids de catálogo
+     * (`idioma_catalogo_id`, `examen_idioma_id`), este método sobreescribe `idioma` e
+     * `institucion_idioma` con los valores reales del catálogo, en vez de confiar en el string
+     * que además haya mandado el cliente.
+     *
+     * Y lo más importante: cuando el examen es del catálogo y trae un puntaje, el **nivel MCER
+     * se calcula aquí** a partir de `examenes_idioma_rangos` — deja de ser algo que el docente
+     * declara y pasa a ser algo que se deriva de la evidencia. El cliente muestra una vista
+     * previa, pero el valor que se guarda siempre lo recalcula el servidor.
+     */
+    private function resolverCatalogos(array $datos): array
+    {
+        if (!empty($datos['idioma_catalogo_id'])) {
+            $idioma = IdiomaCatalogo::find($datos['idioma_catalogo_id']);
+
+            if ($idioma) {
+                $datos['idioma'] = $idioma->nombre_idioma;
+            }
+        }
+
+        if (empty($datos['examen_idioma_id'])) {
+            // Examen escrito a mano: no hay rangos contra los cuales derivar, así que el nivel
+            // que eligió el docente se respeta y el puntaje no aplica.
+            $datos['puntaje_obtenido'] = null;
+
+            return $datos;
+        }
+
+        $examen = ExamenIdioma::find($datos['examen_idioma_id']);
+
+        if (!$examen) {
+            return $datos;
+        }
+
+        $datos['institucion_idioma'] = $examen->nombre_examen;
+
+        if (!array_key_exists('puntaje_obtenido', $datos) || $datos['puntaje_obtenido'] === null) {
+            return $datos;
+        }
+
+        $nivel = $this->nivelSegunPuntaje($examen, (float) $datos['puntaje_obtenido']);
+
+        if ($nivel !== null) {
+            $datos['nivel'] = $nivel;
+        }
+
+        return $datos;
+    }
+
+    /**
+     * Nivel MCER que corresponde a un puntaje según los rangos del examen, o null si el puntaje
+     * no cae en ninguno (la validación del request ya lo rechaza antes de llegar aquí; este
+     * null es solo la salvaguarda).
+     */
+    private function nivelSegunPuntaje(ExamenIdioma $examen, float $puntaje): ?string
+    {
+        return $examen->rangos()
+            ->where('puntaje_min', '<=', $puntaje)
+            ->where('puntaje_max', '>=', $puntaje)
+            ->value('nivel_mcer');
+    }
+
+    /**
      * Registrar un nuevo idioma para el usuario autenticado.
      *
      * Este método permite crear un registro de idioma asociado al usuario autenticado.
@@ -46,7 +112,7 @@ class IdiomaController
 
             DB::transaction(function () use ($request) { // Se ejecuta dentro de una transacción para asegurar consistencia
 
-                $datos = $request->validated();
+                $datos = $this->resolverCatalogos($request->validated());
                 $datos['user_id'] = $request->user()->id; // Se añade el ID del usuario autenticado
                 $idioma = Idioma::create($datos); // Crea el registro del idioma en la base de datos
 
@@ -84,7 +150,12 @@ class IdiomaController
             $user = $request->user(); // Obtiene el usuario autenticado
 
             $idiomas = Idioma::where('user_id', $user->id) // Consulta los idiomas asociados al usuario
-                ->with(['documentosIdioma:id_documento,documentable_id,archivo,estado,motivo_rechazo'])
+                ->with([
+                    'documentosIdioma:id_documento,documentable_id,archivo,estado,motivo_rechazo',
+                    // La tarjeta necesita `vigencia_meses` para saber si el certificado sigue
+                    // vigente. Sin esto, uno vencido hace tres años se ve igual que uno de ayer.
+                    'examenIdioma:id_examen_idioma,nombre_examen,vigencia_meses',
+                ])
                 ->orderBy('created_at')
                 ->get();
 
@@ -127,11 +198,19 @@ class IdiomaController
     public function obtenerIdiomaPorId(Request $request, $id)
     {
         try {
+            if (ClavePrimaria::fueraDeRango($id)) { // Un ID que no cabe en la columna no identifica a ningún registro.
+                return response()->json(['message' => 'Idioma no encontrado.'], 404);
+            }
+
             $user = $request->user();
 
             $idioma = Idioma::where('id_idioma', $id) // Busca el idioma por ID e ID del usuario
                 ->where('user_id', $user->id)
-                ->with(['documentosIdioma:id_documento,documentable_id,archivo,estado,motivo_rechazo'])
+                ->with([
+                    'documentosIdioma:id_documento,documentable_id,archivo,estado,motivo_rechazo',
+                    // Mismo motivo que en `obtenerIdiomas`: el detalle también muestra vigencia.
+                    'examenIdioma:id_examen_idioma,nombre_examen,vigencia_meses',
+                ])
                 ->firstOrFail(); // Falla si no encuentra el idioma
 
             $idioma->documentosIdioma->each(function ($documento) { // Añade URL completa a cada archivo
@@ -169,6 +248,10 @@ class IdiomaController
     {
         try {
 
+            if (ClavePrimaria::fueraDeRango($id)) { // Un ID que no cabe en la columna no identifica a ningún registro.
+                return response()->json(['message' => 'Idioma no encontrado.'], 404);
+            }
+
             DB::transaction(function () use ($request, $id) { // Ejecuta dentro de una transacción
                 $user = $request->user();
 
@@ -176,17 +259,30 @@ class IdiomaController
                     ->where('user_id', $user->id)
                     ->firstOrFail();
 
-                $datos = $request->validated(); // Valida los datos y actualiza el idioma
+                $datos = $this->resolverCatalogos($request->validated()); // Valida, resuelve catálogos y actualiza el idioma
                 $idioma->update($datos);
 
-                if ($request->hasFile('archivo')) { // Si hay nuevo archivo, lo actualiza
+                $archivoNuevo = $request->hasFile('archivo');
+
+                if ($archivoNuevo) { // Si hay nuevo archivo, lo actualiza
                     $this->archivoService->actualizarArchivoDocumento($request->file('archivo'), $idioma, 'Idiomas');
+                }
+
+                // El aval anterior se dio sobre los datos viejos: si algo cambió, el certificado
+                // vuelve a la bandeja del revisor. Un guardado que no modifica nada no reabre
+                // la revisión.
+                if ($idioma->wasChanged() || $archivoNuevo) {
+                    $this->archivoService->reabrirRevisionDocumentos($idioma);
                 }
             });
             // Retorna idioma actualizado
             return response()->json([
                 'mensaje' => 'Idioma actualizado correctamente',
             ], 200);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            // Mismo criterio que obtener y eliminar: si el idioma no existe (o no es del usuario
+            // autenticado) es un 404, no un fallo del servidor.
+            return response()->json(['message' => 'Idioma no encontrado.'], 404);
         } catch (\Exception $e) {
             return response()->json([ // Manejo de errores
                 'message' => 'Error al actualizar el idioma.',
@@ -211,6 +307,10 @@ class IdiomaController
     public function eliminarIdioma(Request $request, $id)
     {
         try {
+            if (ClavePrimaria::fueraDeRango($id)) { // Un ID que no cabe en la columna no identifica a ningún registro.
+                return response()->json(['message' => 'Idioma no encontrado.'], 404);
+            }
+
             $user = $request->user();
 
             $idioma = Idioma::where('id_idioma', $id) // Busca el idioma por ID e ID del usuario

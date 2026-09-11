@@ -172,7 +172,7 @@ La API usa **JWT (JSON Web Token)**. Pasos:
 | Rol | Descripción |
 |---|---|
 | `Aspirante` | Usuario recién registrado; puede completar su HV y postular a convocatorias |
-| `Docente` | Aspirante contratado; accede a sus evaluaciones y puntaje |
+| `Docente` | Aspirante contratado; consulta su evaluación (solo lectura) y su puntaje |
 | `Talento Humano` | Gestiona convocatorias, postulaciones, avales y contrataciones |
 | `Administrador` | Gestión completa de usuarios, roles y normativas |
 | `Coordinador` | Evalúa aspirantes en el proceso de aprobación |
@@ -406,7 +406,7 @@ La API usa **JWT (JSON Web Token)**. Pasos:
 |-------|------|-----------|-------------|
 | `empresa` | string | Sí | Nombre de la empresa/institución |
 | `cargo` | string | Sí | Cargo desempeñado |
-| `tipo_experiencia` | string | Sí | Tipo (catálogo `/constantes/tipos-experiencia`) |
+| `tipo_experiencia` | string | Sí | Nombre de un tipo **activo** del catálogo `/constantes/tipos-experiencia`, administrable por el Administrador |
 | `fecha_inicio` | date (Y-m-d) | Sí | Fecha de inicio |
 | `fecha_fin` | date (Y-m-d) | No | Fecha de fin (vacío si trabajo actual) |
 | `municipio_id` | integer | Sí | ID del municipio |
@@ -526,10 +526,13 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | Método | URI | Descripción |
 |--------|-----|-------------|
 | GET | `/docente/ver-contratacion` | Obtiene la contratación del docente autenticado |
-| POST | `/docente/crear-evaluacion` | Crea la evaluación docente inicial |
-| GET | `/docente/ver-evaluaciones` | Ve su propia evaluación |
-| PUT | `/docente/actualizar-evaluacion` | Actualiza la evaluación docente |
+| GET | `/docente/ver-evaluaciones` | Consulta su propia evaluación (solo lectura) |
 | GET | `/docente/evaluar-puntaje` | Calcula y guarda el puntaje total del docente |
+
+> **La evaluación docente no es autoevaluación.** La asigna el rol `Apoyo Profesoral`; el docente
+> únicamente puede consultarla. El promedio asignado alimenta el requisito de ascenso de categoría
+> en `CalculoPuntajeDocenteService` (evaluación ≥ 4.0), por lo que la escritura está restringida a
+> ese rol. Ver [Apoyo Profesoral → Evaluación docente](#evaluación-docente).
 
 ---
 
@@ -724,6 +727,195 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | PUT | `/admin/actualizar-normativa/{id}` | Actualiza normativa |
 | DELETE | `/admin/eliminar-normativa/{id}` | Elimina normativa |
 
+#### Umbral de evaluación docente
+
+Umbral mínimo de evaluación que un docente debe alcanzar para ascender de categoría. Antes
+estaba fijo en `4.0` dentro de `CalculoPuntajeDocenteService`; ahora lo configura el Administrador.
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| GET | `/admin/umbral-evaluacion` | Umbral vigente |
+| GET | `/admin/umbral-evaluacion/historico` | Histórico completo de umbrales |
+| POST | `/admin/umbral-evaluacion` | Registra un umbral nuevo y cierra el vigente |
+
+**Campos (JSON) de `POST /admin/umbral-evaluacion`:**
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `valor_minimo` | decimal | Sí | Entre `0` y `5`, máximo un decimal |
+| `vigencia_desde` | date | No | Desde cuándo rige. Por defecto hoy; no admite fechas pasadas |
+| `observaciones` | string | No | Justificación del cambio (máx. 500) |
+
+**Reglas de negocio:**
+
+- Los umbrales **no se editan ni se borran**: registrar uno nuevo cierra el anterior con
+  `vigencia_hasta`, conservando el histórico y quién lo registró.
+- **No retroactividad — reglas del momento del otorgamiento.** Subir el umbral no le baja la
+  categoría a quien ya la tenía: al recalcular se re-evalúa al docente con el umbral que regía
+  cuando la obtuvo (`puntajes.umbral_aplicado`). Si bajo aquellas reglas todavía la alcanza, la
+  conserva y la respuesta marca `categoria_protegida: true`. Si perdió un requisito real (por
+  ejemplo le rechazan el doctorado), sí desciende.
+- El umbral vigente se **cachea**; registrar uno nuevo invalida la caché de inmediato.
+- Solo el requisito de evaluación es configurable. Formación, nivel de inglés, puntaje mínimo
+  (20/30/60) y años de antigüedad (4/6/8) siguen fijos en `CalculoPuntajeDocenteService`.
+
+#### Catálogos administrables
+
+Catálogos que antes solo se poblaban por seeder (`database/data/*.csv`) o por constantes PHP y
+que ahora administra el rol `Administrador`.
+
+**Tipos de producto académico**
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| GET | `/admin/productos-academicos` | Lista todos (activos e inactivos) con su número de ámbitos |
+| GET | `/admin/productos-academicos/{id}` | Detalle con sus ámbitos de divulgación |
+| POST | `/admin/productos-academicos` | Crea un tipo de producto académico |
+| PUT | `/admin/productos-academicos/{id}` | Actualiza nombre o estado |
+| DELETE | `/admin/productos-academicos/{id}` | Elimina; **409** si tiene ámbitos asociados |
+
+**Ámbitos de divulgación**
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| GET | `/admin/ambitos-divulgacion` | Lista todos; filtro opcional `?producto_academico_id=` |
+| GET | `/admin/ambitos-divulgacion/{id}` | Detalle con su producto académico |
+| POST | `/admin/ambitos-divulgacion` | Crea un ámbito bajo un producto académico |
+| PUT | `/admin/ambitos-divulgacion/{id}` | Actualiza nombre, producto o estado |
+| DELETE | `/admin/ambitos-divulgacion/{id}` | Elimina; **409** si hay producciones que lo usan |
+
+**Tipos de experiencia**
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| GET | `/admin/tipos-experiencia` | Lista todos con su número de usos |
+| GET | `/admin/tipos-experiencia/{id}` | Detalle |
+| POST | `/admin/tipos-experiencia` | Crea un tipo de experiencia |
+| PUT | `/admin/tipos-experiencia/{id}` | Actualiza nombre o estado (**propaga el renombrado**) |
+| DELETE | `/admin/tipos-experiencia/{id}` | Elimina; **409** si hay experiencias o convocatorias que lo usan |
+
+**Campos**
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `nombre_producto_academico` | string | Sí | Único. Máx. 255 |
+| `nombre_ambito_divulgacion` | string | Sí | Único **dentro de su producto académico**. Máx. 255 |
+| `producto_academico_id` | integer | Sí | Producto al que pertenece el ámbito |
+| `nombre_tipo_experiencia` | string | Sí | Único. Máx. 100 |
+| `activo` | boolean | No | Por defecto `true` |
+
+**Reglas de negocio:**
+
+- **No se borra lo que está en uso.** El `DELETE` responde `409` con el conteo de registros
+  dependientes en lugar de dejar que falle la llave foránea. Para retirar una opción de los
+  formularios sin perder el histórico se usa `activo = false`.
+- **`activo` controla los desplegables.** Los catálogos inactivos desaparecen de
+  `/tiposProduccionAcademica/*` y `/constantes/tipos-experiencia`, y dejan de aceptarse al crear
+  producciones o experiencias nuevas. Los registros históricos que ya los referencian no cambian.
+- **Renombrar un tipo de experiencia arrastra el histórico.** `experiencias.tipo_experiencia` y
+  `convocatorias.tipo_experiencia_requerida` guardan el **nombre**, no un ID, así que el `PUT`
+  propaga el cambio a ambas tablas dentro de una transacción y devuelve cuántas filas actualizó
+  en `registros_renombrados`.
+- **Los ámbitos nuevos no otorgan puntaje.** `CalculoPuntajeDocenteService::clasificacionPorAmbito()`
+  sigue mapeando IDs de ámbito hardcodeados a `top`/`a`/`b`. Un ámbito creado desde el CRUD cae en
+  el `default` y suma **0 puntos** hasta que se actualice ese servicio. Volverlo configurable
+  queda fuera del alcance de este CRUD.
+
+#### Escalafón docente
+
+Los catálogos de arriba (`escalones-docente`, `reglas-excepcion-escalon`) definen las **reglas** del
+escalafón. Estas rutas las **aplican** sobre el expediente de un docente concreto.
+
+**Acciones compartidas con Apoyo Profesoral.** Son el mismo acto con las mismas reglas —se revalida
+contra el motor, se exige periodo cerrado y queda firmado con el ejecutor— así que las atiende el
+mismo controlador (`ApoyoProfesoral\EscalafonDocenteController`) montado bajo los dos prefijos.
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| GET | `/admin/escalafon/periodos` | Periodos de ascenso, con `cerrado` calculado |
+| POST | `/admin/escalafon/periodos` | Crea un periodo; `fecha_cierre` debe ser futura y posterior al último |
+| PUT | `/admin/escalafon/periodos/{id}` | Actualiza; **409** si el periodo ya cerró |
+| POST | `/admin/escalafon/periodos/{id}/cerrar` | Cierre anticipado; **no** mueve `fecha_cierre` |
+| GET | `/admin/escalafon/docentes` | Bandeja. `?estado_antiguedad=`, `?periodo_ascenso_id=` |
+| GET | `/admin/escalafon/docentes/{userId}` | Evaluación + historial completo, revertidos incluidos |
+| POST | `/admin/escalafon/docentes/{userId}/ascender` | Ejecuta el ascenso; **409** con el desglose de lo que falta |
+| POST | `/admin/escalafon/historial/{id}/revertir` | Deshace un acto; `motivo` obligatorio |
+
+**Acciones exclusivas del Administrador.** No existen bajo `/apoyoProfesoral`.
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| POST | `/admin/escalafon/docentes/{userId}/ingreso-manual` | Ingresa al docente en el escalón y la fecha indicados |
+| PUT | `/admin/escalafon/historial/{id}` | Corrige escalón y/o fechas de un tramo |
+| GET | `/admin/escalafon/docentes/{userId}/bitacora` | Intervenciones manuales sobre su historial |
+
+**Campos de `ingreso-manual`**
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `escalon_id` | integer | Sí | Escalón de entrada. Debe existir y estar **activo** (si no, 409) |
+| `desde` | date | Sí | Fecha de entrada. No puede ser futura |
+| `motivo` | string | Sí | Máx. 1000. Queda en la bitácora |
+
+**Campos de la corrección** (al menos uno de los tres primeros, si no 422)
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `escalon_id` | integer | No | Escalón destino |
+| `desde` | date | No | Nuevo inicio del tramo |
+| `hasta` | date\|null | No | Nuevo fin. `null` **reabre** el tramo; omitirlo lo deja como está |
+| `motivo` | string | Sí | Máx. 1000 |
+
+**Reglas de negocio**
+
+- **El ingreso ordinario no pasa por aquí.** `ContratacionObserver` mete al docente en el primer
+  escalón en cuanto Talento Humano registra su contratación de planta. `ingreso-manual` cubre lo que
+  aquel no sabe hacer: el docente que llega con una categoría ya reconocida, el reingreso tras una
+  reversión y la carga de expedientes anteriores al sistema. **Sigue exigiendo contratación de
+  planta vigente**: el escalafón es de los docentes de planta y esa regla no se relaja.
+- **Cuando lo que está mal es una fecha que el automático ya escribió, la herramienta es la
+  corrección, no el ingreso manual**: el docente ya está dentro.
+- **Un ingreso manual se distingue del automático por la firma.** Los dos llevan `via = 'ingreso'`;
+  el automático deja `otorgado_por` en null porque no lo decide nadie, el manual lo lleva relleno.
+- **No son corregibles** `user_id`, `periodo_ascenso_id`, `via`, `otorgado_por` ni los campos de
+  reversión. Los dos primeros trasplantarían antigüedad y falsearían la base legal del acto; los
+  demás son firmas. La identidad de quien corrige vive en la bitácora.
+- **Un tramo revertido no se corrige** (409): es el registro de algo que se deshizo.
+- **Los tramos consecutivos comparten la fecha de frontera.** El ascenso cierra uno y abre el
+  siguiente el mismo día, así que los periodos se tratan como `[desde, hasta)`: compartir esa fecha
+  no es un solapamiento, pisarse sí (409).
+- **Los huecos entre tramos son legales** (el docente pudo retirarse y volver), así que **los
+  vecinos no se ajustan en cascada**. Para mover una frontera se encoge primero el tramo que estorba
+  —lo que abre un hueco— y después se estira el otro.
+- **Cerrar el único tramo abierto responde 409.** Dejaría al docente fuera del escalafón en silencio
+  y sin motivo; a ese estado se llega por la reversión, que sí se firma y sí le avisa.
+- **Un escalón inactivo** vale para un tramo histórico pero no para el vigente (409): el motor
+  resuelve la categoría con `activos()` y el docente quedaría con un escalón ilegible.
+- **Corregir el escalón del tramo vigente es, de hecho, otorgar una categoría** sin evaluación del
+  motor ni periodo de ascenso. Es una capacidad deliberada del Administrador —es como se arregla un
+  expediente mal cargado— y el `message` de la respuesta lo dice en voz alta cuando ocurre.
+- **La antigüedad no siempre crece al retrasar `desde`.** `mesesEnEscalon()` **intersecta** los
+  tramos del historial con los periodos de experiencia `es_uniautonoma` con documento aprobado: sin
+  experiencia documentada que cubra el periodo nuevo, la corrección no da ni un mes. Por eso la
+  respuesta trae `impacto` con la antigüedad y el puntaje antes y después.
+- **Adelantar `desde` descarta producción académica** que hasta entonces puntuaba: `desde` es también
+  el límite inferior de la ventana que suma. Sale igualmente en `impacto`.
+- **Ninguna corrección revalida ascensos ya otorgados.** Mismo criterio que el resto del sistema: las
+  reglas que cuentan son las del momento del otorgamiento.
+- **Toda escritura queda en `historial_escalon_bitacoras`**, con motivo obligatorio y snapshot
+  antes/después. Es una tabla aparte y no un par de columnas porque un tramo puede corregirse varias
+  veces. Los ascensos y reversiones no se duplican ahí: ya van firmados en el propio tramo.
+- **El docente recibe una notificación** en toda corrección, también cuando solo cambian las fechas:
+  le cambia la antigüedad y la ventana de producción, que es lo que usa para saber cuándo asciende.
+- **La invariante de un solo tramo abierto por docente está en la base de datos**, como índice único
+  parcial (`WHERE hasta IS NULL AND revertido_en IS NULL`). Las validaciones en PHP son las que dan
+  el 409 con mensaje útil; el índice es la red que convierte una carrera en error en vez de en un
+  expediente corrupto.
+
+> **Hueco conocido:** si se revierte el tramo de ingreso de un docente, `ContratacionObserver` lo
+> volverá a crear en la siguiente edición de cualquiera de sus contrataciones, en el primer escalón.
+> Es comportamiento preexistente del observer.
+
 #### Otros
 
 | Método | URI | Descripción |
@@ -893,7 +1085,42 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 | GET | `/apoyoProfesoral/mostrar-todas-experiencia` | Docentes con experiencias |
 | GET | `/apoyoProfesoral/filtrar-docentes-experiencia-id/{id}` | Experiencias de un docente |
 | GET | `/apoyoProfesoral/filtrar-docentes-tipo-experiencia/{tipo}` | Filtrar por tipo de experiencia |
+| GET | `/apoyoProfesoral/listar-docentes-puntaje` | Docentes con puntaje y categoría (escalafón) |
 | POST | `/apoyoProfesoral/crear-certificados-masivos` | Genera certificados en masa |
+
+#### Evaluación docente
+
+La evaluación docente **la asigna Apoyo Profesoral**, no el propio docente. El promedio asignado
+es uno de los requisitos obligatorios de ascenso de categoría en `CalculoPuntajeDocenteService`
+(evaluación **≥ 4.0**), por eso la escritura está restringida a este rol y el docente solo puede
+consultarla vía `GET /docente/ver-evaluaciones`.
+
+| Método | URI | Descripción |
+|--------|-----|-------------|
+| GET | `/apoyoProfesoral/listar-evaluaciones` | Todos los docentes con su evaluación asignada (o `null`) |
+| GET | `/apoyoProfesoral/ver-evaluacion/{userId}` | Evaluación de un docente |
+| POST | `/apoyoProfesoral/asignar-evaluacion/{userId}` | Asigna la evaluación a un docente sin evaluación previa |
+| PUT | `/apoyoProfesoral/actualizar-evaluacion/{userId}` | Actualiza la evaluación ya asignada |
+
+**Campos (JSON) de `asignar-evaluacion` y `actualizar-evaluacion`:**
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `promedio_evaluacion_docente` | decimal | Sí al asignar | Entre `0` y `5`, máximo un decimal (`4.5`, `3.0`, `3.2`) |
+| `estado_evaluacion_docente` | string | No | `Pendiente` (por defecto), `Aprobado` o `Rechazado` |
+
+**Respuestas:**
+
+| Código | Situación |
+|--------|-----------|
+| `201` | Evaluación asignada |
+| `200` | Evaluación consultada o actualizada |
+| `404` | El `userId` no existe o no tiene rol `Docente`; o no tiene evaluación al actualizar |
+| `409` | El docente ya tiene evaluación asignada (use `actualizar-evaluacion`) |
+| `422` | Error de validación |
+
+Cada asignación registra en la propia evaluación quién la realizó (`asignado_por`) y cuándo
+(`fecha_asignacion`); al actualizar, ambos campos se reescriben con el último responsable.
 
 ---
 
@@ -922,10 +1149,13 @@ Contiene los mismos endpoints de gestión de HV que el Aspirante, más los sigui
 
 | Método | URI | Descripción |
 |--------|-----|-------------|
-| GET | `/tiposProduccionAcademica/productos-academicos` | Tipos de productos académicos |
-| GET | `/tiposProduccionAcademica/ambitos-divulgacion` | Todos los ámbitos de divulgación |
-| GET | `/tiposProduccionAcademica/ambitos_divulgacion/{id_producto_academico}` | Ámbitos para un tipo de producto |
-| GET | `/tiposProduccionAcademica/ambito-divulgacion-completo/{id_ambito_divulgacion}` | Info completa de ámbito + producto |
+| GET | `/tiposProduccionAcademica/productos-academicos` | Tipos de productos académicos **activos** |
+| GET | `/tiposProduccionAcademica/ambitos-divulgacion` | Ámbitos de divulgación **activos** |
+| GET | `/tiposProduccionAcademica/ambitos_divulgacion/{id_producto_academico}` | Ámbitos **activos** de un tipo de producto |
+| GET | `/tiposProduccionAcademica/ambito-divulgacion-completo/{id_ambito_divulgacion}` | Info completa de ámbito + producto (no filtra por estado: la usa el histórico) |
+
+> Estos listados alimentan los desplegables, por eso omiten los catálogos que el Administrador
+> marcó como inactivos. El CRUD completo está en [Catálogos administrables](#catálogos-administrables).
 
 ---
 

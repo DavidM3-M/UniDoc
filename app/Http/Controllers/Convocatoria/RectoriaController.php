@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Convocatoria;
 
+use Illuminate\Support\Facades\Log;
+
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Usuario\User;
@@ -17,9 +19,9 @@ class RectoriaController extends Controller
 
             return response()->json(['data' => $usuarios], 200);
         } catch (\Exception $e) {
+            Log::error('RectoriaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([
                 'message' => 'Error al obtener usuarios.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -36,9 +38,9 @@ class RectoriaController extends Controller
 
             return response()->json(['data' => $user], 200);
         } catch (\Exception $e) {
+            Log::error('RectoriaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([
                 'message' => 'Error al obtener el usuario.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -67,9 +69,9 @@ class RectoriaController extends Controller
 
             return response()->json(['message' => 'Aval de Rectoría registrado correctamente.'], 201);
         } catch (\Exception $e) {
+            Log::error('RectoriaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([
                 'message' => 'Error al registrar aval.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -92,9 +94,9 @@ class RectoriaController extends Controller
 
             return response()->json(['message' => 'Aval de Rectoría revocado correctamente.'], 200);
         } catch (\Exception $e) {
+            Log::error('RectoriaController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([
                 'message' => 'Error al revocar aval.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }

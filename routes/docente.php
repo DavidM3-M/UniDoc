@@ -94,13 +94,14 @@ Route::group([
     // Rutas relacionadas con la contratación
     Route::get('ver-contratacion', [ContratacionController::class, 'obtenerContratacionUsuario']);
 
-    // Rutas relacionadas con la evaluación docente
-    Route::post('crear-evaluacion', [EvaluacionDocenteController::class, 'crearEvaluacionDocente']);
+    // Rutas relacionadas con la evaluación docente (solo lectura).
+    // La evaluación la asigna el rol "Apoyo Profesoral"; el docente únicamente la consulta.
     Route::get('ver-evaluaciones', [EvaluacionDocenteController::class, 'verEvaluacionDocente']);
-    Route::put('actualizar-evaluacion', [EvaluacionDocenteController::class, 'actualizarEvaluacionDocente']);
 
-    // Rutas relacionadas con el puntaje
-    Route::get('evaluar-puntaje', [PuntajeController::class, 'evaluarYGuardarPuntaje']);
+    // Estado del escalafón: qué le falta al docente para el siguiente escalón. Solo lectura desde
+    // que el ascenso es un acto de Apoyo Profesoral; la ruta conserva el nombre viejo para no
+    // romper el frontend.
+    Route::get('evaluar-puntaje', [PuntajeController::class, 'consultarEstadoEscalafon']);
 
     // Rutas relacionadas con normativas
     Route::get('obtener-normativas', [NormativaController::class, 'obtenerNormativas']);

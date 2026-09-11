@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use App\Models\Usuario\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 use PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth;
 use App\Mail\ResetPasswordMail;
 use Illuminate\Support\Facades\Mail;
@@ -66,7 +68,6 @@ class AuthController
             ], 201);
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error('Error al crear usuario', [
-                'error' => $e->getMessage(),
                 'file'  => $e->getFile(),
                 'line'  => $e->getLine(),
             ]);
@@ -87,6 +88,34 @@ class AuthController
      * @param Request $request Solicitud HTTP con las credenciales del usuario.
      * @return \Illuminate\Http\JsonResponse Respuesta JSON con token de acceso, rol del usuario o mensaje de error.
      */
+    /**
+     * Dice si un correo o un número de identificación ya están registrados.
+     *
+     * El formulario de registro lo consulta al salir del campo, para avisar en el momento en vez
+     * de dejar que el usuario complete cinco pasos y se encuentre el rechazo al final.
+     *
+     * Dos cautelas:
+     *
+     * - El campo llega por nombre, así que se valida contra una lista cerrada. Sin eso, el
+     *   parámetro acabaría siendo un nombre de columna arbitrario en la consulta.
+     * - Solo devuelve un booleano. No confirma ni niega nada más del usuario, y la ruta lleva
+     *   un `throttle` estrecho porque este endpoint permite sondear si alguien está registrado.
+     */
+    public function verificarDisponibilidad(Request $request)
+    {
+        $datos = $request->validate([
+            'campo' => ['required', 'string', Rule::in(['email', 'numero_identificacion'])],
+            'valor' => ['required', 'string', 'max:100'],
+        ]);
+
+        $existe = User::where($datos['campo'], trim($datos['valor']))->exists();
+
+        return response()->json([
+            'campo'      => $datos['campo'],
+            'disponible' => !$existe,
+        ]);
+    }
+
     public function iniciarSesion(Request $request)
     {
         try {
@@ -268,7 +297,6 @@ class AuthController
         } catch (\Exception $e) { // Manejo de excepciones
             return response()->json([
                 'message' => 'Error al actualizar la contraseña.',
-                'error' => $e->getMessage()
             ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
@@ -294,7 +322,7 @@ class AuthController
             ]);
 
             if ($validator->fails()) { // Si la validación falla, se guarda el mensaje de error
-                throw new \Exception('Validación fallida.', 422);
+                return response()->json(['message' => 'Revisa los datos ingresados.', 'errors' => $validator->errors()], 422);
             }
 
             $user = User::where('email', $request->email)->first(); // Recuperar el usuario por su email
@@ -317,7 +345,11 @@ class AuthController
                 ['token' => $tokenHasheado, 'created_at' => now()] // Datos a actualizar o insertar
             );
 
-            $resetLink = rtrim(config('app.frontend_url'), '/') 
+            $frontend = trim(explode(',', (string) config('app.frontend_url'))[0]);
+            if (!filter_var($frontend, FILTER_VALIDATE_URL) || !in_array(parse_url($frontend, PHP_URL_SCHEME), ['http', 'https'], true)) {
+                throw new \RuntimeException('Configura FRONTEND_URL con la dirección pública del frontend.');
+            }
+            $resetLink = rtrim($frontend, '/')
                 . '/restablecer-contrasena2?token=' . $token 
                 . '&email=' . urlencode($user->email); // Crear el enlace de restablecimiento
             Mail::to($user->email)->send(new ResetPasswordMail($user, $resetLink)); // Enviar correo
@@ -325,7 +357,7 @@ class AuthController
             return response()->json(['message' => 'Si el correo está registrado, recibirás un enlace de restablecimiento.'], 200); // Devolver respuesta
 
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Error al enviar correo de restablecimiento', ['error' => $e->getMessage()]);
+            \Illuminate\Support\Facades\Log::error('Error al enviar correo de restablecimiento', []);
             return response()->json([
                 'message' => 'Error al enviar el correo de restablecimiento.',
             ], 500);
@@ -339,16 +371,18 @@ class AuthController
             $validator = Validator::make($request->all(), [
                 'email' => 'required|email',
                 'token' => 'required|string',
-                'password' => 'required|string|min:8|confirmed',
+                'password' => ['required', 'string', 'confirmed', Password::min(8)->mixedCase()->numbers()],
             ]);
 
             if ($validator->fails()) {
-                throw new \Exception('Validación fallida.', 422);
+                return response()->json(['message' => 'Revisa los datos ingresados.', 'errors' => $validator->errors()], 422);
             }
 
+            return DB::transaction(function () use ($request) {
             $reset = DB::table('password_reset_tokens')
                 ->where('email', $request->email)
-                ->where('token', hash('sha256', $request->token)) // Comparar contra el hash almacenado
+                ->where('token', hash('sha256', $request->token))
+                ->lockForUpdate()
                 ->first();
 
             if (!$reset) {
@@ -357,7 +391,7 @@ class AuthController
 
             // Verificar si el token ha expirado (5 minutos)
             $createdAt = Carbon::parse($reset->created_at);
-            if ($createdAt->diffInMinutes(now()) > 5) {
+            if ($createdAt->copy()->addMinutes(5)->lessThanOrEqualTo(now())) {
                 throw new \Exception('El token ha expirado. Por favor solicita uno nuevo.', 410);
             }
 
@@ -374,11 +408,11 @@ class AuthController
             return response()->json([
                 'message' => 'Contraseña actualizada correctamente.',
             ], 200);
+            });
         } catch (\Exception $e) {
             return response()->json([
-                'message' => 'Error al actualizar la contraseña.',
-                'error' => $e->getMessage(),
-            ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
+                'message' => in_array((int) $e->getCode(), [404, 410, 422], true) ? $e->getMessage() : 'Error al actualizar la contraseña.',
+            ], in_array((int) $e->getCode(), [404, 410, 422], true) ? (int) $e->getCode() : 500);
         }
     }
 }

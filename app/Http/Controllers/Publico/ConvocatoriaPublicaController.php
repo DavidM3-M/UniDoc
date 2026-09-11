@@ -56,7 +56,6 @@ class ConvocatoriaPublicaController extends Controller
 
             return response()->json([
                 'mensaje' => 'Error al obtener las convocatorias',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -108,7 +107,6 @@ class ConvocatoriaPublicaController extends Controller
 
             return response()->json([
                 'mensaje' => 'Error al obtener la convocatoria',
-                'error' => $e->getMessage()
             ], 500);
         }
     }

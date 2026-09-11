@@ -30,7 +30,9 @@ Route::group([
     Route::get('categoria-libreta-militar', [ConstantesController::class, 'obtenerTipoLibretaMilitar']);
 
     // Constantes relacionadas con los estudios
-    Route::get('tipos-estudio', [ConstantesController::class, 'obtenerTipoEstudio']);
+
+    // Catálogo administrable de niveles de formación académica (reemplaza tipos-estudio).
+    Route::get('niveles-formacion-academica', [ConstantesController::class, 'obtenerNivelFormacionAcademica']);
 
     // Constantes: perfiles profesionales (desplegable)
     Route::get('perfiles-profesionales', [ConstantesController::class, 'obtenerPerfilesProfesionales']);
@@ -40,6 +42,18 @@ Route::group([
 
     // Constantes relacionadas con los idiomas
     Route::get('niveles-idioma', [ConstantesController::class, 'obtenerNivelIdioma']);
+
+    // Catálogo administrable de idiomas y sus exámenes de certificación.
+    Route::get('idiomas', [ConstantesController::class, 'obtenerIdiomas']);
+    Route::get('examenes-idioma', [ConstantesController::class, 'obtenerExamenesIdioma']);
+
+    // Escalafón docente: escalones y sus requisitos, para la tarjeta que ve el docente en su
+    // hoja de vida. Misma tabla que administra el rol Administrador en Escalafón docente.
+    Route::get('escalones-docente', [ConstantesController::class, 'obtenerEscalonesDocente']);
+
+    // Fecha de cierre contra la que se está midiendo el expediente del docente hoy. Null entre un
+    // periodo y el siguiente.
+    Route::get('periodo-ascenso-vigente', [ConstantesController::class, 'obtenerPeriodoAscensoVigente']);
 
     // Constantes relacionadas con certificaciones bancarias
     Route::get('tipos-cuenta-bancaria', [ConstantesController::class, 'obtenerTipoCuenta']);

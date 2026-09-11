@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Aspirante;
 
+use Illuminate\Support\Facades\Log;
+
 use App\Http\Requests\RequestAspirante\RequestAntecedentesJudiciales\ActualizarAntecedenteJudicialRequest;
 use App\Http\Requests\RequestAspirante\RequestAntecedentesJudiciales\CrearAntecedenteJudicialRequest;
 use App\Models\Aspirante\AntecedentesJudiciales;
@@ -48,9 +50,9 @@ class AntecedentesJudicialesController
             ], 201);
 
         } catch (\Exception $e) {
+            Log::error('AntecedentesJudicialesController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([
                 'message' => 'Error al crear el Antecedente Judicial.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -79,9 +81,9 @@ class AntecedentesJudicialesController
             return response()->json(['antecedente_judicial' => $antecedenteJudicial,], 200);
 
         } catch (\Exception $e) {
+            Log::error('AntecedentesJudicialesController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([
                 'message' => 'Error al obtener el Antecedente Judicial.',
-                'error' => $e->getMessage(),
             ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
         }
     }
@@ -109,9 +111,9 @@ class AntecedentesJudicialesController
             ], 200);
 
         } catch (\Exception $e) {
+            Log::error('AntecedentesJudicialesController: ' . $e->getMessage(), ['excepcion' => $e]);
             return response()->json([
                 'message' => 'Error al actualizar el Antecedente Judicial.',
-                'error' => $e->getMessage(),
             ], is_numeric($e->getCode()) ? (int) $e->getCode() : 500);
 
         }

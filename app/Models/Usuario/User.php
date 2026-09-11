@@ -30,6 +30,7 @@ use App\Models\Aspirante\Estudio;
 use App\Models\Aspirante\ProduccionAcademica;
 use App\Models\Aspirante\FotoPerfil;
 use App\Models\Docente\Puntaje;
+use App\Models\HistorialEscalonDocente;
 use App\Models\TalentoHumano\Contratacion;
 use App\Models\TalentoHumano\Postulacion;
 use App\Models\Aspirante\CertificacionBancaria;
@@ -233,6 +234,43 @@ class User extends Authenticatable implements JWTSubject
     public function puntajeUsuario(): HasOne
     {
         return $this->hasOne(Puntaje::class, 'user_id', 'id');
+    }
+
+    /**
+     * Tramos del docente en el escalafón, del más antiguo al más reciente.
+     *
+     * Fuente de verdad de la categoría vigente y de la antigüedad en ella; `puntajes.categoria_lograda`
+     * es solo una caché de esto. Incluye los tramos revertidos: filtrarlos es responsabilidad de
+     * quien consulta, con los scopes `noRevertidos()` / `vigentes()` de `HistorialEscalonDocente`.
+     */
+    public function historialEscalonUsuario(): HasMany
+    {
+        return $this->hasMany(HistorialEscalonDocente::class, 'user_id', 'id')->orderBy('desde');
+    }
+
+    /**
+     * Los que están en el escalafón docente: tienen un tramo abierto.
+     *
+     * El escalafón es solo para docentes de planta, pero el filtro mira el **tramo** y no la
+     * contratación, y la diferencia importa en los dos bordes:
+     *
+     * - Un docente de planta entra solo (`ContratacionObserver` le crea el tramo en cuanto Talento
+     *   Humano registra el contrato), así que filtrar por tramo abierto ya devuelve a los de planta
+     *   sin tener que volver a consultar `contratacions`.
+     * - Un docente que entró y luego dejó de ser planta —contrato vencido, o corregido a cátedra—
+     *   sigue en el escalafón hasta que alguien firme una reversión. Filtrar por contrato vigente lo
+     *   borraría de la bandeja justo cuando hay que gestionarlo, y dejaría su reversión fuera de
+     *   alcance de quien tiene que ejecutarla.
+     *
+     * Quien nunca ingresó no aparece: sin tramo el motor no tiene contra qué medir la antigüedad ni
+     * desde cuándo contar la producción, y no es elegible para nada.
+     */
+    public function scopeEnEscalafon($query)
+    {
+        return $query->whereHas(
+            'historialEscalonUsuario',
+            fn ($tramo) => $tramo->vigentes()
+        );
     }
 
     // relacion de uno a muchos con la tabla postulaciones

@@ -7,6 +7,19 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Aspirante\NormativaController;
 use App\Http\Controllers\Admin\ReporteController;
 use App\Http\Controllers\Admin\AspiranteAdminController;
+use App\Http\Controllers\Admin\ProductoAcademicoController;
+use App\Http\Controllers\Admin\AmbitoDivulgacionController;
+use App\Http\Controllers\Admin\TipoExperienciaController;
+use App\Http\Controllers\Admin\NivelFormacionAcademicaController;
+use App\Http\Controllers\Admin\FormacionEducativaController;
+use App\Http\Controllers\Admin\SniesImportacionController;
+use App\Http\Controllers\Admin\IdiomaController;
+use App\Http\Controllers\Admin\ExamenIdiomaController;
+use App\Http\Controllers\Admin\RangoExamenIdiomaController;
+use App\Http\Controllers\Admin\EscalonDocenteController;
+use App\Http\Controllers\Admin\EscalafonHistorialController;
+use App\Http\Controllers\Admin\ReglaExcepcionEscalonController;
+use App\Http\Controllers\ApoyoProfesoral\EscalafonDocenteController;
 use App\Http\Controllers\TalentoHumano\ContratacionController;
 
 Route::group([
@@ -36,6 +49,126 @@ Route::group([
     Route::get('obtener-normativa/{id}', [NormativaController::class, 'obtenerNormativaPorId']);
     Route::put('actualizar-normativa/{id}', [NormativaController::class, 'actualizarNormativa']);
     Route::delete('eliminar-normativa/{id}', [NormativaController::class, 'eliminarNormativa']);
+
+    // Catálogo de tipos de producto académico.
+    // Antes solo se poblaba desde database/data/tipo_producto_academico.csv.
+    // Borrar un producto con ámbitos asociados responde 409; para retirarlo use activo=false.
+    Route::get('productos-academicos', [ProductoAcademicoController::class, 'listar']);
+    Route::get('productos-academicos/{id}', [ProductoAcademicoController::class, 'obtenerPorId']);
+    Route::post('productos-academicos', [ProductoAcademicoController::class, 'crear']);
+    Route::put('productos-academicos/{id}', [ProductoAcademicoController::class, 'actualizar']);
+    Route::delete('productos-academicos/{id}', [ProductoAcademicoController::class, 'eliminar']);
+
+    // Catálogo de ámbitos de divulgación, cada uno bajo un tipo de producto académico.
+    // Borrar un ámbito usado por producciones académicas responde 409.
+    Route::get('ambitos-divulgacion', [AmbitoDivulgacionController::class, 'listar']);
+    Route::get('ambitos-divulgacion/{id}', [AmbitoDivulgacionController::class, 'obtenerPorId']);
+    Route::post('ambitos-divulgacion', [AmbitoDivulgacionController::class, 'crear']);
+    Route::put('ambitos-divulgacion/{id}', [AmbitoDivulgacionController::class, 'actualizar']);
+    Route::delete('ambitos-divulgacion/{id}', [AmbitoDivulgacionController::class, 'eliminar']);
+
+    // Catálogo de tipos de experiencia profesional.
+    // Antes era la constante PHP TiposExperiencia. Renombrar propaga el cambio a
+    // experiencias y convocatorias; borrar un tipo en uso responde 409.
+    Route::get('tipos-experiencia', [TipoExperienciaController::class, 'listar']);
+    Route::get('tipos-experiencia/{id}', [TipoExperienciaController::class, 'obtenerPorId']);
+    Route::post('tipos-experiencia', [TipoExperienciaController::class, 'crear']);
+    Route::put('tipos-experiencia/{id}', [TipoExperienciaController::class, 'actualizar']);
+    Route::delete('tipos-experiencia/{id}', [TipoExperienciaController::class, 'eliminar']);
+
+    // Catálogo de niveles de formación académica. nivel_academico y nivel_formacion son texto
+    // libre a propósito (sin lista fija SNIES ni cruce entre campos). Catálogo independiente por
+    // ahora: nada lo referencia todavía.
+    Route::get('niveles-formacion-academica', [NivelFormacionAcademicaController::class, 'listar']);
+    Route::get('niveles-formacion-academica/{id}', [NivelFormacionAcademicaController::class, 'obtenerPorId']);
+    Route::post('niveles-formacion-academica', [NivelFormacionAcademicaController::class, 'crear']);
+    Route::put('niveles-formacion-academica/{id}', [NivelFormacionAcademicaController::class, 'actualizar']);
+    Route::delete('niveles-formacion-academica/{id}', [NivelFormacionAcademicaController::class, 'eliminar']);
+
+    // "Formación educativa" (Fase 2 del catálogo de Formación académica): programas académicos.
+    // Alta manual aquí; la carga masiva va por SniesImportacionController.
+    Route::get('formacion-educativa', [FormacionEducativaController::class, 'listar']);
+    Route::post('formacion-educativa', [FormacionEducativaController::class, 'crear']);
+    Route::put('formacion-educativa/{id}', [FormacionEducativaController::class, 'actualizar']);
+    Route::delete('formacion-educativa/{id}', [FormacionEducativaController::class, 'eliminar']);
+
+    // Importación masiva de programas SNIES: sube el Excel, lo procesa ImportarSniesJob en
+    // segundo plano (requiere el servicio queue-worker corriendo).
+    Route::post('snies/importaciones', [SniesImportacionController::class, 'subir']);
+    Route::get('snies/importaciones/historial', [SniesImportacionController::class, 'historial']);
+    Route::get('snies/importaciones/{id}', [SniesImportacionController::class, 'estado']);
+
+    // Catálogo de idiomas (ej. Inglés, Francés). Todavía no conectado con `idiomas.idioma`
+    // (el registro de aspirante/docente); esa conexión es una fase posterior.
+    // Borrar un idioma con exámenes asociados responde 409; para retirarlo use activo=false.
+    Route::get('idiomas', [IdiomaController::class, 'listar']);
+    Route::get('idiomas/{id}', [IdiomaController::class, 'obtenerPorId']);
+    Route::post('idiomas', [IdiomaController::class, 'crear']);
+    Route::put('idiomas/{id}', [IdiomaController::class, 'actualizar']);
+    Route::delete('idiomas/{id}', [IdiomaController::class, 'eliminar']);
+
+    // Exámenes de certificación de idioma (IELTS, TOEFL iBT, Cambridge FCE...), cada uno bajo un
+    // idioma del catálogo. `?idioma_id=` filtra el listado por idioma.
+    Route::get('examenes-idioma', [ExamenIdiomaController::class, 'listar']);
+    Route::get('examenes-idioma/{id}', [ExamenIdiomaController::class, 'obtenerPorId']);
+    Route::post('examenes-idioma', [ExamenIdiomaController::class, 'crear']);
+    Route::put('examenes-idioma/{id}', [ExamenIdiomaController::class, 'actualizar']);
+    Route::delete('examenes-idioma/{id}', [ExamenIdiomaController::class, 'eliminar']);
+
+    // Rangos de puntaje de un examen y su nivel MCER equivalente (ej. IELTS 5.5-6.5 = B2).
+    // `?examen_idioma_id=` filtra el listado por examen.
+    Route::get('rangos-examen-idioma', [RangoExamenIdiomaController::class, 'listar']);
+    Route::post('rangos-examen-idioma', [RangoExamenIdiomaController::class, 'crear']);
+    Route::put('rangos-examen-idioma/{id}', [RangoExamenIdiomaController::class, 'actualizar']);
+    Route::delete('rangos-examen-idioma/{id}', [RangoExamenIdiomaController::class, 'eliminar']);
+
+    // Escalones del escalafón docente (Auxiliar, Asistente, Asociado, Titular...) y sus
+    // requisitos de ascenso. Borrar un escalón con excepciones apuntándole responde 409; para
+    // retirarlo use activo=false.
+    Route::get('escalones-docente', [EscalonDocenteController::class, 'listar']);
+    Route::get('escalones-docente/{id}', [EscalonDocenteController::class, 'obtenerPorId']);
+    Route::post('escalones-docente', [EscalonDocenteController::class, 'crear']);
+    Route::put('escalones-docente/{id}', [EscalonDocenteController::class, 'actualizar']);
+    Route::delete('escalones-docente/{id}', [EscalonDocenteController::class, 'eliminar']);
+
+    // Reglas de excepción del escalafón (ej. "tiene Doctorado aprobado -> mínimo Asociado").
+    Route::get('reglas-excepcion-escalon', [ReglaExcepcionEscalonController::class, 'listar']);
+    Route::post('reglas-excepcion-escalon', [ReglaExcepcionEscalonController::class, 'crear']);
+    Route::put('reglas-excepcion-escalon/{id}', [ReglaExcepcionEscalonController::class, 'actualizar']);
+    Route::delete('reglas-excepcion-escalon/{id}', [ReglaExcepcionEscalonController::class, 'eliminar']);
+
+    // ---------------------------------------------------------------
+    // Escalafón docente: los actos sobre el expediente de un docente.
+    //
+    // Las rutas de arriba definen las REGLAS del escalafón (qué escalones hay y qué pide cada uno);
+    // estas las APLICAN sobre docentes concretos. Hasta ahora eran exclusivas de Apoyo Profesoral.
+    // ---------------------------------------------------------------
+
+    // Mismo acto y mismas reglas que en `/apoyoProfesoral`, así que es el mismo controlador: un
+    // ascenso ejecutado por el Administrador revalida contra el motor y exige periodo cerrado
+    // igual, y queda firmado con su id en `otorgado_por` porque el servicio usa `$request->user()`.
+    // Duplicar el controlador solo garantizaría que las dos copias se separen con el tiempo. Mismo
+    // criterio que las contrataciones de más abajo, que reutilizan el controlador de Talento Humano.
+    Route::get('escalafon/periodos', [EscalafonDocenteController::class, 'listarPeriodos']);
+    Route::post('escalafon/periodos', [EscalafonDocenteController::class, 'crearPeriodo']);
+    Route::put('escalafon/periodos/{id}', [EscalafonDocenteController::class, 'actualizarPeriodo']);
+    Route::post('escalafon/periodos/{id}/cerrar', [EscalafonDocenteController::class, 'cerrarPeriodo']);
+
+    // La bandeja no es solo consulta: `verDocente` es la única forma de obtener el
+    // `id_historial_escalon` que necesitan la reversión y la corrección para direccionar un tramo.
+    Route::get('escalafon/docentes', [EscalafonDocenteController::class, 'listarDocentes']);
+    Route::get('escalafon/docentes/{userId}', [EscalafonDocenteController::class, 'verDocente']);
+    Route::post('escalafon/docentes/{userId}/ascender', [EscalafonDocenteController::class, 'ascender']);
+    Route::post('escalafon/historial/{id}/revertir', [EscalafonDocenteController::class, 'revertir']);
+
+    // Exclusivas del Administrador: corregir el expediente. No existen bajo `/apoyoProfesoral` y por
+    // eso viven en otra clase (ver el docblock de `Admin\EscalafonHistorialController`).
+    // El ingreso ordinario lo sigue disparando `ContratacionObserver`, siempre al primer escalón;
+    // `ingreso-manual` cubre lo que aquel no sabe hacer y exige contratación de planta vigente igual.
+    // Toda escritura de aquí queda en `historial_escalon_bitacoras` con motivo obligatorio.
+    Route::post('escalafon/docentes/{userId}/ingreso-manual', [EscalafonHistorialController::class, 'ingresarManual']);
+    Route::put('escalafon/historial/{id}', [EscalafonHistorialController::class, 'corregir']);
+    Route::get('escalafon/docentes/{userId}/bitacora', [EscalafonHistorialController::class, 'bitacora']);
 
     // Rutas de reportes
     Route::get('usuarios-excel', [ReporteController::class, 'usuariosExcel']);

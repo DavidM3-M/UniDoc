@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Admin;
 
+use Illuminate\Support\Facades\Log;
+
 use App\Exports\ReporteCompletoExport;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -22,10 +24,10 @@ class ReporteController
             // Genera el archivo Excel usando la clase ReporteCompletoExport
             return Excel::download(new ReporteCompletoExport, 'reporteUnidoc.xlsx');
         } catch (\Exception $e) {
+            Log::error('ReporteController: ' . $e->getMessage(), ['excepcion' => $e]);
             // Manejo de errores
             return response()->json([
                 'message' => 'Error al generar el reporte.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }

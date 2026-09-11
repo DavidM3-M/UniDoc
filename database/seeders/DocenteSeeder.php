@@ -15,7 +15,7 @@ class DocenteSeeder extends Seeder
          $docente = User::firstOrCreate([
             'email' => 'docente@universidad.com'
         ], [
-            'municipio_id'           => 703, // Cambia este valor según el municipio en tu DB
+            'municipio_id'           => Ubicaciones::municipio(),
             'tipo_identificacion'    => 'Cédula de ciudadanía', // Cambia según los valores en TipoIdentificacion::all()
             'numero_identificacion'  => '978645312', // Cambia según necesidad
             'genero'                 => 'Masculino', // Cambia según los valores en Genero::all()

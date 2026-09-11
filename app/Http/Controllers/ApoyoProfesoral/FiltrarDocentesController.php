@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Log;
 // Definición de la clase FiltrarDocentesController, que contiene métodos para filtrar y mostrar información de docentes.
 
 use Illuminate\Support\Facades\Storage;
-use App\Services\CalculoPuntajeDocenteService;
+use App\Services\MotorEscalafonDocenteService;
 
 class FiltrarDocentesController
 {
@@ -48,7 +48,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al obtener los estudios.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -84,7 +83,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'No se pudieron obtener los estudios del docente.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -125,7 +123,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al filtrar los estudios.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -157,7 +154,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al obtener los idiomas.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -195,7 +191,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'No se pudieron obtener los idiomas del docente.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -233,7 +228,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al filtrar los idiomas.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -268,7 +262,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al obtener las experiencias.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -306,7 +299,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al filtrar las experiencias.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -343,7 +335,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'No se pudieron obtener las experiencias del docente.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -399,7 +390,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al obtener la producción académica.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -449,7 +439,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'No se pudo obtener la producción académica del docente.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -507,34 +496,44 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al filtrar la producción académica.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
 
     /**
-     * Lista todos los docentes con su puntaje total y categoría (escalafón) calculados.
+     * Lista los docentes del escalafón con su categoría vigente y su avance hacia el siguiente escalón.
      *
-     * @param CalculoPuntajeDocenteService $servicio
+     * Solo los que están dentro del escalafón, que son los de planta: `enEscalafon()` filtra por
+     * tramo abierto. Un docente de cátedra no tiene categoría ni ascenso posible, así que su fila
+     * aquí no decía nada.
+     *
+     * La categoría ya no se calcula al vuelo: sale del tramo abierto en `historial_escalon_docente`,
+     * que solo escribe `AscensoEscalafonService`. Lo que sí se calcula es la elegibilidad para
+     * ascender, igual que en la bandeja de `EscalafonDocenteController`, que es la pantalla pensada
+     * para trabajar los ascensos; este listado se queda como vista general.
+     *
+     * @param MotorEscalafonDocenteService $motor
      * @return \Illuminate\Http\JsonResponse
      */
-    public function listarDocentesConPuntaje(CalculoPuntajeDocenteService $servicio)
+    public function listarDocentesConPuntaje(MotorEscalafonDocenteService $motor)
     {
         try {
             // Carga los docentes junto con todas las relaciones que necesita
-            // CalculoPuntajeDocenteService::evaluar() para evitar consultas N+1.
+            // MotorEscalafonDocenteService::evaluarAscenso() para evitar consultas N+1.
             $docentes = User::role('Docente')
+                ->enEscalafon()
                 ->with([
-                    'contratacionUsuario',
                     'estudiosUsuario.documentosEstudio',
                     'idiomasUsuario.documentosIdioma',
+                    'experienciasUsuario.documentosExperiencia',
                     'produccionAcademicaUsuario.documentosProduccionAcademica',
                     'evaluacionDocenteUsuario',
+                    'historialEscalonUsuario.escalon', // Categoría vigente y desde cuándo
                 ])
                 ->get();
 
-            $data = $docentes->map(function ($docente) use ($servicio) {
-                $resultado = $servicio->evaluar($docente);
+            $data = $docentes->map(function ($docente) use ($motor) {
+                $resultado = $motor->evaluarAscenso($docente);
 
                 return [
                     'id' => $docente->id,
@@ -547,7 +546,14 @@ class FiltrarDocentesController
                     'email' => $docente->email,
                     'numero_identificacion' => $docente->numero_identificacion,
                     'puntaje_total' => $resultado['puntaje_total'],
-                    'categoria_lograda' => $resultado['categoria_lograda'],
+                    // El mismo puntaje contando la producción todavía sin avalar. Va aquí explícito
+                    // porque esta fila se arma campo por campo, a diferencia de la bandeja de
+                    // `EscalafonDocenteController`, que devuelve el resultado completo del motor.
+                    'puntaje_declarado' => $resultado['puntaje_declarado'],
+                    'categoria_lograda' => $resultado['escalon_vigente'],
+                    'escalon_objetivo' => $resultado['escalon_objetivo'],
+                    'elegible' => $resultado['elegible'],
+                    'estado_antiguedad' => $resultado['estado_antiguedad'],
                     'razon' => $resultado['razon'],
                 ];
             })->values();
@@ -562,7 +568,6 @@ class FiltrarDocentesController
             return response()->json([
                 'status' => 'error',
                 'message' => 'Ocurrió un error al listar los docentes con su puntaje.',
-                'error' => $e->getMessage()
             ], 500);
         }
     }

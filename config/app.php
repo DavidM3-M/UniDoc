@@ -65,7 +65,16 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    // UTC es la zona de ALMACENAMIENTO, no la de presentación. Las 121 columnas `timestamp` del
+    // esquema no guardan zona horaria: el valor que se escribe es el que se lee, así que cambiar
+    // esta línea reinterpreta hacia atrás todo lo ya guardado. Toda la base histórica se escribió
+    // en UTC; ponerla en 'America/Bogota' hacía que cada registro anterior apareciera 5 horas en
+    // el futuro, sin forma de distinguir después una fila vieja de una nueva.
+    //
+    // La hora colombiana se aplica donde de verdad importa: en `routes/console.php` para que las
+    // tareas programadas salgan a las 07:00 de Colombia, y en el navegador, que convierte solo
+    // porque la API serializa en ISO-8601 con sufijo Z.
+    'timezone' => env('APP_TIMEZONE', 'UTC'),
 
     /*
     |--------------------------------------------------------------------------
@@ -123,6 +132,6 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
-    'frontend_url' => env('FRONTEND_URL', 'http://localhost:8000'),
+    'frontend_url' => env('FRONTEND_URL', env('APP_ENV', 'production') === 'local' ? 'http://localhost:8020' : env('APP_URL')),
 
 ];

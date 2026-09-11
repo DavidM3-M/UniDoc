@@ -4,7 +4,6 @@ namespace App\Http\Requests\RequestSecretaria;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use App\Constants\ConstAgregarEstudio\TiposEstudio;
 use App\Constants\ConstAgregarEstudio\Graduado;
 use App\Constants\ConstAgregarEstudio\TituloConvalidado;
 use Illuminate\Contracts\Validation\Validator;
@@ -42,7 +41,13 @@ class CrearCertificadosMasivosRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'tipo_estudio'              => ['required', 'string', Rule::in(TiposEstudio::all())],
+            // Escribe en la MISMA tabla `estudios` que el formulario del docente, así que tiene
+            // que validar contra el mismo catálogo. Antes usaba la constante fija `TiposEstudio`,
+            // cuyos 12 valores ya no coinciden con los 17 del catálogo administrable: un
+            // certificado generado con "Pregrado en medicina humana o composición musical" no
+            // existía en `niveles_formacion_academica`, así que el motor del escalafón nunca lo
+            // contaba y el docente no podía editarlo.
+            'tipo_estudio'              => ['required', 'string', Rule::exists('niveles_formacion_academica', 'nivel_formacion')->where('activo', true)],
             // Valida que `tipo_estudio` sea requerido y que su valor esté dentro de los valores definidos en `TiposEstudio`.
             'graduado'                  => ['required', 'string', Rule::in(Graduado::all())],
             // Valida que `graduado` sea requerido y que su valor esté dentro de los valores definidos en `Graduado`.

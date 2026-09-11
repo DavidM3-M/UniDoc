@@ -24,8 +24,11 @@ class Municipio extends Model
     protected $primaryKey = 'id_municipio';
     // definimos los campos de la tabla municipios que se pueden llenar
     protected $fillable = [
+        'id_municipio',
         'nombre',
         'departamento_id',
+        'codigo_divipola',
+        'tipo',
     ];
 
 

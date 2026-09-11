@@ -53,6 +53,18 @@ RUN { \
     echo 'opcache.fast_shutdown=1'; \
 } > /usr/local/etc/php/conf.d/opcache.ini
 
+# ─── Subida de archivos y memoria ──────────────────────────────────────────
+# Los defaults de PHP (upload 2M, memory 128M) se quedan cortos con archivos
+# reales como el de "Oferta y Programas" del SNIES (varios MB, ~30k filas,
+# múltiples hojas). memory_limit sube porque aunque el importador lee por
+# chunks, PhpSpreadsheet igual parsea la estructura XML completa del .xlsx
+# (shared strings de las 3 hojas) antes de poder filtrar por chunk.
+RUN { \
+    echo 'upload_max_filesize=25M'; \
+    echo 'post_max_size=30M'; \
+    echo 'memory_limit=1024M'; \
+} > /usr/local/etc/php/conf.d/uploads.ini
+
 # ─── Apache: habilitar mod_rewrite y seguir symlinks ─────────────────────
 RUN a2enmod rewrite \
     && sed -i 's/Options -Indexes$/Options -Indexes +FollowSymLinks/' /etc/apache2/conf-enabled/docker-php.conf 2>/dev/null || true
