@@ -7,6 +7,7 @@ use App\Constants\ConstAgregarIdioma\NivelIdioma;
 use App\Constants\ConstTalentoHumano\PerfilesProfesionales\PerfilesProfesionales;
 use App\Constants\ConstAgregarEstudio\TiposEstudio;
 use App\Constants\ConstTalentoHumano\EstadoPostulacion;
+use App\Constants\ConstTalentoHumano\Aprobaciones;
 use App\Models\TalentoHumano\Postulacion;
 use App\Models\TalentoHumano\Convocatoria;
 use App\Models\TalentoHumano\ConvocatoriaAval;
@@ -30,18 +31,6 @@ class PostulacionController
     ) {
         $this->generadorHojaDeVidaPDFService = $generadorHojaDeVidaPDFService;
         $this->puntajeService = $puntajeService;
-    }
-
-    /** Normaliza el nombre de aval a clave técnica usada en convocatoria_avales. */
-    private function normalizarAval(string $aval): string
-    {
-        return match ($aval) {
-            'Talento Humano', 'talento humano', 'talento_humano' => 'talento_humano',
-            'Coordinador', 'Coordinación', 'coordinacion', 'coordinador' => 'coordinador',
-            'Vicerrectoría', 'Vicerrectoria', 'vicerrectoria' => 'vicerrectoria',
-            'Rectoría', 'Rectoria', 'rectoria' => 'rectoria',
-            default => $aval,
-        };
     }
 
     /**
@@ -109,12 +98,13 @@ class PostulacionController
                 // Crear registros de avales pendientes para este postulante si la convocatoria los requiere
                 if (!empty($convocatoria->avales_establecidos) && is_array($convocatoria->avales_establecidos)) {
                     foreach ($convocatoria->avales_establecidos as $avalRequerido) {
-                        $avalNormalizado = $this->normalizarAval((string) $avalRequerido);
+                        $avalClave = Aprobaciones::toDatabaseKey($avalRequerido) ?? $avalRequerido;
+
                         ConvocatoriaAval::updateOrCreate(
                             [
                                 'convocatoria_id' => $convocatoriaId,
                                 'user_id' => $user->id,
-                                'aval' => $avalNormalizado,
+                                'aval' => $avalClave,
                             ],
                             [
                                 'estado' => 'pending'
@@ -173,12 +163,24 @@ class PostulacionController
             // Agregar estado de aval TH y puntaje por postulación
             $puntajeService = $this->puntajeService;
             $postulaciones->each(function ($p) use ($puntajeService) {
-                $p->aval_th_aprobado = ConvocatoriaAval::where('convocatoria_id', $p->convocatoria_id)
+                $avales = ConvocatoriaAval::where('convocatoria_id', $p->convocatoria_id)
                     ->where('user_id', $p->user_id)
-                    ->where('aval', 'talento_humano')
-                    ->where('estado', 'aprobado')
-                    ->exists();
+                    ->get();
+
+                $estaAprobado = function (array $nombres) use ($avales): bool {
+                    return $avales->contains(function ($a) use ($nombres) {
+                        return in_array($a->aval, $nombres) && $a->estado === 'aprobado';
+                    });
+                };
+
+                // Asignar directamente a la postulación, NO a usuarioPostulacion
+                $p->aval_talento_humano = $estaAprobado(['talento_humano', 'Talento Humano', 'talento humano']);
+                $p->aval_coordinador = $estaAprobado(['coordinador', 'Coordinador', 'Coordinación', 'coordinacion']);
+                $p->aval_vicerrectoria = $estaAprobado(['vicerrectoria', 'Vicerrectoria', 'Vicerrectoría']);
+                $p->aval_rectoria = $estaAprobado(['rectoria', 'Rectoria', 'Rectoría']);
+
                 if ($p->usuarioPostulacion) {
+                    // Esto sí es seguro: el puntaje es del usuario, no depende de la convocatoria
                     $p->usuarioPostulacion->puntaje_aspirante = $puntajeService->calcular((int) $p->user_id)['total'];
                 }
             });

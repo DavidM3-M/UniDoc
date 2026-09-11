@@ -20,4 +20,20 @@ class Aprobaciones
             self::DECANATO,
         ];
     }
+
+    public static function databaseKeys(): array
+    {
+        return [
+            self::TALENTO_HUMANO => 'talento_humano',
+            self::COORDINADOR => 'coordinador',
+            self::VICERRECTORIA => 'vicerrectoria',
+            self::RECTORIA => 'rectoria',
+            self::DECANATO => 'decanato',
+        ];
+    }
+
+    public static function toDatabaseKey(string $name): ?string
+    {
+        return self::databaseKeys()[$name] ?? null;
+    }
 }
